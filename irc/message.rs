@@ -3,7 +3,6 @@ extern crate debug;
 use std::string::{String};
 use std::fmt;
 
-
 pub struct IrcMessage {
     prefix: Option<String>,
     command: String,
@@ -17,20 +16,18 @@ fn parse_message_args(text: &str) -> Result<Vec<String>, ()> {
     if text.char_at(0) == ':' {
         return Ok(vec![String::from_str(text.slice_from(1))]);
     }
+
     let (arg_parts, rest) = match text.find_str(" :") {
-        Some(val) => {
-            (text.slice_to(val), Some(text.slice_from(val + 2)))
-        },
-        None => {
-            (text, None)
-        }
+        Some(val) => (text.slice_to(val), Some(text.slice_from(val + 2))),
+        None => (text, None)
     };
+
     let mut output: Vec<String> = arg_parts.split(' ')
             .map(|s| String::from_str(s)).collect();
-    match rest {
-        Some(val) => output.push(String::from_str(val)),
-        None => ()
-    };
+
+    if rest.is_some() {
+        output.push(String::from_str(rest.unwrap()));
+    }
     Ok(output)
 }
 
@@ -72,6 +69,10 @@ impl IrcMessage {
 
     pub fn get_command<'a>(&'a self) -> &'a str {
         self.command.as_slice()
+    }
+
+    pub fn get_arg<'a>(&'a self, i: uint) -> &'a str {
+        self.args[i].as_slice()
     }
 }
 
