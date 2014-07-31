@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 extern crate debug;
 
 use std::fmt;
@@ -27,7 +29,7 @@ impl ConnectMessageWatcher {
 
 impl MessageWatcher for ConnectMessageWatcher {
     fn accept(&mut self, message: &IrcMessage) {
-        if message.get_command() == "001" {
+        if message.get_command().as_slice() == "001" {
             self.rx_connect = true;
         }
     }
@@ -72,20 +74,21 @@ impl MessageWatcher for JoinMessageWatcher {
     fn accept(&mut self, message: &IrcMessage) {
         let incr_state: bool = match self.state {
             0 => {
-                message.get_command() == "JOIN" &&
-                    message.get_arg(0) == self.channel.as_slice()
+                message.get_command().as_slice() == "JOIN" &&
+                    *message.get_arg(0) == self.channel
             },
             1 => {
+
                 // 353 contains nicks
                 // 366 is ``End of /NAMES list''
-                if message.get_command() == "353" && 
-                        message.get_arg(2) == self.channel.as_slice() {
-                    for nick in message.get_arg(3).split(' ') {
+                if message.get_command().as_slice() == "353" &&
+                        *message.get_arg(2) == self.channel {
+                    for nick in message.get_arg(3).as_slice().split(' ') {
                         self.nicks.push(String::from_str(nick));
                     }
                 };
-                message.get_command() == "366" &&
-                    message.get_arg(1) == self.channel.as_slice()
+                message.get_command().as_slice() == "366" &&
+                    *message.get_arg(1) == self.channel
             },
             _ => false
         };
@@ -152,7 +155,7 @@ impl IrcConnection {
 
                 loop {
                     match watchers_rx.try_recv() {
-                        Ok(value) => watchers.push_back(value),
+                        Ok(value) => watchers.push(value),
                         Err(_) => break
                     };
                 }
@@ -166,7 +169,7 @@ impl IrcConnection {
                                     if watcher.finished() {
                                         event_queue_tx.send(WatcherResponse(watcher));
                                     } else {
-                                        keep_watchers.push_back(watcher);
+                                        keep_watchers.push(watcher);
                                     }
                                 },
                                 None => break
@@ -174,7 +177,7 @@ impl IrcConnection {
                         }
                         loop {
                             match keep_watchers.pop_front() {
-                                Some(watcher) => watchers.push_back(watcher),
+                                Some(watcher) => watchers.push(watcher),
                                 None => break
                             }
                         }
@@ -232,10 +235,10 @@ fn main() {
         match conn.event_queue.recv() {
             Message(message) => {
                 println!("RX: {}", message);
-                if message.get_command() == "001" {
+                if message.get_command().as_slice() == "001" {
                     conn.join("#dicks");
                 }
-                if message.get_command() == "PING" {
+                if message.get_command().as_slice() == "PING" {
                     let response = format!("PONG :{}\n", message.get_arg(0));
                     println!("TX: {}", response.as_slice());
                     match conn.writer.write_str(response.as_slice()) {
