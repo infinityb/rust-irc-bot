@@ -53,8 +53,6 @@ impl fmt::Show for ConnectMessageWatcher {
 struct JoinMessageWatcher {
     channel: String,
     nicks: Vec<String>,
-    rx_join: bool,
-    rx_nicklist: bool,
     state: u16
 }
 
@@ -63,8 +61,6 @@ impl JoinMessageWatcher {
         JoinMessageWatcher {
             channel: String::from_str(channel),
             nicks: Vec::new(),
-            rx_join: false,
-            rx_nicklist: false,
             state: 0
         }
     }
