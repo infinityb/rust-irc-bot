@@ -1,9 +1,9 @@
 [package]
-name = "rust-irc"
+name = "irc"
 version = "0.1.0"
 authors = [ "Stacey Ell <stacey.ell@gmail.com>" ]
 
 
 [[lib]]
-name = "rust-irc"
+name = "irc"
 

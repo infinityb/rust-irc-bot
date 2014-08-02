@@ -1,5 +1,4 @@
 use std::string::{String};
-use std::fmt;
 
 
 #[allow(dead_code)]
@@ -119,27 +118,6 @@ impl IrcMessage {
         &self.args[i]
     }
 }
-
-
-impl fmt::Show for IrcMessage {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut arg_string = String::new();
-        arg_string = arg_string.append("[");
-        for part in self.args.iter().map(|s| s.as_slice()) {
-            arg_string = arg_string.append(format!("{:?}, ", part).as_slice());
-        }
-        arg_string = arg_string.append("]");
-
-        match self.prefix {
-            Some(ref prefix) => write!(f, "IrcMessage({:?}, {:?}, {})",
-                prefix.as_slice(), self.command.as_slice(), arg_string.as_slice()),
-            None => write!(f, "IrcMessage({:?}, {})",
-                self.command.as_slice(), arg_string.as_slice())
-        }
-    }
-}
-
-
 
 
 #[test]

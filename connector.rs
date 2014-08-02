@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+extern crate irc;
 extern crate debug;
 
 use std::fmt;
@@ -8,7 +9,6 @@ use std::comm::channel;
 use std::io::{TcpStream, IoResult, LineBufferedWriter, BufferedReader};
 
 use irc::IrcMessage;
-mod irc;
 
 
 trait MessageWatcher {
