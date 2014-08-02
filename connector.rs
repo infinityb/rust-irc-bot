@@ -12,6 +12,7 @@ use irc::{
     IrcMessage,
     IrcConnection,
     IrcEventMessage,
+    IrcEventBundle,
     IrcEventWatcherResponse
 };
 
@@ -38,6 +39,9 @@ fn main() {
                         Err(err) => fail!("Error writing to IRC server: {}", err)
                     }
                 }
+            },
+            IrcEventBundle(event) => {
+                println!("got bundle back: {}", event.pretty_print());
             },
             IrcEventWatcherResponse(watcher) => {
                 println!("got watcher back: {}", watcher.pretty_print());

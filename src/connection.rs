@@ -1,3 +1,4 @@
+use std::fmt;
 use std::collections::{RingBuf, Deque};
 use std::io::{TcpStream, IoResult, LineBufferedWriter, BufferedReader};
 
@@ -9,8 +10,73 @@ use watchers::{
 };
 
 
+pub trait IrcBundleEventInterface {
+    fn accept(&mut self, message: &IrcMessage) -> bool;
+    fn pretty_print(&self) -> String;
+}
+
+
+pub struct IrcBundleJoinEvent {
+    channel: String,
+    nicks: Vec<String>,
+    state: u16
+}
+
+
+impl IrcBundleJoinEvent {
+    pub fn new(message: &IrcMessage) -> Option<IrcBundleJoinEvent> {
+        if message.get_args().len() == 0 {
+            return None;
+        }
+        let is_join: bool = message.get_command().as_slice() == "JOIN";
+        match is_join {
+            true => {
+                let channel = message.get_arg(0).clone();
+                Some(IrcBundleJoinEvent {
+                    channel: channel,
+                    nicks: Vec::new(),
+                    state: 0
+                })
+            },
+            false => None
+        }
+    }
+}
+
+
+impl IrcBundleEventInterface for IrcBundleJoinEvent {
+    fn accept(&mut self, message: &IrcMessage) -> bool {
+        let incr_state: bool = match self.state {
+            0 => {
+                // 353 contains nicks
+                // 366 is ``End of /NAMES list''
+                if message.get_command().as_slice() == "353" &&
+                        *message.get_arg(2) == self.channel {
+                    for nick in message.get_arg(3).as_slice().split(' ') {
+                        self.nicks.push(String::from_str(nick));
+                    }
+                };
+                message.get_args().len() >= 2 &&
+                    message.get_command().as_slice() == "366" &&
+                    *message.get_arg(1) == self.channel
+            },
+            _ => false
+        };
+        if incr_state {
+            self.state += 1;
+        }
+        self.state == 1
+    }
+
+    fn pretty_print(&self) -> String {
+        format!("IrcBundleJoinEvent({} with {} nicks)",
+            self.channel.as_slice(), self.nicks.len())
+    }
+}
+
 pub enum IrcEvent {
     IrcEventMessage(Box<IrcMessage>),
+    IrcEventBundle(Box<IrcBundleEventInterface+Send>),
     IrcEventWatcherResponse(Box<MessageWatcher+Send>)
 }
 
@@ -19,7 +85,62 @@ pub struct IrcConnection {
     // conn: TcpStream,
     writer: LineBufferedWriter<TcpStream>,
     event_queue: Receiver<IrcEvent>,
-    watchers: SyncSender<Box<MessageWatcher+Send>>,
+    watchers: SyncSender<Box<MessageWatcher+Send>>
+}
+
+fn watcher_accept(buf: &mut RingBuf<Box<MessageWatcher+Send>>,
+                  message: &IrcMessage
+                 ) -> Vec<Box<MessageWatcher+Send>> {
+
+    let mut keep_watchers: RingBuf<Box<MessageWatcher+Send>> = RingBuf::new();
+    let mut finished_watchers: Vec<Box<MessageWatcher+Send>> = Vec::new();
+    loop {
+        match buf.pop_front() {
+            Some(mut watcher) => {
+                watcher.accept(message);
+                if watcher.finished() {
+                    finished_watchers.push(watcher);
+                } else {
+                    keep_watchers.push(watcher);
+                }
+            },
+            None => break
+        }
+    }
+    loop {
+        match keep_watchers.pop_front() {
+            Some(watcher) => buf.push(watcher),
+            None => break
+        }
+    }
+    finished_watchers
+}
+
+fn bundler_accept(buf: &mut RingBuf<Box<IrcBundleEventInterface+Send>>,
+                  message: &IrcMessage
+                 ) -> Vec<Box<IrcBundleEventInterface+Send>> {
+
+    let mut keep_watchers: RingBuf<Box<IrcBundleEventInterface+Send>> = RingBuf::new();
+    let mut finished_watchers: Vec<Box<IrcBundleEventInterface+Send>> = Vec::new();
+    loop {
+        match buf.pop_front() {
+            Some(mut watcher) => {
+                if watcher.accept(message) {
+                    finished_watchers.push(watcher);
+                } else {
+                    keep_watchers.push(watcher);
+                }
+            },
+            None => break
+        }
+    }
+    loop {
+        match keep_watchers.pop_front() {
+            Some(watcher) => buf.push(watcher),
+            None => break
+        }
+    }
+    finished_watchers
 }
 
 
@@ -36,6 +157,8 @@ impl IrcConnection {
 
         spawn(proc() {
             let mut watchers: RingBuf<Box<MessageWatcher+Send>> = RingBuf::new();
+            let mut event_bundlers: RingBuf<Box<IrcBundleEventInterface+Send>> = RingBuf::new();
+
             let mut reader = reader;
 
             loop {
@@ -50,34 +173,24 @@ impl IrcConnection {
                         Err(_) => break
                     };
                 }
-                match IrcMessage::from_str(string.as_slice()) {
-                    Ok(message) => {
-                        let mut keep_watchers: RingBuf<Box<MessageWatcher+Send>> = RingBuf::new();
-                        loop {
-                            match watchers.pop_front() {
-                                Some(mut watcher) => {
-                                    watcher.accept(&message);
-                                    if watcher.finished() {
-                                        event_queue_tx.send(IrcEventWatcherResponse(watcher));
-                                    } else {
-                                        keep_watchers.push(watcher);
-                                    }
-                                },
-                                None => break
-                            }
-                        }
-                        loop {
-                            match keep_watchers.pop_front() {
-                                Some(watcher) => watchers.push(watcher),
-                                None => break
-                            }
-                        }
-                        event_queue_tx.send(IrcEventMessage(box message));
-                    },
+                let message = match IrcMessage::from_str(string.as_slice()) {
+                    Ok(message) => message,
                     Err(err) => {
                         println!("Invalid IRC message: {} for {}", err, string);
+                        continue;
                     }
                 };
+                match IrcBundleJoinEvent::new(&message) {
+                    Some(bundler) => event_bundlers.push(box bundler),
+                    None => ()
+                }
+                for resp in watcher_accept(&mut watchers, &message).move_iter() {
+                    event_queue_tx.send(IrcEventWatcherResponse(resp));
+                }
+                for resp in bundler_accept(&mut event_bundlers, &message).move_iter() {
+                    event_queue_tx.send(IrcEventBundle(resp));
+                }
+                event_queue_tx.send(IrcEventMessage(box message));
             }
         });
 
@@ -85,7 +198,7 @@ impl IrcConnection {
             // conn: stream.clone(),
             writer: LineBufferedWriter::new(stream.clone()),
             event_queue: event_queue_rx,
-            watchers: watchers_tx
+            watchers: watchers_tx,
         })
     }
 

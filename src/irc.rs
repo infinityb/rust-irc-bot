@@ -17,8 +17,10 @@ pub use self::state::{
 pub use self::connection::{
     IrcConnection,
     IrcEvent,
+    IrcEventBundle,
     IrcEventMessage,
     IrcEventWatcherResponse,
+    IrcBundleEventInterface,
 };
 
 pub use self::watchers::{

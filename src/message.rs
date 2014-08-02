@@ -1,4 +1,3 @@
-
 use std::string::{String};
 use std::fmt;
 
@@ -64,14 +63,14 @@ pub struct IrcMessage {
 fn parse_prefix(text: &str) -> IrcPrefix {
     let parts: Vec<&str> = text.splitn('!', 1).collect();
     let (nick, rest) = match parts.as_slice() {
-        [one_part] => return IrcOtherPrefix(String::from_str(text)),
+        [_] => return IrcOtherPrefix(String::from_str(text)),
         [nick, rest] => (nick, rest),
         _ => fail!("programmer error")
     };
 
     let parts: Vec<&str> = rest.splitn('@', 1).collect();
     let (user, host) = match parts.as_slice() {
-        [one_part] => return IrcOtherPrefix(String::from_str(text)),
+        [_] => return IrcOtherPrefix(String::from_str(text)),
         [user, rest] => (user, rest),
         _ => fail!("programmer error")
     };  
@@ -187,6 +186,10 @@ impl IrcMessage {
 
     pub fn get_command<'a>(&'a self) -> &'a String {
         &self.command
+    }
+
+    pub fn get_args(&self) -> &Vec<String> {
+        &self.args
     }
 
     pub fn get_arg<'a>(&'a self, i: uint) -> &'a String {

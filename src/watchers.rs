@@ -23,6 +23,7 @@ impl MessageWatcher for ConnectMessageWatcher {
         if message.get_command().as_slice() == "001" {
             self.rx_connect = true;
         }
+        println!("connect watcher ok");
     }
 
     fn finished(&self) -> bool {
