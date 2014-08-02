@@ -13,5 +13,20 @@ pub use self::state::{
     IrcState
 };
 
+
+pub use self::connection::{
+    IrcConnection,
+    IrcEvent,
+    IrcEventMessage,
+    IrcEventWatcherResponse,
+};
+
+pub use self::watchers::{
+    MessageWatcher,
+    JoinMessageWatcher,
+};
+
+pub mod connection;
 pub mod message;
 pub mod state;
+pub mod watchers;
