@@ -266,3 +266,10 @@ impl IrcConnection {
         self.writer.write_str(content)
     }
 }
+
+
+impl Drop for IrcConnection {
+    fn drop(&mut self) {
+        self.writer.write_str("QUIT\n");
+    }
+} 
