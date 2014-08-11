@@ -3,31 +3,35 @@ use std::fmt;
 
 
 #[allow(dead_code)]
-pub enum IrcProtocolMessage {
-    Ping(String, Option<String>),
-    Pong(String),
-    Notice(String),
-    Join(String),
-    IrcNumeric(u16, Vec<String>),
-    // parsed but not processed into a safe message type. command, rest
-    Unknown(String, Vec<String>)
+pub type IrcProtocolMessage = self::IrcProtocolMessage::IrcProtocolMessage;
+pub mod IrcProtocolMessage {
+    #[deriving(Clone)]
+    pub enum IrcProtocolMessage {
+        Ping(String, Option<String>),
+        Pong(String),
+        Notice(String),
+        Join(String),
+        Numeric(u16, Vec<String>),
+        // parsed but not processed into a safe message type. command, rest
+        Unknown(String, Vec<String>)
+    }
 }
 
 
 impl fmt::Show for IrcProtocolMessage {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Ping(ref s1, None) => write!(f, "PING {}", s1),
-            Ping(ref s1, Some(ref s2)) => write!(f, "PING {} {}", s1, s2),
-            Pong(ref s1) => write!(f, "PONG {}", s1),
-            Notice(ref s1) => write!(f, "NOTICE {}", s1),
+            IrcProtocolMessage::Ping(ref s1, None) => write!(f, "PING {}", s1),
+            IrcProtocolMessage::Ping(ref s1, Some(ref s2)) => write!(f, "PING {} {}", s1, s2),
+            IrcProtocolMessage::Pong(ref s1) => write!(f, "PONG {}", s1),
+            IrcProtocolMessage::Notice(ref s1) => write!(f, "NOTICE {}", s1),
             _ => write!(f, "WHAT")
         }
     }
 }
 
 
-#[deriving(PartialEq)]
+#[deriving(PartialEq, Clone)]
 pub struct IrcHostmask {
     nick: String,
     user: String,
@@ -44,13 +48,14 @@ impl fmt::Show for IrcHostmask {
 }
 
 
-#[deriving(PartialEq, Show)]
+#[deriving(PartialEq, Clone, Show)]
 pub enum IrcPrefix {
     IrcHostmaskPrefix(IrcHostmask),
     IrcOtherPrefix(String)
 }
 
 
+#[deriving(Clone)]
 pub struct IrcMessage {
     prefix: Option<IrcPrefix>,
     prefix_raw: Option<String>,
@@ -144,17 +149,17 @@ impl IrcMessage {
 
         let message = match (command.as_slice(), args.len()) {
             ("PING", 1..2) => {
-                Ping(args.remove(0).unwrap(), args.remove(0))
+                IrcProtocolMessage::Ping(args.remove(0).unwrap(), args.remove(0))
             },
             ("PING", _) => return Err(from_str(
                 "Invalid IRC message: too many arguments to PING")),
-            ("PONG", 1) => Pong(args.remove(0).unwrap()),
+            ("PONG", 1) => IrcProtocolMessage::Pong(args.remove(0).unwrap()),
             ("PONG", _) => return Err(from_str(
                 "Invalid IRC message: too many arguments to PONG")),
             (_, _) => {
                 match from_str(command.as_slice()) {
-                    Some(num) => IrcNumeric(num, args),
-                    None => Unknown(command, args)
+                    Some(num) => IrcProtocolMessage::Numeric(num, args),
+                    None => IrcProtocolMessage::Unknown(command, args)
                 }
             }
         };
@@ -336,7 +341,7 @@ fn test_irc_message_numerics() {
             assert_eq!(message.prefix_raw, Some(String::from_str("somewhere")));
             assert_eq!(message.command.as_slice(), "001");
             match message.message {
-                IrcNumeric(num, _) => assert_eq!(num, 1),
+                IrcProtocolMessage::Numeric(num, _) => assert_eq!(num, 1),
                 _ => fail!("numbers should parse as numerics")
             }
 
@@ -349,7 +354,7 @@ fn test_irc_message_numerics() {
             assert_eq!(message.prefix_raw, None);
             assert_eq!(message.command.as_slice(), "001");
             match message.message {
-                IrcNumeric(num, _) => assert_eq!(num, 1),
+                IrcProtocolMessage::Numeric(num, _) => assert_eq!(num, 1),
                 _ => fail!("numbers should parse as numerics")
             }
 
@@ -360,7 +365,7 @@ fn test_irc_message_numerics() {
     match IrcMessage::from_str("366 arg") {
         Ok(message) => {
             match message.message {
-                IrcNumeric(num, _) => assert_eq!(num, 366),
+                IrcProtocolMessage::Numeric(num, _) => assert_eq!(num, 366),
                 _ => fail!("numbers should parse as numerics")
             }
 

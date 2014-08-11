@@ -1,0 +1,6 @@
+pub static ERR_NONICKNAMEGIVEN: i32 = 431;
+pub static ERR_NICKNAMEINUSE: i32 = 433;
+pub static ERR_UNAVAILRESOURCE: i32 = 437;
+pub static ERR_ERRONEUSNICKNAME: i32 = 432;
+pub static ERR_NICKCOLLISION: i32 = 436;
+pub static ERR_RESTRICTED: i32 = 484;

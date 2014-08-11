@@ -2,10 +2,11 @@
 #![crate_type = "dylib"]
 #![license = "MIT"]
 
+// pub use self::numerics;
 
 pub use self::message::{
     IrcMessage,
-    IrcNumeric
+    IrcProtocolMessage
 };
 
 pub use self::state::{
@@ -26,8 +27,13 @@ pub use self::connection::{
 pub use self::watchers::{
     MessageWatcher,
     JoinMessageWatcher,
+    RegisterError,
+    RegisterErrorType,
+    JoinResult,
+    JoinError,
 };
 
+pub mod numerics;
 pub mod connection;
 pub mod message;
 pub mod state;

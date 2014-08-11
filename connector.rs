@@ -13,7 +13,9 @@ use irc::{
     IrcConnection,
     IrcEventMessage,
     IrcEventBundle,
-    IrcEventWatcherResponse
+    IrcEventWatcherResponse,
+    RegisterError,
+    RegisterErrorType,
 };
 
 
@@ -22,15 +24,41 @@ fn main() {
         Ok(stream) => stream,
         Err(err) => fail!("{}", err)
     };
-    conn.register("platy");
+    let mut nick = String::from_str("platy");
+
+    loop {
+        println!("trying nick {}", nick.as_slice());
+        match conn.register(nick.as_slice()) {
+            Ok(_) => {
+                println!("ok, connected as {}", nick.as_slice());
+                break;
+            }
+            Err(err) => {
+                if err.should_pick_new_nickname() {
+                    nick = nick.append("`");
+                } else {
+                    fail!("{:?}", err)
+                }
+            }
+        };
+    }
+    
+    println!("joining #dicks...");
+    match conn.join("#dicks") {
+        Ok(res) => {
+            println!("succeeded in joining {}, got {} nicks",
+                res.channel.as_slice(), res.nicks.len());
+        },
+        Err(err) => {
+            println!("join error: {:?}", err);
+            fail!("failed to join channel.. dying");
+        }
+    }
 
     loop {      
         match conn.recv() {
             IrcEventMessage(message) => {
                 println!("RX: {}", message);
-                if message.get_command().as_slice() == "001" {
-                    conn.join("#dicks");
-                }
                 if message.get_command().as_slice() == "PING" {
                     let response = format!("PONG :{}\n", message.get_arg(0));
                     println!("TX: {}", response.as_slice());

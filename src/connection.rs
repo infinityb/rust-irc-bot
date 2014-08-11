@@ -1,12 +1,13 @@
-use std::fmt;
 use std::collections::{RingBuf, Deque};
 use std::io::{TcpStream, IoResult, LineBufferedWriter, BufferedReader};
 
 use message::IrcMessage;
 use watchers::{
+    RegisterError,
     MessageWatcher,
-    ConnectMessageWatcher,
+    RegisterMessageWatcher,
     JoinMessageWatcher,
+    JoinResult
 };
 
 
@@ -85,7 +86,8 @@ pub struct IrcConnection {
     // conn: TcpStream,
     writer: LineBufferedWriter<TcpStream>,
     event_queue: Receiver<IrcEvent>,
-    watchers: SyncSender<Box<MessageWatcher+Send>>
+    watchers: SyncSender<Box<MessageWatcher+Send>>,
+    has_registered: bool
 }
 
 fn watcher_accept(buf: &mut RingBuf<Box<MessageWatcher+Send>>,
@@ -97,12 +99,14 @@ fn watcher_accept(buf: &mut RingBuf<Box<MessageWatcher+Send>>,
     loop {
         match buf.pop_front() {
             Some(mut watcher) => {
+                let watcher_repr = watcher.pretty_print();
                 watcher.accept(message);
                 if watcher.finished() {
                     finished_watchers.push(watcher);
                 } else {
                     keep_watchers.push(watcher);
                 }
+
             },
             None => break
         }
@@ -143,6 +147,15 @@ fn bundler_accept(buf: &mut RingBuf<Box<IrcBundleEventInterface+Send>>,
     finished_watchers
 }
 
+pub struct IrcRegisterRequest<'a> {
+    // NICK {nick}\n
+    // USER {username} {mode} * :{realname}
+    nick: &'a str,
+    username: &'a str,
+    mode: uint,
+    realname: &'a str
+}
+
 
 impl IrcConnection {
     pub fn new(host: &str, port: u16) -> IoResult<IrcConnection> {
@@ -151,8 +164,8 @@ impl IrcConnection {
             Err(err) => return Err(err)
         };
 
-        let (watchers_tx, watchers_rx) = sync_channel(0);
-        let (event_queue_tx, event_queue_rx) = sync_channel(10);
+        let (watchers_tx, watchers_rx) = sync_channel(10);
+        let (event_queue_tx, event_queue_rx) = sync_channel(1024);
         let reader = BufferedReader::new(stream.clone());
 
         spawn(proc() {
@@ -173,6 +186,7 @@ impl IrcConnection {
                         Err(_) => break
                     };
                 }
+
                 let message = match IrcMessage::from_str(string.as_slice()) {
                     Ok(message) => message,
                     Err(err) => {
@@ -180,16 +194,20 @@ impl IrcConnection {
                         continue;
                     }
                 };
+
                 match IrcBundleJoinEvent::new(&message) {
                     Some(bundler) => event_bundlers.push(box bundler),
                     None => ()
                 }
+
                 for resp in watcher_accept(&mut watchers, &message).move_iter() {
                     event_queue_tx.send(IrcEventWatcherResponse(resp));
                 }
+
                 for resp in bundler_accept(&mut event_bundlers, &message).move_iter() {
                     event_queue_tx.send(IrcEventBundle(resp));
                 }
+
                 event_queue_tx.send(IrcEventMessage(box message));
             }
         });
@@ -199,11 +217,14 @@ impl IrcConnection {
             writer: LineBufferedWriter::new(stream.clone()),
             event_queue: event_queue_rx,
             watchers: watchers_tx,
+            has_registered: false
         })
     }
 
-    pub fn register(&mut self, nick: &str) { // -> Box<MessageWatcher> {
-        let watcher: Box<MessageWatcher+Send> = box ConnectMessageWatcher::new();
+    pub fn register(&mut self, nick: &str) -> Result<(), RegisterError> {
+        let mut reg_watcher = RegisterMessageWatcher::new();        
+        let result_rx = reg_watcher.get_monitor();
+        let watcher: Box<MessageWatcher+Send> = box reg_watcher;
         self.watchers.send(watcher);
 
         match self.writer.write_str(format!("NICK {}\n", nick).as_slice()) {
@@ -211,20 +232,30 @@ impl IrcConnection {
             Err(err) => fail!("Error writing to IRC server: {}", err)
         };
 
-        match self.writer.write_str("USER rustbot 8 *: Rust Bot\n") {
-            Ok(_) => (),
-            Err(err) => fail!("Error writing to IRC server: {}", err)
-        };
-    }
+        if !self.has_registered {
+            match self.writer.write_str("USER rustbot 8 *: Rust Bot\n") {
+                Ok(_) => (),
+                Err(err) => fail!("Error writing to IRC server: {}", err)
+            };
+        }
 
-    pub fn join(&mut self, channel: &str) -> () {
-        let watcher: Box<MessageWatcher+Send> = box JoinMessageWatcher::new(channel);
+        result_rx.recv()
+    }
+    // RX: IrcMessage(miyuki.yasashiisyndicate.org, 475, [
+    //    aibi`, #dicks, Cannot join channel (Incorrect channel key), ])
+
+    pub fn join(&mut self, channel: &str) -> JoinResult {
+        let mut join_watcher = JoinMessageWatcher::new(channel);
+        let result_rx = join_watcher.get_monitor();
+        let watcher: Box<MessageWatcher+Send> = box join_watcher;
         self.watchers.send(watcher);
 
         match self.writer.write_str(format!("JOIN {}\n", channel).as_slice()) {
             Ok(_) => (),
             Err(err) => fail!("Error writing to IRC server: {}", err)
         }
+
+        result_rx.recv()
     }
 
     pub fn recv(&self) -> IrcEvent {
