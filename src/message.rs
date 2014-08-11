@@ -300,7 +300,7 @@ fn test_irc_message_general() {
             assert_eq!(message.args[0].as_slice(), "server1");
             assert_eq!(message.args[1].as_slice(), "server2");
             match message.message {
-                Ping(s1, s2) => {
+                IrcProtocolMessage::Ping(s1, s2) => {
                     assert_eq!(s1, String::from_str("server1"));
                     assert_eq!(s2, Some(String::from_str("server2")));
                 },
