@@ -1,6 +1,10 @@
 use std::collections::{RingBuf, Deque};
 use std::io::{TcpStream, IoResult, LineBufferedWriter, BufferedReader};
 
+use plugins::DeerPlugin;
+use plugins::GreedPlugin;
+
+
 use message::IrcMessage;
 use watchers::{
     RegisterError,
@@ -9,6 +13,19 @@ use watchers::{
     JoinMessageWatcher,
     JoinResult
 };
+
+
+pub struct RustBotPluginApi {
+    raw_tx: SyncSender<String>,
+}
+
+
+/// Defines the public API the bot exposes to plugins.
+impl RustBotPluginApi {
+    pub fn send_raw(&mut self, string: String) {
+        self.raw_tx.send(string);
+    }
+}
 
 
 pub trait IrcBundleEventInterface {
@@ -82,12 +99,19 @@ pub enum IrcEvent {
 }
 
 
+pub trait RustBotPlugin {
+    fn accept(&mut self, message: &IrcMessage);
+}
+
+
 pub struct IrcConnection {
     // conn: TcpStream,
-    writer: LineBufferedWriter<TcpStream>,
+    // writer: LineBufferedWriter<TcpStream>,
+    raw_tx: SyncSender<String>,
     event_queue: Receiver<IrcEvent>,
     watchers: SyncSender<Box<MessageWatcher+Send>>,
-    has_registered: bool
+    has_registered: bool,
+    plugins: Vec<Box<RustBotPlugin>>
 }
 
 fn watcher_accept(buf: &mut RingBuf<Box<MessageWatcher+Send>>,
@@ -126,6 +150,7 @@ fn bundler_accept(buf: &mut RingBuf<Box<IrcBundleEventInterface+Send>>,
 
     let mut keep_watchers: RingBuf<Box<IrcBundleEventInterface+Send>> = RingBuf::new();
     let mut finished_watchers: Vec<Box<IrcBundleEventInterface+Send>> = Vec::new();
+
     loop {
         match buf.pop_front() {
             Some(mut watcher) => {
@@ -166,7 +191,19 @@ impl IrcConnection {
 
         let (watchers_tx, watchers_rx) = sync_channel(10);
         let (event_queue_tx, event_queue_rx) = sync_channel(1024);
+        let (raw_tx, raw_rx) = sync_channel::<String>(1024);
         let reader = BufferedReader::new(stream.clone());
+
+        let tmp_stream = stream.clone();
+
+        spawn(proc() {
+            let mut writer = LineBufferedWriter::new(tmp_stream);
+            loop {
+                for message in raw_rx.iter() {
+                    writer.write_str(message.append("\n").as_slice());
+                }
+            }
+        });
 
         spawn(proc() {
             let mut watchers: RingBuf<Box<MessageWatcher+Send>> = RingBuf::new();
@@ -212,12 +249,24 @@ impl IrcConnection {
             }
         });
 
+        let mut plugins: Vec<Box<RustBotPlugin>> = Vec::new();
+
+        plugins.push(box GreedPlugin::new(RustBotPluginApi {
+            raw_tx: raw_tx.clone()
+        }));
+
+        plugins.push(box DeerPlugin::new(RustBotPluginApi {
+            raw_tx: raw_tx.clone()
+        }));
+
         Ok(IrcConnection {
             // conn: stream.clone(),
-            writer: LineBufferedWriter::new(stream.clone()),
+            // writer: LineBufferedWriter::new(stream.clone()),
+            raw_tx: raw_tx,
             event_queue: event_queue_rx,
             watchers: watchers_tx,
-            has_registered: false
+            has_registered: false,
+            plugins: plugins
         })
     }
 
@@ -227,16 +276,10 @@ impl IrcConnection {
         let watcher: Box<MessageWatcher+Send> = box reg_watcher;
         self.watchers.send(watcher);
 
-        match self.writer.write_str(format!("NICK {}\n", nick).as_slice()) {
-            Ok(_) => (),
-            Err(err) => fail!("Error writing to IRC server: {}", err)
-        };
+        self.write_str(format!("NICK {}", nick).as_slice());
 
         if !self.has_registered {
-            match self.writer.write_str("USER rustbot 8 *: Rust Bot\n") {
-                Ok(_) => (),
-                Err(err) => fail!("Error writing to IRC server: {}", err)
-            };
+            self.write_str("USER rustbot 8 *: Rust Bot");
         }
 
         result_rx.recv()
@@ -250,11 +293,7 @@ impl IrcConnection {
         let watcher: Box<MessageWatcher+Send> = box join_watcher;
         self.watchers.send(watcher);
 
-        match self.writer.write_str(format!("JOIN {}\n", channel).as_slice()) {
-            Ok(_) => (),
-            Err(err) => fail!("Error writing to IRC server: {}", err)
-        }
-
+        self.write_str(format!("JOIN {}", channel).as_slice());
         result_rx.recv()
     }
 
@@ -262,14 +301,14 @@ impl IrcConnection {
         self.event_queue.recv()
     }
 
-    pub fn write_str(&mut self, content: &str) -> IoResult<()> {
-        self.writer.write_str(content)
+    pub fn write_str(&mut self, content: &str) {
+        self.raw_tx.send(String::from_str(content))
     }
 }
 
 
-impl Drop for IrcConnection {
-    fn drop(&mut self) {
-        self.writer.write_str("QUIT\n");
-    }
-} 
+// impl Drop for IrcConnection {
+//     fn drop(&mut self) {
+//         self.write_str("QUIT");
+//     }
+// } 

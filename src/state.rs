@@ -23,6 +23,7 @@ pub struct IrcState<'a> {
     users: TreeMap<String, IrcUser<'a>>
 }
 
+
 impl<'a> IrcState<'a> {
     pub fn new<'a>() -> IrcState<'a> {
         IrcState {

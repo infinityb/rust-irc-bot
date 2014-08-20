@@ -178,6 +178,14 @@ impl IrcMessage {
         })
     }
 
+    pub fn source_nick(&self) -> Option<String> {
+        match self.prefix {
+            Some(IrcHostmaskPrefix(ref hostmask)) => Some(hostmask.nick.clone()),
+            Some(IrcOtherPrefix(_)) => None,
+            None => None
+        }
+    }
+
     pub fn get_prefix<'a>(&'a self) -> Option<&'a IrcPrefix> {
         match self.prefix {
             Some(ref pref) => Some(pref),

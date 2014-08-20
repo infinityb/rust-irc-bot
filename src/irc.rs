@@ -33,6 +33,7 @@ pub use self::watchers::{
     JoinError,
 };
 
+pub mod plugins;
 pub mod numerics;
 pub mod connection;
 pub mod message;
