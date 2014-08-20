@@ -66,14 +66,14 @@ pub struct IrcMessage {
 
 
 fn parse_prefix(text: &str) -> IrcPrefix {
-    let parts: Vec<&str> = text.splitn('!', 1).collect();
+    let parts: Vec<&str> = text.splitn(1, '!').collect();
     let (nick, rest) = match parts.as_slice() {
         [_] => return IrcOtherPrefix(String::from_str(text)),
         [nick, rest] => (nick, rest),
         _ => fail!("programmer error")
     };
 
-    let parts: Vec<&str> = rest.splitn('@', 1).collect();
+    let parts: Vec<&str> = rest.splitn(1, '@').collect();
     let (user, host) = match parts.as_slice() {
         [_] => return IrcOtherPrefix(String::from_str(text)),
         [user, rest] => (user, rest),
@@ -110,7 +110,7 @@ fn parse_message_args(text: &str) -> Result<Vec<String>, Option<String>> {
 
 
 fn parse_message_rest(text: &str) -> Result<(String, Vec<String>), Option<String>> {
-    let parts: Vec<&str> = text.splitn(' ', 1).collect();
+    let parts: Vec<&str> = text.splitn(1, ' ').collect();
     let args = match parse_message_args(parts[1]) {
         Ok(args) => args,
         Err(err) => return Err(err)
@@ -125,7 +125,7 @@ impl IrcMessage {
             return Err(from_str("Invalid IRC message"));
         }
         let (prefix, command, mut args) = if text.char_at(0) == ':' {
-                let parts: Vec<&str> = text.splitn(' ', 1).collect();
+                let parts: Vec<&str> = text.splitn(1, ' ').collect();
                 if parts.len() < 2 {
                     return Err(from_str("Invalid IRC message"));
                 }
