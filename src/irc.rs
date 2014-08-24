@@ -1,6 +1,9 @@
 #![crate_name = "irc"]
 #![crate_type = "dylib"]
 #![license = "MIT"]
+#![feature(unsafe_destructor)]
+
+extern crate debug;
 
 // pub use self::numerics;
 
@@ -33,9 +36,17 @@ pub use self::watchers::{
     JoinError,
 };
 
+pub use self::command_mapper::{
+    CommandMapperDispatch,
+    CommandMapperRecord,
+    PluginContainer,
+    IrcBotConfigurator
+};
+
 pub mod plugins;
 pub mod numerics;
 pub mod connection;
 pub mod message;
 pub mod state;
 pub mod watchers;
+pub mod command_mapper;

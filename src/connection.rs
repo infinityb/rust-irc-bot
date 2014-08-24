@@ -6,6 +6,14 @@ use plugins::GreedPlugin;
 
 
 use message::IrcMessage;
+use command_mapper::{
+    IrcBotConfigurator,
+    PluginContainer,
+    CommandMapperRecord,
+    CommandMapperDispatch,
+    RustBotPlugin,
+};
+
 use watchers::{
     RegisterError,
     MessageWatcher,
@@ -13,19 +21,6 @@ use watchers::{
     JoinMessageWatcher,
     JoinResult
 };
-
-
-pub struct RustBotPluginApi {
-    raw_tx: SyncSender<String>,
-}
-
-
-/// Defines the public API the bot exposes to plugins.
-impl RustBotPluginApi {
-    pub fn send_raw(&mut self, string: String) {
-        self.raw_tx.send(string);
-    }
-}
 
 
 pub trait IrcBundleEventInterface {
@@ -99,19 +94,10 @@ pub enum IrcEvent {
 }
 
 
-pub trait RustBotPlugin {
-    fn accept(&mut self, message: &IrcMessage);
-}
-
-
 pub struct IrcConnection {
-    // conn: TcpStream,
-    // writer: LineBufferedWriter<TcpStream>,
     raw_tx: SyncSender<String>,
-    event_queue: Receiver<IrcEvent>,
     watchers: SyncSender<Box<MessageWatcher+Send>>,
-    has_registered: bool,
-    plugins: Vec<Box<RustBotPlugin>>
+    has_registered: bool
 }
 
 fn watcher_accept(buf: &mut RingBuf<Box<MessageWatcher+Send>>,
@@ -173,8 +159,6 @@ fn bundler_accept(buf: &mut RingBuf<Box<IrcBundleEventInterface+Send>>,
 }
 
 pub struct IrcRegisterRequest<'a> {
-    // NICK {nick}\n
-    // USER {username} {mode} * :{realname}
     nick: &'a str,
     username: &'a str,
     mode: uint,
@@ -183,7 +167,7 @@ pub struct IrcRegisterRequest<'a> {
 
 
 impl IrcConnection {
-    pub fn new(host: &str, port: u16) -> IoResult<IrcConnection> {
+    pub fn new(host: &str, port: u16) -> IoResult<(IrcConnection, Receiver<IrcEvent>)> {
         let stream = match TcpStream::connect(host, port) {
             Ok(stream) => stream,
             Err(err) => return Err(err)
@@ -208,6 +192,9 @@ impl IrcConnection {
         spawn(proc() {
             let mut watchers: RingBuf<Box<MessageWatcher+Send>> = RingBuf::new();
             let mut event_bundlers: RingBuf<Box<IrcBundleEventInterface+Send>> = RingBuf::new();
+            let mut command_mapper = PluginContainer::new(String::from_str("!"));
+            command_mapper.register(box GreedPlugin::new());
+            command_mapper.register(box DeerPlugin::new());
 
             let mut reader = reader;
 
@@ -245,29 +232,17 @@ impl IrcConnection {
                     event_queue_tx.send(IrcEventBundle(resp));
                 }
 
+                command_mapper.dispatch(&message);
                 event_queue_tx.send(IrcEventMessage(box message));
             }
         });
 
-        let mut plugins: Vec<Box<RustBotPlugin>> = Vec::new();
-
-        plugins.push(box GreedPlugin::new(RustBotPluginApi {
-            raw_tx: raw_tx.clone()
-        }));
-
-        plugins.push(box DeerPlugin::new(RustBotPluginApi {
-            raw_tx: raw_tx.clone()
-        }));
-
-        Ok(IrcConnection {
-            // conn: stream.clone(),
-            // writer: LineBufferedWriter::new(stream.clone()),
+        let conn = IrcConnection {
             raw_tx: raw_tx,
-            event_queue: event_queue_rx,
             watchers: watchers_tx,
-            has_registered: false,
-            plugins: plugins
-        })
+            has_registered: false
+        };
+        Ok((conn, event_queue_rx))
     }
 
     pub fn register(&mut self, nick: &str) -> Result<(), RegisterError> {
@@ -284,8 +259,6 @@ impl IrcConnection {
 
         result_rx.recv()
     }
-    // RX: IrcMessage(miyuki.yasashiisyndicate.org, 475, [
-    //    aibi`, #dicks, Cannot join channel (Incorrect channel key), ])
 
     pub fn join(&mut self, channel: &str) -> JoinResult {
         let mut join_watcher = JoinMessageWatcher::new(channel);
@@ -297,18 +270,15 @@ impl IrcConnection {
         result_rx.recv()
     }
 
-    pub fn recv(&self) -> IrcEvent {
-        self.event_queue.recv()
-    }
-
     pub fn write_str(&mut self, content: &str) {
         self.raw_tx.send(String::from_str(content))
     }
 }
 
 
-// impl Drop for IrcConnection {
-//     fn drop(&mut self) {
-//         self.write_str("QUIT");
-//     }
-// } 
+#[unsafe_destructor]
+impl Drop for IrcConnection {
+    fn drop(&mut self) {
+        self.write_str("QUIT");
+    }
+}

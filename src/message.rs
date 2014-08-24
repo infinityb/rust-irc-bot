@@ -178,6 +178,18 @@ impl IrcMessage {
         })
     }
 
+    pub fn channel(&self) -> Option<&str> {
+        if self.command() == "PRIVMSG" {
+            if self.get_arg(0).as_slice().starts_with("#") {
+                Some(self.get_arg(0).as_slice())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
     pub fn source_nick(&self) -> Option<String> {
         match self.prefix {
             Some(IrcHostmaskPrefix(ref hostmask)) => Some(hostmask.nick.clone()),
@@ -195,6 +207,10 @@ impl IrcMessage {
 
     pub fn get_message<'a>(&'a self) -> &'a IrcProtocolMessage {
         &self.message
+    }
+
+    pub fn command<'a>(&'a self) -> &'a str {
+        self.command.as_slice()
     }
 
     pub fn get_command<'a>(&'a self) -> &'a String {
@@ -341,6 +357,7 @@ fn test_irc_message_general() {
         Err(_) => fail!("failed to parse")
     };
 }
+
 
 #[test]
 fn test_irc_message_numerics() {

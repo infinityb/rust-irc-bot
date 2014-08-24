@@ -3,24 +3,17 @@
 extern crate irc;
 extern crate debug;
 
-use std::fmt;
-use std::collections::{RingBuf, Deque};
-use std::comm::channel;
-use std::io::{TcpStream, IoResult, LineBufferedWriter, BufferedReader};
 
 use irc::{
-    IrcMessage,
     IrcConnection,
     IrcEventMessage,
     IrcEventBundle,
     IrcEventWatcherResponse,
-    RegisterError,
-    RegisterErrorType,
 };
 
 
 fn main() {
-    let mut conn = match IrcConnection::new("127.0.0.1", 6667) {
+    let (mut conn, event_queue) = match IrcConnection::new("127.0.0.1", 6667) {
         Ok(stream) => stream,
         Err(err) => fail!("{}", err)
     };
@@ -56,16 +49,13 @@ fn main() {
     }
 
     loop {      
-        match conn.recv() {
+        match event_queue.recv() {
             IrcEventMessage(message) => {
                 println!("RX: {}", message);
                 if message.get_command().as_slice() == "PING" {
                     let response = format!("PONG :{}\n", message.get_arg(0));
                     println!("TX: {}", response.as_slice());
-                    match conn.write_str(response.as_slice()) {
-                        Ok(_) => (),
-                        Err(err) => fail!("Error writing to IRC server: {}", err)
-                    }
+                    conn.write_str(response.as_slice())
                 }
             },
             IrcEventBundle(event) => {
