@@ -7,10 +7,7 @@ use plugins::GreedPlugin;
 
 use message::IrcMessage;
 use command_mapper::{
-    IrcBotConfigurator,
     PluginContainer,
-    CommandMapperRecord,
-    CommandMapperDispatch,
     RustBotPlugin,
 };
 
@@ -109,7 +106,6 @@ fn watcher_accept(buf: &mut RingBuf<Box<MessageWatcher+Send>>,
     loop {
         match buf.pop_front() {
             Some(mut watcher) => {
-                let watcher_repr = watcher.pretty_print();
                 watcher.accept(message);
                 if watcher.finished() {
                     finished_watchers.push(watcher);
@@ -158,12 +154,13 @@ fn bundler_accept(buf: &mut RingBuf<Box<IrcBundleEventInterface+Send>>,
     finished_watchers
 }
 
-pub struct IrcRegisterRequest<'a> {
-    nick: &'a str,
-    username: &'a str,
-    mode: uint,
-    realname: &'a str
-}
+
+// pub struct IrcRegisterRequest<'a> {
+//     nick: &'a str,
+//     username: &'a str,
+//     mode: uint,
+//     realname: &'a str
+// }
 
 
 impl IrcConnection {
@@ -183,11 +180,11 @@ impl IrcConnection {
         spawn(proc() {
             let mut writer = LineBufferedWriter::new(tmp_stream);
             for message in raw_rx.iter() {
-                writer.write_str(message.append("\n").as_slice());
+                assert!(writer.write_str(message.append("\n").as_slice()).is_ok());
             }
         });
 
-        let mut core_raw_tx = raw_tx.clone();
+        let core_raw_tx = raw_tx.clone();
         spawn(proc() {
             let mut watchers: RingBuf<Box<MessageWatcher+Send>> = RingBuf::new();
             let mut event_bundlers: RingBuf<Box<IrcBundleEventInterface+Send>> = RingBuf::new();
@@ -274,11 +271,3 @@ impl IrcConnection {
         self.raw_tx.send(String::from_str(content))
     }
 }
-
-
-// #[unsafe_destructor]
-// impl Drop for IrcConnection {
-//     fn drop(&mut self) {
-//         self.write_str("QUIT");
-//     }
-// }

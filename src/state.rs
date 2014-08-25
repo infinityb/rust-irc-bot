@@ -55,7 +55,7 @@ fn test_insert_channel() {
     let mut state: IrcState = IrcState::new();
     state.add_channel(IrcChannel {
         name: String::from_str("#coolchannel"),
-        users: vec!["aibi", "faux", "aers", "owly"].move_iter()
+        users: vec!["aibi", "faux", "aers", "owls"].move_iter()
                 .map(|s| String::from_str(s)).collect()
     });
 }

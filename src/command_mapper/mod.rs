@@ -8,7 +8,8 @@ pub struct RustBotPluginApi {
 }
 
 
-/// Defines the public API the bot exposes to plugins
+/// Defines the public API the bot exposes to plugins, valid for 
+/// the lifetime of the plugin instance.
 impl RustBotPluginApi {
     pub fn send_raw(&mut self, string: String) {
         self.raw_tx.send(string);
@@ -47,12 +48,15 @@ impl IrcBotConfigurator {
 }
 
 
+/// Defines the public API the bot exposes to plugins, valid while
+/// the plugins dispatch_cmd method is called
 pub struct CommandMapperDispatch<'a> {
     sender:  &'a SyncSender<String>,
     channel: Option<&'a str>
 }
 
 
+///
 impl<'a> CommandMapperDispatch<'a> {
     pub fn reply(&self, message: String) {
         match self.channel {

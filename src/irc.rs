@@ -12,10 +12,10 @@ pub use self::message::{
     IrcProtocolMessage
 };
 
-pub use self::state::{
-    IrcChannel,
-    IrcState
-};
+// pub use self::state::{
+//     IrcChannel,
+//     IrcState
+// };
 
 
 pub use self::connection::{
@@ -47,6 +47,6 @@ pub mod plugins;
 pub mod numerics;
 pub mod connection;
 pub mod message;
-pub mod state;
+// pub mod state;
 pub mod watchers;
 pub mod command_mapper;
