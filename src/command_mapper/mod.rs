@@ -48,9 +48,18 @@ impl IrcBotConfigurator {
 
 
 pub struct CommandMapperDispatch<'a> {
+    sender:  &'a SyncSender<String>,
     channel: Option<&'a str>
 }
 
+
+impl<'a> CommandMapperDispatch<'a> {
+    pub fn reply(&self, message: String) {
+        let mut sender = self.sender.clone();
+        sender.send(format!("PRIVMSG #dicks :{}", message.as_slice()));
+        // println!("WOULD REPLY WITH: {}", message.as_slice());
+    }
+}
 
 pub struct CommandMapperRecord {
     cmd_word: String,
@@ -80,12 +89,13 @@ impl PluginContainer {
         self.plugins.push((plugin, configurator.mapped));
     }
 
-    pub fn dispatch(&mut self, message: &IrcMessage) {
+    pub fn dispatch(&mut self, raw_tx: &SyncSender<String>, message: &IrcMessage) {
         let channel = match message.channel() {
             Some(channel) => Some(String::from_str(channel)),
             None => None
         };
         let dispatch = CommandMapperDispatch {
+            sender: raw_tx,
             channel: match channel {
                 Some(ref channel) => Some(channel.as_slice()),
                 None => None

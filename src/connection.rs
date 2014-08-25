@@ -189,10 +189,12 @@ impl IrcConnection {
             }
         });
 
+        let mut core_raw_tx = raw_tx.clone();
         spawn(proc() {
             let mut watchers: RingBuf<Box<MessageWatcher+Send>> = RingBuf::new();
             let mut event_bundlers: RingBuf<Box<IrcBundleEventInterface+Send>> = RingBuf::new();
             let mut command_mapper = PluginContainer::new(String::from_str("!"));
+
             command_mapper.register(box GreedPlugin::new());
             command_mapper.register(box DeerPlugin::new());
 
@@ -232,7 +234,7 @@ impl IrcConnection {
                     event_queue_tx.send(IrcEventBundle(resp));
                 }
 
-                command_mapper.dispatch(&message);
+                command_mapper.dispatch(&core_raw_tx, &message);
                 event_queue_tx.send(IrcEventMessage(box message));
             }
         });
