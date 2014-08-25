@@ -1,7 +1,8 @@
 #![crate_name = "irc"]
 #![crate_type = "dylib"]
 #![license = "MIT"]
-#![feature(unsafe_destructor)]
+
+extern crate debug;
 
 // pub use self::numerics;
 
@@ -48,3 +49,4 @@ pub mod message;
 // pub mod state;
 pub mod watchers;
 pub mod command_mapper;
+pub mod core_plugins;

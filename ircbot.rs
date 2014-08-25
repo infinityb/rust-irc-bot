@@ -110,11 +110,6 @@ fn main() {
         match event_queue.recv() {
             IrcEventMessage(message) => {
                 println!("RX: {}", message);
-                if message.get_command().as_slice() == "PING" {
-                    let response = format!("PONG :{}\n", message.get_arg(0));
-                    println!("TX: {}", response.as_slice());
-                    conn.write_str(response.as_slice())
-                }
             },
             IrcEventBundle(event) => {
                 println!("got bundle back: {}", event.pretty_print());

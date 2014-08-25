@@ -3,7 +3,7 @@ use std::io::{TcpStream, IoResult, LineBufferedWriter, BufferedReader};
 
 use plugins::DeerPlugin;
 use plugins::GreedPlugin;
-
+use core_plugins::CtcpVersionResponderPlugin;
 
 use message::IrcMessage;
 use command_mapper::{
@@ -185,11 +185,13 @@ impl IrcConnection {
         });
 
         let core_raw_tx = raw_tx.clone();
+        
         spawn(proc() {
             let mut watchers: RingBuf<Box<MessageWatcher+Send>> = RingBuf::new();
             let mut event_bundlers: RingBuf<Box<IrcBundleEventInterface+Send>> = RingBuf::new();
             let mut command_mapper = PluginContainer::new(String::from_str("!"));
 
+            command_mapper.register(box CtcpVersionResponderPlugin::new());
             command_mapper.register(box GreedPlugin::new());
             command_mapper.register(box DeerPlugin::new());
 
@@ -215,6 +217,11 @@ impl IrcConnection {
                         continue;
                     }
                 };
+
+                if message.get_command().as_slice() == "PING" {
+                    let ping_body: &String = message.get_arg(0);
+                    core_raw_tx.send(format!("PONG :{}\n", ping_body));
+                }
 
                 match IrcBundleJoinEvent::new(&message) {
                     Some(bundler) => event_bundlers.push(box bundler),

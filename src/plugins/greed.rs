@@ -191,16 +191,13 @@ impl RustBotPlugin for GreedPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
         conf.map("greed");
     }
-
-    fn start(&mut self) {
-    }
     
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
         let channel = match message.channel() {
             Some(channel) => channel,
             None => return
         };
-        
+
         let source_nick = match message.source_nick() {
             Some(nickname) => nickname,
             None => return

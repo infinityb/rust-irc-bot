@@ -20,9 +20,9 @@ impl RustBotPluginApi {
 /// Defines the API a plugin implements
 // TODO: move to `plugin' module
 pub trait RustBotPlugin {
-    fn configure(&mut self, conf: &mut IrcBotConfigurator);
-    fn start(&mut self);
-    fn accept(&mut self, _: &IrcMessage) {}
+    fn configure(&mut self, _: &mut IrcBotConfigurator) {}
+    fn start(&mut self) {}
+    fn accept(&mut self,_: &CommandMapperDispatch, _: &IrcMessage) {}
     fn dispatch_cmd(&mut self, _: &CommandMapperDispatch, _: &IrcMessage) {}
 }
 
@@ -56,7 +56,12 @@ pub struct CommandMapperDispatch<'a> {
 }
 
 
-///
+pub struct CommandMapperDispatchAlloc {
+    sender:  SyncSender<String>,
+    channel: Option<String>
+}
+
+
 impl<'a> CommandMapperDispatch<'a> {
     pub fn reply(&self, message: String) {
         match self.channel {
@@ -64,6 +69,21 @@ impl<'a> CommandMapperDispatch<'a> {
                 self.sender.send(format!("PRIVMSG {} :{}", channel, message.as_slice()));
             },
             None => ()
+        }
+    }
+
+    pub fn reply_raw(&self, message: String) {
+        self.sender.send(message);
+    }
+
+    /// Get a long-lived version of the dispatcher.
+    pub fn acquire(&self) -> CommandMapperDispatchAlloc {
+        CommandMapperDispatchAlloc {
+            sender: self.sender.clone(),
+            channel: match self.channel {
+                Some(channel) => Some(String::from_str(channel)),
+                None => None
+            }
         }
     }
 }
@@ -110,6 +130,9 @@ impl PluginContainer {
         };
         for pair in self.plugins.mut_iter() {
             let (ref mut plugin, ref mut mappers) = *pair;
+            // dispatch.plugin = Some(plugin);
+            plugin.accept(&dispatch, message);
+
             for mapper in mappers.iter() {
                 let mut prefix_matcher = String::new();
                 prefix_matcher = prefix_matcher.append(self.cmd_prefix.as_slice());
