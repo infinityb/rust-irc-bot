@@ -110,14 +110,11 @@ impl PluginContainer {
         };
         for pair in self.plugins.mut_iter() {
             let (ref mut plugin, ref mut mappers) = *pair;
-            println!("PluginContainer dispatching for {:?}", plugin);
             for mapper in mappers.iter() {
                 let mut prefix_matcher = String::new();
                 prefix_matcher = prefix_matcher.append(self.cmd_prefix.as_slice());
                 prefix_matcher = prefix_matcher.append(mapper.cmd_word.as_slice());
                 if message.get_args().len() > 1 {
-                    println!("PluginContainer dispatching for {:?}/{}.starts_with({})",
-                        plugin, message.get_arg(1).as_slice(), prefix_matcher.as_slice());
                     if message.get_arg(1).as_slice().starts_with(prefix_matcher.as_slice()) {
                         plugin.dispatch_cmd(&dispatch, message);
                     }

@@ -10,3 +10,8 @@ name = "irc"
 [[bin]]
 name = "ircbot"
 path = "ircbot.rs"
+
+
+[dependencies.toml]
+git = "https://github.com/alexcrichton/toml-rs"
+

@@ -3,8 +3,6 @@
 #![license = "MIT"]
 #![feature(unsafe_destructor)]
 
-extern crate debug;
-
 // pub use self::numerics;
 
 pub use self::message::{

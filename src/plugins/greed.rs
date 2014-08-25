@@ -200,6 +200,7 @@ impl RustBotPlugin for GreedPlugin {
             Some(channel) => channel,
             None => return
         };
+        
         let source_nick = match message.source_nick() {
             Some(nickname) => nickname,
             None => return
