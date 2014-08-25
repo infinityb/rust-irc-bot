@@ -34,7 +34,7 @@ fn parse_botconfig() -> Option<BotConfig> {
         [] => fail!("impossible"),
         [_] => return None,
         [_, ref filename] => filename.clone(),
-        [_, ref filename, ..rest] => filename.clone()
+        [_, ref filename, ..] => filename.clone()
     });
     let mut file = match File::open(&filename) {
         Ok(file) => file,
