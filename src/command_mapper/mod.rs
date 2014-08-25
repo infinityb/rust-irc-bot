@@ -55,9 +55,12 @@ pub struct CommandMapperDispatch<'a> {
 
 impl<'a> CommandMapperDispatch<'a> {
     pub fn reply(&self, message: String) {
-        let mut sender = self.sender.clone();
-        sender.send(format!("PRIVMSG #dicks :{}", message.as_slice()));
-        // println!("WOULD REPLY WITH: {}", message.as_slice());
+        match self.channel {
+            Some(channel) => {
+                self.sender.send(format!("PRIVMSG {} :{}", channel, message.as_slice()));
+            },
+            None => ()
+        }
     }
 }
 

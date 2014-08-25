@@ -17,7 +17,7 @@ fn main() {
         Ok(stream) => stream,
         Err(err) => fail!("{}", err)
     };
-    let mut nick = String::from_str("platy");
+    let mut nick = String::from_str("nano");
 
     loop {
         println!("trying nick {}", nick.as_slice());
@@ -34,6 +34,18 @@ fn main() {
                 }
             }
         };
+    }
+    
+    println!("joining #...");
+    match conn.join("#") {
+        Ok(res) => {
+            println!("succeeded in joining {}, got {} nicks",
+                res.channel.as_slice(), res.nicks.len());
+        },
+        Err(err) => {
+            println!("join error: {:?}", err);
+            fail!("failed to join channel.. dying");
+        }
     }
     
     println!("joining #dicks...");

@@ -182,10 +182,8 @@ impl IrcConnection {
 
         spawn(proc() {
             let mut writer = LineBufferedWriter::new(tmp_stream);
-            loop {
-                for message in raw_rx.iter() {
-                    writer.write_str(message.append("\n").as_slice());
-                }
+            for message in raw_rx.iter() {
+                writer.write_str(message.append("\n").as_slice());
             }
         });
 
@@ -278,9 +276,9 @@ impl IrcConnection {
 }
 
 
-#[unsafe_destructor]
-impl Drop for IrcConnection {
-    fn drop(&mut self) {
-        self.write_str("QUIT");
-    }
-}
+// #[unsafe_destructor]
+// impl Drop for IrcConnection {
+//     fn drop(&mut self) {
+//         self.write_str("QUIT");
+//     }
+// }
