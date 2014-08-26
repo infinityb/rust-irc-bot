@@ -178,8 +178,18 @@ impl IrcMessage {
         })
     }
 
+    #[inline]
+    pub fn is_privmsg(&self) -> bool {
+        self.command() == "PRIVMSG"
+    }
+
+    #[inline]
+    pub fn target_is_channel(&self) -> bool {
+        self.channel().is_some()
+    }
+
     pub fn channel(&self) -> Option<&str> {
-        if self.command() == "PRIVMSG" {
+        if self.is_privmsg() {
             if self.get_arg(0).as_slice().starts_with("#") {
                 Some(self.get_arg(0).as_slice())
             } else {
@@ -190,6 +200,7 @@ impl IrcMessage {
         }
     }
 
+    #[inline]
     pub fn source_nick(&self) -> Option<String> {
         match self.prefix {
             Some(IrcHostmaskPrefix(ref hostmask)) => Some(hostmask.nick.clone()),
@@ -209,18 +220,22 @@ impl IrcMessage {
         &self.message
     }
 
+    #[inline]
     pub fn command<'a>(&'a self) -> &'a str {
         self.command.as_slice()
     }
 
+    #[inline]
     pub fn get_command<'a>(&'a self) -> &'a String {
         &self.command
     }
 
+    #[inline]
     pub fn get_args(&self) -> &Vec<String> {
         &self.args
     }
 
+    #[inline]
     pub fn get_arg<'a>(&'a self, i: uint) -> &'a String {
         &self.args[i]
     }

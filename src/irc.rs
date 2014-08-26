@@ -2,7 +2,7 @@
 #![crate_type = "dylib"]
 #![license = "MIT"]
 
-extern crate debug;
+extern crate time;
 
 // pub use self::numerics;
 

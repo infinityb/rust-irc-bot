@@ -22,7 +22,7 @@ impl RustBotPluginApi {
 pub trait RustBotPlugin {
     fn configure(&mut self, _: &mut IrcBotConfigurator) {}
     fn start(&mut self) {}
-    fn accept(&mut self,_: &CommandMapperDispatch, _: &IrcMessage) {}
+    fn accept(&mut self, _: &CommandMapperDispatch, _: &IrcMessage) {}
     fn dispatch_cmd(&mut self, _: &CommandMapperDispatch, _: &IrcMessage) {}
 }
 

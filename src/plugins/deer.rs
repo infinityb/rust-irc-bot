@@ -27,7 +27,7 @@ impl RustBotPlugin for DeerPlugin {
         // "http://deer.satf.se/deerlist.php?deer={}";
     }
 
-    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
+    fn dispatch_cmd(&mut self, _m: &CommandMapperDispatch, message: &IrcMessage) {
         // println!("{:?}", m.acquire());
         match message.channel() {
             Some(channel) => {

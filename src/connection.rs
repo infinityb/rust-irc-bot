@@ -3,6 +3,7 @@ use std::io::{TcpStream, IoResult, LineBufferedWriter, BufferedReader};
 
 use plugins::DeerPlugin;
 use plugins::GreedPlugin;
+use plugins::SeenPlugin;
 use core_plugins::CtcpVersionResponderPlugin;
 
 use message::IrcMessage;
@@ -193,6 +194,7 @@ impl IrcConnection {
 
             command_mapper.register(box CtcpVersionResponderPlugin::new());
             command_mapper.register(box GreedPlugin::new());
+            command_mapper.register(box SeenPlugin::new());
             command_mapper.register(box DeerPlugin::new());
 
             let mut reader = reader;
