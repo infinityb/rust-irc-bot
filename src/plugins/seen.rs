@@ -126,6 +126,11 @@ impl RustBotPlugin for SeenPlugin {
     }
 
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
+        let source_nick = match message.source_nick() {
+            Some(source_nick) => source_nick,
+            None => return
+        };
+
         if !message.target_is_channel() {
             return;
         }
@@ -146,6 +151,16 @@ impl RustBotPlugin for SeenPlugin {
         }
 
         let target_nick = String::from_str(args[1]);
+
+        if source_nick == target_nick {
+            m.reply(format!("Looking for yourself, {}?", source_nick));
+            return;
+        }
+
+        if m.current_nick() == target_nick.as_slice() {
+            m.reply(format!("You found me, {}!", source_nick));
+            return;
+        }
 
         let activity = match self.map.find(&target_nick) {
             Some(val) => val,

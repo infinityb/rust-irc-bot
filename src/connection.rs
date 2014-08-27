@@ -21,6 +21,7 @@ use watchers::{
 };
 
 
+
 pub trait IrcBundleEventInterface {
     fn accept(&mut self, message: &IrcMessage) -> bool;
     fn pretty_print(&self) -> String;
@@ -98,9 +99,27 @@ pub struct IrcConnection {
     has_registered: bool
 }
 
-fn watcher_accept(buf: &mut RingBuf<Box<MessageWatcher+Send>>,
-                  message: &IrcMessage
-                 ) -> Vec<Box<MessageWatcher+Send>> {
+
+struct IrcConnectionInternalState {
+    // The output stream towards the user
+    event_queue_tx: SyncSender<IrcEvent>,
+
+    // The output stream towards the server
+    raw_sender: SyncSender<String>,
+
+    // Unfinished watchers currently attached to the stream
+    watchers: RingBuf<Box<MessageWatcher+Send>>,
+
+    event_bundlers: RingBuf<Box<IrcBundleEventInterface+Send>>,
+
+    command_mapper: PluginContainer,
+    current_nick: Option<String>
+}
+
+
+fn watcher_accept_impl(buf: &mut RingBuf<Box<MessageWatcher+Send>>,
+                       message: &IrcMessage
+                      ) -> Vec<Box<MessageWatcher+Send>> {
 
     let mut keep_watchers: RingBuf<Box<MessageWatcher+Send>> = RingBuf::new();
     let mut finished_watchers: Vec<Box<MessageWatcher+Send>> = Vec::new();
@@ -127,10 +146,10 @@ fn watcher_accept(buf: &mut RingBuf<Box<MessageWatcher+Send>>,
     finished_watchers
 }
 
-fn bundler_accept(buf: &mut RingBuf<Box<IrcBundleEventInterface+Send>>,
-                  message: &IrcMessage
-                 ) -> Vec<Box<IrcBundleEventInterface+Send>> {
 
+fn bundler_accept_impl(buf: &mut RingBuf<Box<IrcBundleEventInterface+Send>>,
+                       message: &IrcMessage
+                      ) -> Vec<Box<IrcBundleEventInterface+Send>> {
     let mut keep_watchers: RingBuf<Box<IrcBundleEventInterface+Send>> = RingBuf::new();
     let mut finished_watchers: Vec<Box<IrcBundleEventInterface+Send>> = Vec::new();
 
@@ -156,12 +175,71 @@ fn bundler_accept(buf: &mut RingBuf<Box<IrcBundleEventInterface+Send>>,
 }
 
 
-// pub struct IrcRegisterRequest<'a> {
-//     nick: &'a str,
-//     username: &'a str,
-//     mode: uint,
-//     realname: &'a str
-// }
+impl IrcConnectionInternalState {
+    pub fn new(event_queue_tx: SyncSender<IrcEvent>,
+               raw_sender: SyncSender<String>
+              ) -> IrcConnectionInternalState {
+        let mut watchers = RingBuf::new();
+        let mut event_bundlers = RingBuf::new();
+        let mut command_mapper = PluginContainer::new(String::from_str("!"));
+
+        IrcConnectionInternalState {
+            event_queue_tx: event_queue_tx,
+            raw_sender: raw_sender,
+            watchers: watchers,
+            event_bundlers: event_bundlers,
+            command_mapper: command_mapper,
+            current_nick: None
+        }
+    }
+
+    fn dispatch(&mut self, message: IrcMessage) {
+        if message.command() == "PING" {
+            let ping_body: &String = message.get_arg(0);
+            self.raw_sender.send(format!("PONG :{}\n", ping_body));
+        }
+
+        if message.command() == "001" {
+            let accepted_nick: &String = message.get_arg(0);
+            self.current_nick = Some(accepted_nick.clone());
+        }
+
+        if message.command() == "NICK" {
+            self.current_nick = match (message.source_nick(), self.current_nick.take()) {
+                (Some(source_nick), Some(current_nick)) => {
+                    if source_nick == current_nick {
+                        Some(message.get_arg(0).clone())
+                    } else {
+                        Some(current_nick)
+                    }
+                },
+                (_, any) => any
+            };
+        }
+
+        match IrcBundleJoinEvent::new(&message) {
+            Some(bundler) => self.event_bundlers.push(box bundler),
+            None => ()
+        }
+
+        for resp in watcher_accept_impl(&mut self.watchers, &message).move_iter() {
+            self.event_queue_tx.send(IrcEventWatcherResponse(resp));
+        }
+
+        for resp in bundler_accept_impl(&mut self.event_bundlers, &message).move_iter() {
+            self.event_queue_tx.send(IrcEventBundle(resp));
+        }
+
+        match self.current_nick {
+            Some(ref current_nick) => {
+                self.command_mapper.dispatch(
+                    current_nick.as_slice(), &self.raw_sender, &message);
+            },
+            None => ()
+        }
+        self.event_queue_tx.send(IrcEventMessage(box message));
+    }
+}
 
 
 impl IrcConnection {
@@ -188,14 +266,13 @@ impl IrcConnection {
         let core_raw_tx = raw_tx.clone();
         
         spawn(proc() {
-            let mut watchers: RingBuf<Box<MessageWatcher+Send>> = RingBuf::new();
-            let mut event_bundlers: RingBuf<Box<IrcBundleEventInterface+Send>> = RingBuf::new();
-            let mut command_mapper = PluginContainer::new(String::from_str("!"));
+            let mut state = IrcConnectionInternalState::new(event_queue_tx, core_raw_tx);
+            // RX: IrcMessage(rustbot!rustbot@out-ab-191.wireless.telus.com, NICK, [rustbot2, ])
 
-            command_mapper.register(box CtcpVersionResponderPlugin::new());
-            command_mapper.register(box GreedPlugin::new());
-            command_mapper.register(box SeenPlugin::new());
-            command_mapper.register(box DeerPlugin::new());
+            state.command_mapper.register(box CtcpVersionResponderPlugin::new());
+            state.command_mapper.register(box GreedPlugin::new());
+            state.command_mapper.register(box SeenPlugin::new());
+            state.command_mapper.register(box DeerPlugin::new());
 
             let mut reader = reader;
 
@@ -207,39 +284,17 @@ impl IrcConnection {
 
                 loop {
                     match watchers_rx.try_recv() {
-                        Ok(value) => watchers.push(value),
+                        Ok(value) => state.watchers.push(value),
                         Err(_) => break
                     };
                 }
-
-                let message = match IrcMessage::from_str(string.as_slice()) {
+                state.dispatch(match IrcMessage::from_str(string.as_slice()) {
                     Ok(message) => message,
                     Err(err) => {
                         println!("Invalid IRC message: {} for {}", err, string);
                         continue;
                     }
-                };
-
-                if message.get_command().as_slice() == "PING" {
-                    let ping_body: &String = message.get_arg(0);
-                    core_raw_tx.send(format!("PONG :{}\n", ping_body));
-                }
-
-                match IrcBundleJoinEvent::new(&message) {
-                    Some(bundler) => event_bundlers.push(box bundler),
-                    None => ()
-                }
-
-                for resp in watcher_accept(&mut watchers, &message).move_iter() {
-                    event_queue_tx.send(IrcEventWatcherResponse(resp));
-                }
-
-                for resp in bundler_accept(&mut event_bundlers, &message).move_iter() {
-                    event_queue_tx.send(IrcEventBundle(resp));
-                }
-
-                command_mapper.dispatch(&core_raw_tx, &message);
-                event_queue_tx.send(IrcEventMessage(box message));
+                });
             }
         });
 

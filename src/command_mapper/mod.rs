@@ -51,6 +51,7 @@ impl IrcBotConfigurator {
 /// Defines the public API the bot exposes to plugins, valid while
 /// the plugins dispatch_cmd method is called
 pub struct CommandMapperDispatch<'a> {
+    bot_nick: &'a str,
     sender:  &'a SyncSender<String>,
     channel: Option<&'a str>
 }
@@ -63,6 +64,10 @@ pub struct CommandMapperDispatchAlloc {
 
 
 impl<'a> CommandMapperDispatch<'a> {
+    pub fn current_nick(&self) -> &'a str {
+        self.bot_nick
+    }
+
     pub fn reply(&self, message: String) {
         match self.channel {
             Some(channel) => {
@@ -116,12 +121,13 @@ impl PluginContainer {
         self.plugins.push((plugin, configurator.mapped));
     }
 
-    pub fn dispatch(&mut self, raw_tx: &SyncSender<String>, message: &IrcMessage) {
+    pub fn dispatch(&mut self, bot_nick: &str, raw_tx: &SyncSender<String>, message: &IrcMessage) {
         let channel = match message.channel() {
             Some(channel) => Some(String::from_str(channel)),
             None => None
         };
         let dispatch = CommandMapperDispatch {
+            bot_nick: bot_nick,
             sender: raw_tx,
             channel: match channel {
                 Some(ref channel) => Some(channel.as_slice()),
@@ -130,7 +136,6 @@ impl PluginContainer {
         };
         for pair in self.plugins.mut_iter() {
             let (ref mut plugin, ref mut mappers) = *pair;
-            // dispatch.plugin = Some(plugin);
             plugin.accept(&dispatch, message);
 
             for mapper in mappers.iter() {
