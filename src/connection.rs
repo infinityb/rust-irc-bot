@@ -266,15 +266,13 @@ impl IrcConnection {
         let core_raw_tx = raw_tx.clone();
         
         spawn(proc() {
+            let mut reader = reader;
             let mut state = IrcConnectionInternalState::new(event_queue_tx, core_raw_tx);
-            // RX: IrcMessage(rustbot!rustbot@out-ab-191.wireless.telus.com, NICK, [rustbot2, ])
 
             state.command_mapper.register(box CtcpVersionResponderPlugin::new());
             state.command_mapper.register(box GreedPlugin::new());
             state.command_mapper.register(box SeenPlugin::new());
             state.command_mapper.register(box DeerPlugin::new());
-
-            let mut reader = reader;
 
             loop {
                 let string = String::from_str(match reader.read_line() {
@@ -288,6 +286,7 @@ impl IrcConnection {
                         Err(_) => break
                     };
                 }
+                
                 state.dispatch(match IrcMessage::from_str(string.as_slice()) {
                     Ok(message) => message,
                     Err(err) => {

@@ -3,18 +3,14 @@
 #![license = "MIT"]
 
 extern crate time;
+extern crate serialize;
 
-// pub use self::numerics;
+use serialize::json;
 
 pub use self::message::{
     IrcMessage,
     IrcProtocolMessage
 };
-
-// pub use self::state::{
-//     IrcChannel,
-//     IrcState
-// };
 
 
 pub use self::connection::{

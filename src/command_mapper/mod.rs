@@ -50,28 +50,23 @@ impl IrcBotConfigurator {
 
 /// Defines the public API the bot exposes to plugins, valid while
 /// the plugins dispatch_cmd method is called
-pub struct CommandMapperDispatch<'a> {
-    bot_nick: &'a str,
-    sender:  &'a SyncSender<String>,
-    channel: Option<&'a str>
-}
-
-
-pub struct CommandMapperDispatchAlloc {
+#[deriving(Clone)]
+pub struct CommandMapperDispatch {
+    bot_nick: String,
     sender:  SyncSender<String>,
     channel: Option<String>
 }
 
 
-impl<'a> CommandMapperDispatch<'a> {
-    pub fn current_nick(&self) -> &'a str {
-        self.bot_nick
+impl CommandMapperDispatch {
+    pub fn current_nick(&self) -> &str {
+        self.bot_nick.as_slice()
     }
 
     pub fn reply(&self, message: String) {
         match self.channel {
-            Some(channel) => {
-                self.sender.send(format!("PRIVMSG {} :{}", channel, message.as_slice()));
+            Some(ref channel) => {
+                self.sender.send(format!("PRIVMSG {} :{}", channel.as_slice(), message.as_slice()));
             },
             None => ()
         }
@@ -80,18 +75,8 @@ impl<'a> CommandMapperDispatch<'a> {
     pub fn reply_raw(&self, message: String) {
         self.sender.send(message);
     }
-
-    /// Get a long-lived version of the dispatcher.
-    pub fn acquire(&self) -> CommandMapperDispatchAlloc {
-        CommandMapperDispatchAlloc {
-            sender: self.sender.clone(),
-            channel: match self.channel {
-                Some(channel) => Some(String::from_str(channel)),
-                None => None
-            }
-        }
-    }
 }
+
 
 pub struct CommandMapperRecord {
     cmd_word: String,
@@ -118,6 +103,7 @@ impl PluginContainer {
         let mut plugin = plugin;
         let mut configurator = IrcBotConfigurator::new();
         plugin.configure(&mut configurator);
+        plugin.start();
         self.plugins.push((plugin, configurator.mapped));
     }
 
@@ -126,22 +112,24 @@ impl PluginContainer {
             Some(channel) => Some(String::from_str(channel)),
             None => None
         };
+
         let dispatch = CommandMapperDispatch {
-            bot_nick: bot_nick,
-            sender: raw_tx,
+            bot_nick: String::from_str(bot_nick),
+            sender: raw_tx.clone(),
             channel: match channel {
-                Some(ref channel) => Some(channel.as_slice()),
+                Some(ref channel) => Some(channel.clone()),
                 None => None
             }
         };
+
         for pair in self.plugins.mut_iter() {
             let (ref mut plugin, ref mut mappers) = *pair;
             plugin.accept(&dispatch, message);
 
             for mapper in mappers.iter() {
-                let mut prefix_matcher = String::new();
-                prefix_matcher = prefix_matcher.append(self.cmd_prefix.as_slice());
-                prefix_matcher = prefix_matcher.append(mapper.cmd_word.as_slice());
+                let prefix_matcher = String::new()
+                        .append(self.cmd_prefix.as_slice())
+                        .append(mapper.cmd_word.as_slice());
                 if message.get_args().len() > 1 {
                     if message.get_arg(1).as_slice().starts_with(prefix_matcher.as_slice()) {
                         plugin.dispatch_cmd(&dispatch, message);
