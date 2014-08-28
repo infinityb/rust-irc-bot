@@ -5,7 +5,6 @@
 extern crate time;
 extern crate serialize;
 
-use serialize::json;
 
 pub use self::message::{
     IrcMessage,

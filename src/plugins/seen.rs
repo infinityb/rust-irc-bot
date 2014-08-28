@@ -63,6 +63,28 @@ fn is_message_interesting(message: &IrcMessage) -> bool {
     }
 }
 
+enum SeenCommandType<'a> {
+    Seen(&'a str)
+}
+
+
+fn parse_seen<'a>(message: &'a IrcMessage) -> Option<SeenCommandType<'a>> {
+    let message_body = message.get_arg(1).as_slice();
+    match message_body.find(' ') {
+        Some(idx) => Some(Seen(message_body.slice_from(idx + 1))),
+        None => None
+    }
+}
+
+
+fn parse_command<'a>(m: &CommandMapperDispatch, message: &'a IrcMessage) -> Option<SeenCommandType<'a>> {
+    match m.command() {
+        Some("seen") => parse_seen(message),
+        Some(_) => None,
+        None => None
+    }
+}
+
 
 fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
     let mut user_has_quit: Option<Timespec> = None;
@@ -105,7 +127,7 @@ impl RustBotPlugin for SeenPlugin {
         conf.map("seen");
     }
 
-    fn accept(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
+    fn accept(&mut self, _m: &CommandMapperDispatch, message: &IrcMessage) {
         if !is_message_interesting(message) {
             return;
         }
@@ -119,7 +141,7 @@ impl RustBotPlugin for SeenPlugin {
                 self.map.insert(source_nick, trim_vec(records));
             },
             None => {
-                let mut records = vec![SeenRecord::with_now(message.clone())];
+                let records = vec![SeenRecord::with_now(message.clone())];
                 self.map.insert(source_nick, records);
             }
         }
@@ -134,42 +156,33 @@ impl RustBotPlugin for SeenPlugin {
         if !message.target_is_channel() {
             return;
         }
+
         if !message.is_privmsg() {
             return;
         }
         
-        let args = message.get_args();
-        if args.len() != 2 {
-            // Invalid PRIVMSG
-            return;
+        match parse_command(m, message) {
+            Some(Seen(target_nick)) => {
+                if source_nick.as_slice() == target_nick {
+                    m.reply(format!("Looking for yourself, {}?", source_nick));
+                    return;
+                }
+
+                if m.current_nick() == target_nick {
+                    m.reply(format!("You found me, {}!", source_nick));
+                    return;
+                }
+                let target_nick_str = String::from_str(target_nick);
+                let activity = match self.map.find(&target_nick_str) {
+                    Some(val) => val,
+                    None => {
+                        m.reply(format!("{} is unknown", target_nick));
+                        return
+                    }
+                };
+                m.reply(format_activity(target_nick.as_slice(), activity));
+            },
+            None => return
         }
-
-        let args: Vec<&str> = args[1].as_slice().splitn(1, ' ').collect();
-        if args.len() != 2 {
-            // Invalid command
-            return;
-        }
-
-        let target_nick = String::from_str(args[1]);
-
-        if source_nick == target_nick {
-            m.reply(format!("Looking for yourself, {}?", source_nick));
-            return;
-        }
-
-        if m.current_nick() == target_nick.as_slice() {
-            m.reply(format!("You found me, {}!", source_nick));
-            return;
-        }
-
-        let activity = match self.map.find(&target_nick) {
-            Some(val) => val,
-            None => {
-                m.reply(format!("{} is unknown", args[1]));
-                return
-            }
-        };
-        let activity_formatted = format_activity(target_nick.as_slice(), activity);
-        m.reply(activity_formatted);
     }
 }

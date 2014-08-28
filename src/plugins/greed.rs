@@ -59,6 +59,20 @@ pub struct GreedPlugin {
 }
 
 
+enum GreedCommandType<'a> {
+    Greed
+}
+
+
+fn parse_command<'a>(m: &CommandMapperDispatch, _message: &'a IrcMessage) -> Option<GreedCommandType<'a>> {
+    match m.command() {
+        Some("greed") => Some(Greed),
+        Some(_) => None,
+        None => None
+    }
+}
+
+
 #[inline]
 fn is_prefix(rec: &ScoreRec, roll: &RollResult, start_idx: uint) -> bool {
     let (prefix_len, ref roll_target, _) = *rec;
@@ -184,15 +198,8 @@ impl GreedPlugin {
             states: Vec::new()
         }
     }
-}
 
-
-impl RustBotPlugin for GreedPlugin {
-    fn configure(&mut self, conf: &mut IrcBotConfigurator) {
-        conf.map("greed");
-    }
-    
-    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
+    fn dispatch_cmd_greed(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
         let channel = match message.channel() {
             Some(channel) => channel,
             None => return
@@ -240,6 +247,20 @@ impl RustBotPlugin for GreedPlugin {
             None => {
                 Some((source_nick, cur_user_roll, score))
             }
+        }
+    }
+}
+
+
+impl RustBotPlugin for GreedPlugin {
+    fn configure(&mut self, conf: &mut IrcBotConfigurator) {
+        conf.map("greed");
+    }
+    
+    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
+        match parse_command(m, message) {
+            Some(Greed) => self.dispatch_cmd_greed(m, message),
+            None => ()
         }
     }
 }

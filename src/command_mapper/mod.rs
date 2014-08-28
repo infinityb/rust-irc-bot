@@ -53,6 +53,7 @@ impl IrcBotConfigurator {
 #[deriving(Clone)]
 pub struct CommandMapperDispatch {
     bot_nick: String,
+    command: Option<String>,
     sender:  SyncSender<String>,
     channel: Option<String>
 }
@@ -61,6 +62,13 @@ pub struct CommandMapperDispatch {
 impl CommandMapperDispatch {
     pub fn current_nick(&self) -> &str {
         self.bot_nick.as_slice()
+    }
+
+    pub fn command(&self) -> Option<&str> {
+        match self.command {
+            Some(ref command) => Some(command.as_slice()),
+            None => None
+        }
     }
 
     pub fn reply(&self, message: String) {
@@ -113,7 +121,8 @@ impl PluginContainer {
             None => None
         };
 
-        let dispatch = CommandMapperDispatch {
+        let mut dispatch = CommandMapperDispatch {
+            command: None,
             bot_nick: String::from_str(bot_nick),
             sender: raw_tx.clone(),
             channel: match channel {
@@ -127,15 +136,56 @@ impl PluginContainer {
             plugin.accept(&dispatch, message);
 
             for mapper in mappers.iter() {
-                let prefix_matcher = String::new()
-                        .append(self.cmd_prefix.as_slice())
-                        .append(mapper.cmd_word.as_slice());
                 if message.get_args().len() > 1 {
-                    if message.get_arg(1).as_slice().starts_with(prefix_matcher.as_slice()) {
-                        plugin.dispatch_cmd(&dispatch, message);
-                    }
+                    let first_word = extract_first_word(message.get_arg(1).as_slice());
+                    match decompose_command(self.cmd_prefix.as_slice(), first_word) {
+                        Some(command) => {
+                            if command == mapper.cmd_word.as_slice() {
+                                dispatch.command = Some(mapper.cmd_word.clone());
+                                println!("dispatching {} -> {}", dispatch.command, command);
+                                plugin.dispatch_cmd(&dispatch, message);
+                                dispatch.command = None
+                            }
+                        }
+                        None => ()
+                    };
                 }   
             }
         }
     }
+}
+
+
+fn extract_first_word(privmsg_text: &str) -> &str {
+    match privmsg_text.find(' ') {
+        Some(idx) => privmsg_text.slice_to(idx),
+        None => privmsg_text
+    }
+}
+
+
+fn decompose_command<'a>(prefix: &str, first_word: &'a str) -> Option<&'a str> {
+    if first_word.len() < prefix.len() {
+        return None;
+    }
+    if prefix != first_word.slice_to(prefix.len()) {
+        return None;
+    }
+    Some(first_word.slice_from(prefix.len()))
+}
+
+
+#[test]
+fn test_extract_first_word() {
+    assert_eq!(extract_first_word("!deer"), "!deer");
+    assert_eq!(extract_first_word("!deerkins foobar"), "!deerkins");
+    assert_eq!(extract_first_word(""), "");
+}
+
+#[test]
+fn test_decompose_command() {
+    assert_eq!(decompose_command("!", "!deer"), Some("deer"));
+    assert_eq!(decompose_command("@", "!deer"), None);
+    assert_eq!(decompose_command("", "deer"), Some("deer"));
+    assert_eq!(decompose_command("!", ""), None);
 }

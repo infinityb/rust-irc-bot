@@ -179,9 +179,9 @@ impl IrcConnectionInternalState {
     pub fn new(event_queue_tx: SyncSender<IrcEvent>,
                raw_sender: SyncSender<String>
               ) -> IrcConnectionInternalState {
-        let mut watchers = RingBuf::new();
-        let mut event_bundlers = RingBuf::new();
-        let mut command_mapper = PluginContainer::new(String::from_str("!"));
+        let watchers = RingBuf::new();
+        let event_bundlers = RingBuf::new();
+        let command_mapper = PluginContainer::new(String::from_str("!"));
 
         IrcConnectionInternalState {
             event_queue_tx: event_queue_tx,
@@ -286,7 +286,7 @@ impl IrcConnection {
                         Err(_) => break
                     };
                 }
-                
+
                 state.dispatch(match IrcMessage::from_str(string.as_slice()) {
                     Ok(message) => message,
                     Err(err) => {

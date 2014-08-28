@@ -7,6 +7,7 @@ use message::{
     IrcMessage
 };
 use std::io::TcpStream;
+use std::str::replace;
 use serialize::json;
 use serialize::json::{DecodeResult, ApplicationError};
 
@@ -33,12 +34,7 @@ static HTTP_SERVER: &'static str = "deer.satf.se";
 
 #[deriving(Decodable, Encodable)]
 struct DeerApiResponse {
-    creator: String,
-    date: String,
-    deer: String,
-    irccode: String,
-    kinskode: String,
-    status: String
+    irccode: String
 }
 
 
@@ -47,11 +43,12 @@ fn get_deer(deer_name: &str) -> DecodeResult<DeerApiResponse> {
         Ok(stream) => stream,
         Err(_) => return Err(ApplicationError(format!("Host Connection Error")))
     };
+    let deer_name = replace(deer_name, " ", "%20");
 
-    stream.write(format!(
+    assert!(stream.write(format!(
         "GET /deerlist.php?deer={} HTTP/1.0\r\nHost: deer.satf.se\r\n\r\n",
-        deer_name
-    ).as_bytes());
+        deer_name.as_slice()
+    ).as_bytes()).is_ok());
 
     let http_doc = match stream.read_to_string() {
         Ok(string) => string,
@@ -64,6 +61,7 @@ fn get_deer(deer_name: &str) -> DecodeResult<DeerApiResponse> {
         None => return Err(ApplicationError(format!("HTTP Parse Error")))
     };
     let json_doc = http_doc.as_slice().slice_from(index);
+    println!("json_doc = {}", json_doc);
   
     json::decode::<DeerApiResponse>(json_doc)
 }
@@ -81,10 +79,35 @@ impl DeerPlugin {
 }
 
 
+enum DeerCommandType<'a> {
+    Deer,
+    Deerkins(&'a str)
+}
+
+
+fn parse_deerkins<'a>(message: &'a IrcMessage) -> Option<DeerCommandType<'a>> {
+    let message_body = message.get_arg(1).as_slice();
+    match message_body.find(' ') {
+        Some(idx) => Some(Deerkins(message_body.slice_from(idx + 1))),
+        None => None
+    }
+}
+
+
+fn parse_command<'a>(m: &CommandMapperDispatch, message: &'a IrcMessage) -> Option<DeerCommandType<'a>> {
+    match m.command() {
+        Some("deer") => Some(Deer),
+        Some("deerkins") => parse_deerkins(message),
+        Some(_) => None,
+        None => None
+    }
+}
+
+
 impl RustBotPlugin for DeerPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
         conf.map("deer");
-        // conf.map("deerkins");
+        conf.map("deerkins");
     }
 
     fn start(&mut self) {
@@ -96,22 +119,14 @@ impl RustBotPlugin for DeerPlugin {
                 if message.get_args().len() < 2 {
                     continue
                 }
-                let unprefixed_msg = message.get_arg(1).as_slice().slice_from(1);
-                let command_parts = if unprefixed_msg == "deer" {
-                    ("deer", None)
-                } else if unprefixed_msg.starts_with("deerkins ") {
-                    ("deerkins", Some(unprefixed_msg.slice_from(9)))
-                } else {
-                    continue
-                };
-                match command_parts {
-                    ("deer", _) => {
+                match parse_command(&m, &message) {
+                    Some(Deer) => {
                         for deer_line in DEER.split('\n') {
                             m.reply(String::from_str(deer_line));
                         }
                     },
-                    ("deerkins", Some(something)) => {
-                        match get_deer(something) {
+                    Some(Deerkins(deer_name)) => {
+                        match get_deer(deer_name) {
                             Ok(deer_data) => {
                                 for deer_line in deer_data.irccode.as_slice().split('\n') {
                                     m.reply(String::from_str(deer_line));
@@ -121,8 +136,8 @@ impl RustBotPlugin for DeerPlugin {
                                 m.reply(format!("error: {}", err));
                             }
                         }
-                    }
-                    _ => continue
+                    },
+                    None => continue
                 };
             }
         });
