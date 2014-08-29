@@ -57,6 +57,8 @@ fn trim_vec<T>(vec: Vec<T>) -> Vec<T> {
 
 fn is_message_interesting(message: &IrcMessage) -> bool {
     match message.command() {
+        // "JOIN" => true,
+        // "ACTION" => true,
         "PRIVMSG" => true,
         "QUIT" => true,
         _ => false

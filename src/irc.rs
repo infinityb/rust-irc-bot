@@ -4,6 +4,7 @@
 
 extern crate time;
 extern crate serialize;
+extern crate debug;
 
 
 pub use self::message::{
@@ -41,7 +42,7 @@ pub mod plugins;
 pub mod numerics;
 pub mod connection;
 pub mod message;
-// pub mod state;
+pub mod state;
 pub mod watchers;
 pub mod command_mapper;
 pub mod core_plugins;
