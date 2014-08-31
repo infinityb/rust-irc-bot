@@ -1,7 +1,7 @@
 use std::io::IoError;
 
 use serialize::json;
-use serialize::json::{DecoderError, DecodeResult, ApplicationError};
+use serialize::json::DecoderError;
 use url::Url;
 use http::client::RequestWriter;
 use http::method::Get;
@@ -38,7 +38,7 @@ enum RadioCommandType {
 }
 
 
-fn parse_command<'a>(m: &CommandMapperDispatch, message: &'a IrcMessage) -> Option<RadioCommandType> {
+fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<RadioCommandType> {
     match m.command() {
         Some("dj") => Some(Dj),
         Some(_) => None,
@@ -47,6 +47,7 @@ fn parse_command<'a>(m: &CommandMapperDispatch, message: &'a IrcMessage) -> Opti
 }
 
 
+#[deriving(Show)]
 enum RadioApiFailure {
     NoResponseError(IoError),
     ResponseReadError(IoError),
@@ -98,7 +99,7 @@ impl RadioInternalState {
         }
     }
 
-    fn handle_dj(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
+    fn handle_dj(&mut self, m: &CommandMapperDispatch) {
         self.requests_made += 1;
 
         match get_radio_api_result() {
@@ -107,14 +108,15 @@ impl RadioInternalState {
             }
             Err(err) => {
                 self.requests_failed += 1;
+                m.reply(format!("Error: {}", err));
             }
         }
     }
 
     fn start(&mut self, rx: Receiver<(CommandMapperDispatch, IrcMessage)>) {
         for (m, message) in rx.iter() {
-            match parse_command(&m, &message) {
-                Some(Dj) => self.handle_dj(&m, &message),
+            match parse_command(&m) {
+                Some(Dj) => self.handle_dj(&m),
                 None => ()
             }
         }

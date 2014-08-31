@@ -6,11 +6,16 @@ use command_mapper::{
 use message::{
     IrcMessage
 };
-use std::io::TcpStream;
-use std::str::replace;
+use std::io::IoError;
 use serialize::json;
-use serialize::json::{DecodeResult, ApplicationError};
+use serialize::json::DecoderError;
 use time::{get_time, Timespec};
+
+use url::Url;
+use url::form_urlencoded::serialize_owned;
+
+use http::client::RequestWriter;
+use http::method::Get;
 
 
 static DEER: &'static str = concat!(
@@ -30,7 +35,7 @@ static DEER: &'static str = concat!(
     "\u000301,01@@@@\u000300,00@\u000301,01@\u000300,00@\u000301,01@@");
 
 
-static HTTP_SERVER: &'static str = "deer.satf.se";
+static BASE_URL: &'static str = "http://deer.satf.se/deerlist.php";
 
 
 #[deriving(Decodable, Encodable)]
@@ -39,33 +44,43 @@ struct DeerApiResponse {
 }
 
 
-fn get_deer(deer_name: &str) -> DecodeResult<DeerApiResponse> {
-    let mut stream = match TcpStream::connect(HTTP_SERVER, 80) {
-        Ok(stream) => stream,
-        Err(_) => return Err(ApplicationError(format!("Host Connection Error")))
-    };
-    let deer_name = replace(deer_name, " ", "%20");
+#[deriving(Show)]
+enum DeerApiFailure {
+    NoResponseError(IoError),
+    ResponseReadError(IoError),
+    ResponseDecodeError,
+    ResponseDeserializeError(DecoderError)
+}
 
-    assert!(stream.write(format!(
-        "GET /deerlist.php?deer={} HTTP/1.0\r\nHost: {}\r\n\r\n",
-        deer_name.as_slice(),
-        HTTP_SERVER
-    ).as_bytes()).is_ok());
 
-    let http_doc = match stream.read_to_string() {
-        Ok(string) => string,
-        Err(_) => return Err(ApplicationError(format!("Read Error")))
+fn get_deer(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> {
+    let mut url = match Url::parse(BASE_URL) {
+        Ok(url) => url,
+        Err(_err) => unreachable!()
     };
-    drop(stream);
+    url.query = Some(serialize_owned(vec![
+        (String::from_str("deer"), String::from_str(deer_name)),
+    ].as_slice()));
 
-    let index = match http_doc.as_slice().find_str("\r\n\r\n") {
-        Some(index) => index,
-        None => return Err(ApplicationError(format!("HTTP Parse Error")))
+    let request: RequestWriter = RequestWriter::new(Get, url).unwrap();
+
+    let mut response = match request.read_response() {
+        Ok(response) => response,
+        Err((_, io_error)) => return Err(NoResponseError(io_error))
     };
-    let json_doc = http_doc.as_slice().slice_from(index);
-    println!("json_doc = {}", json_doc);
-  
-    json::decode::<DeerApiResponse>(json_doc)
+    let body = match response.read_to_end() {
+        Ok(body) => body,
+        Err(io_error) => return Err(ResponseReadError(io_error))
+    };
+    let body = match String::from_utf8(body) {
+        Ok(body) => body,
+        Err(_err) => return Err(ResponseDecodeError)
+    };
+
+    match json::decode::<DeerApiResponse>(body.as_slice()) {
+        Ok(result) => Ok(result),
+        Err(error) => Err(ResponseDeserializeError(error))
+    }
 }
 
 
