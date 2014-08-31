@@ -60,10 +60,13 @@ pub struct CommandMapperDispatch {
 
 
 impl CommandMapperDispatch {
+    /// The current nickname held by the IRC client
     pub fn current_nick(&self) -> &str {
         self.bot_nick.as_slice()
     }
 
+    /// The current command name, as set by the call to `map` when
+    /// `configure` is called on the `RustBotPlugin`.
     pub fn command(&self) -> Option<&str> {
         match self.command {
             Some(ref command) => Some(command.as_slice()),
@@ -71,6 +74,7 @@ impl CommandMapperDispatch {
         }
     }
 
+    /// Reply with a message to the channel/nick which sent the message being dispatched
     pub fn reply(&self, message: String) {
         match self.channel {
             Some(ref channel) => {
@@ -80,6 +84,7 @@ impl CommandMapperDispatch {
         }
     }
 
+    /// Send a raw IRC message to the IRC server
     pub fn reply_raw(&self, message: String) {
         self.sender.send(message);
     }
@@ -107,6 +112,7 @@ impl PluginContainer {
         }
     }
 
+    /// Register a plugin instance.  This will configure and start the plugin.
     pub fn register(&mut self, plugin: Box<RustBotPlugin+'static>) {
         let mut plugin = plugin;
         let mut configurator = IrcBotConfigurator::new();
@@ -115,6 +121,8 @@ impl PluginContainer {
         self.plugins.push((plugin, configurator.mapped));
     }
 
+    /// Dispatches messages to plugins, if they have expressed interest in the message.
+    /// Interest is expressed via calling map during the configuration phase.
     pub fn dispatch(&mut self, bot_nick: &str, raw_tx: &SyncSender<String>, message: &IrcMessage) {
         let channel = match message.channel() {
             Some(channel) => Some(String::from_str(channel)),
