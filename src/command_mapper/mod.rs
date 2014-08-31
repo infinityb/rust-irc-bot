@@ -95,7 +95,7 @@ pub struct CommandMapperRecord {
 #[deriving(Send)]
 pub struct PluginContainer {
     cmd_prefix: String,
-    plugins: Vec<(Box<RustBotPlugin>, Vec<CommandMapperRecord>)>,
+    plugins: Vec<(Box<RustBotPlugin+'static>, Vec<CommandMapperRecord>)>,
 }
 
 
@@ -107,7 +107,7 @@ impl PluginContainer {
         }
     }
 
-    pub fn register(&mut self, plugin: Box<RustBotPlugin>) {
+    pub fn register(&mut self, plugin: Box<RustBotPlugin+'static>) {
         let mut plugin = plugin;
         let mut configurator = IrcBotConfigurator::new();
         plugin.configure(&mut configurator);

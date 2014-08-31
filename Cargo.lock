@@ -2,11 +2,11 @@
 name = "irc"
 version = "0.1.0"
 dependencies = [
- "toml 0.1.0 (git+https://github.com/alexcrichton/toml-rs#8c128cb550ba66d4962cd81acca93857c605eaa0)",
+ "toml 0.1.0 (git+https://github.com/alexcrichton/toml-rs#e3ce3517348dd5f6f6306dc1f3bae7f9dd77c0fe)",
 ]
 
 [[package]]
 name = "toml"
 version = "0.1.0"
-source = "git+https://github.com/alexcrichton/toml-rs#8c128cb550ba66d4962cd81acca93857c605eaa0"
+source = "git+https://github.com/alexcrichton/toml-rs#e3ce3517348dd5f6f6306dc1f3bae7f9dd77c0fe"
 
