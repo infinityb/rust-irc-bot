@@ -2,4 +2,4 @@
 nickname = "rustbot"
 server_host = "127.0.0.1"
 server_port = 6667
-channels = ["#dicks"]
+channels = ["#sample"]
