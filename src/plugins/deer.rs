@@ -7,6 +7,8 @@ use message::{
     IrcMessage
 };
 use std::io::IoError;
+use std::collections::hashmap::HashMap;
+
 use serialize::json;
 use serialize::json::DecoderError;
 use time::{get_time, Timespec};
@@ -38,7 +40,7 @@ static DEER: &'static str = concat!(
 static BASE_URL: &'static str = "http://deer.satf.se/deerlist.php";
 
 
-#[deriving(Decodable, Encodable)]
+#[deriving(Decodable, Encodable, Clone)]
 struct DeerApiResponse {
     irccode: String
 }
@@ -53,7 +55,7 @@ enum DeerApiFailure {
 }
 
 
-fn get_deer(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> {
+fn get_deer_nocache(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> {
     let mut url = match Url::parse(BASE_URL) {
         Ok(url) => url,
         Err(_err) => unreachable!()
@@ -84,6 +86,26 @@ fn get_deer(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> {
 }
 
 
+fn get_deer(state: &mut DeerInternalState, deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> {
+    let deer_name_alloc = String::from_str(deer_name);
+
+    match state.cache.find(&deer_name_alloc) {
+        Some(result) => return Ok(result.clone()),
+        None => ()
+    }
+
+    match get_deer_nocache(deer_name) {
+        Ok(response) => {
+            state.cache.insert(
+                String::from_str(deer_name),
+                response.clone());
+            Ok(response)
+        },
+        Err(err) => Err(err)
+    }
+}
+
+
 pub struct DeerPlugin {
     sender: Option<SyncSender<(CommandMapperDispatch, IrcMessage)>>
 }
@@ -97,7 +119,8 @@ impl DeerPlugin {
 
 struct DeerInternalState {
     lines_sent: u64,
-    last_request: Option<Timespec>
+    last_request: Option<Timespec>,
+    cache: HashMap<String, DeerApiResponse>,
 }
 
 
@@ -105,7 +128,8 @@ impl DeerInternalState {
     fn new() -> DeerInternalState {
         DeerInternalState {
             lines_sent: 0,
-            last_request: None
+            last_request: None,
+            cache: HashMap::new(),
         }
     }
 
@@ -151,7 +175,7 @@ impl DeerInternalState {
                     }
                 },
                 Some(Deerkins(deer_name)) => {
-                    match get_deer(deer_name) {
+                    match get_deer(self, deer_name) {
                         Ok(deer_data) => {
                             for deer_line in deer_data.irccode.as_slice().split('\n') {
                                 m.reply(String::from_str(deer_line));
