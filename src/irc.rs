@@ -5,6 +5,8 @@
 extern crate time;
 extern crate serialize;
 extern crate debug;
+extern crate http;
+extern crate url;
 
 
 pub use self::message::{

@@ -2,11 +2,39 @@
 name = "irc"
 version = "0.1.0"
 dependencies = [
+ "http 0.1.0-pre (git+https://github.com/chris-morgan/rust-http#7ba39ca2923310f438513c5b19d0eb48ee34c0e2)",
  "toml 0.1.0 (git+https://github.com/alexcrichton/toml-rs#e3ce3517348dd5f6f6306dc1f3bae7f9dd77c0fe)",
 ]
+
+[[package]]
+name = "encoding"
+version = "0.1.0"
+source = "git+https://github.com/lifthrasiir/rust-encoding#a44501c7d87dec0a8071053a57c1213b33195ee9"
+
+[[package]]
+name = "http"
+version = "0.1.0-pre"
+source = "git+https://github.com/chris-morgan/rust-http#7ba39ca2923310f438513c5b19d0eb48ee34c0e2"
+dependencies = [
+ "openssl 0.0.0 (git+https://github.com/sfackler/rust-openssl.git#cd40d25cb5721064c5c2002c41a616d2dba7399a)",
+ "url 0.1.0 (git+https://github.com/servo/rust-url#bb68de835ad945a72fba44979944a587ba83941a)",
+]
+
+[[package]]
+name = "openssl"
+version = "0.0.0"
+source = "git+https://github.com/sfackler/rust-openssl.git#cd40d25cb5721064c5c2002c41a616d2dba7399a"
 
 [[package]]
 name = "toml"
 version = "0.1.0"
 source = "git+https://github.com/alexcrichton/toml-rs#e3ce3517348dd5f6f6306dc1f3bae7f9dd77c0fe"
+
+[[package]]
+name = "url"
+version = "0.1.0"
+source = "git+https://github.com/servo/rust-url#bb68de835ad945a72fba44979944a587ba83941a"
+dependencies = [
+ "encoding 0.1.0 (git+https://github.com/lifthrasiir/rust-encoding#a44501c7d87dec0a8071053a57c1213b33195ee9)",
+]
 

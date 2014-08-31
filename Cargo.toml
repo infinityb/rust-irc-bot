@@ -14,3 +14,7 @@ path = "ircbot.rs"
 
 [dependencies.toml]
 git = "https://github.com/alexcrichton/toml-rs"
+
+[dependencies.http]
+git = "https://github.com/chris-morgan/rust-http"
+

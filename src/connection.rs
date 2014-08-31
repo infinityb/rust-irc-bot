@@ -1,9 +1,13 @@
 use std::collections::{RingBuf, Deque};
 use std::io::{TcpStream, IoResult, LineBufferedWriter, BufferedReader};
 
-use plugins::DeerPlugin;
-use plugins::GreedPlugin;
-use plugins::SeenPlugin;
+use plugins::{
+    DeerPlugin,
+    GreedPlugin,
+    SeenPlugin,
+    RadioPlugin,
+};
+
 use core_plugins::CtcpVersionResponderPlugin;
 
 use message::IrcMessage;
@@ -273,6 +277,7 @@ impl IrcConnection {
             state.command_mapper.register(box GreedPlugin::new());
             state.command_mapper.register(box SeenPlugin::new());
             state.command_mapper.register(box DeerPlugin::new());
+            state.command_mapper.register(box RadioPlugin::new());
 
             loop {
                 let string = String::from_str(match reader.read_line() {
