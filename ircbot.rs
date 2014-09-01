@@ -14,9 +14,6 @@ use toml::Parser;
 
 use irc::{
     IrcConnection,
-    IrcEventMessage,
-    IrcEventBundle,
-    IrcEventWatcherResponse,
 };
 
 
@@ -106,17 +103,18 @@ fn main() {
         }
     }
 
-    loop {      
-        match event_queue.recv() {
-            IrcEventMessage(message) => {
-                println!("RX: {}", message);
-            },
-            IrcEventBundle(event) => {
-                println!("got bundle back: {}", event.pretty_print());
-            },
-            IrcEventWatcherResponse(watcher) => {
-                println!("got watcher back: {}", watcher.pretty_print());
-            }
-        }
+    loop {
+        println!("{:?}", event_queue.recv());
+        // match  {
+        //     IrcEventMessage(message) => {
+        //         println!("RX: {}", message);
+        //     },
+        //     IrcEventBundle(event) => {
+        //         // println!("got bundle back: {}", event.pretty_print());
+        //     },
+        //     IrcEventWatcherResponse(watcher) => {
+        //         // println!("got watcher back: {}", watcher.pretty_print());
+        //     }
+        // }
     }
 }

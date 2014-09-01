@@ -132,6 +132,7 @@ impl RadioMonitorState {
     }
 }
 
+
 struct RadioInternalState {
     requests_made: uint,
     requests_failed: uint,
@@ -242,9 +243,6 @@ impl RadioPlugin {
             sender: None
         }
     }
-
-    // pub fn with_config() -> RadioPlugin {
-    // }
 }
 
 

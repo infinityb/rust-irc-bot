@@ -63,7 +63,6 @@ impl WhoBundler {
         }
         match *message.get_message() {
             IrcProtocolMessage::Numeric(352, ref message) => {
-
                 self.add_record(message);
                 true
             },
@@ -75,6 +74,7 @@ impl WhoBundler {
         }
     }
 }
+
 
 pub struct IrcUser {
     nick: String,

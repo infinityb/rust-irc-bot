@@ -16,18 +16,11 @@ pub use self::message::{
 };
 
 
-pub use self::connection::{
-    IrcConnection,
-    IrcEvent,
-    IrcEventBundle,
-    IrcEventMessage,
-    IrcEventWatcherResponse,
-    IrcBundleEventInterface,
-};
+pub use self::connection::IrcConnection;
 
 pub use self::watchers::{
     MessageWatcher,
-    JoinMessageWatcher,
+    JoinBundler,
     RegisterError,
     RegisterErrorType,
     JoinResult,
