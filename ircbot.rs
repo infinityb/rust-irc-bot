@@ -95,6 +95,15 @@ fn main() {
             Ok(res) => {
                 println!("succeeded in joining {}, got {} nicks",
                     res.channel.as_slice(), res.nicks.len());
+                match conn.who(channel.as_slice()) {
+                    Ok(who_res) => {
+                        println!("succeeded in WHOing {:?}, got {:?} nicks",
+                            who_res.channel.as_slice(), who_res.who_records.len());
+                    },
+                    Err(who_err) => {
+                        println!("failed to WHO {}: {:?}", channel, who_err);
+                    }
+                }
             },
             Err(err) => {
                 println!("join error: {:?}", err);

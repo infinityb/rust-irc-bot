@@ -37,7 +37,7 @@ use watchers::{
 
 pub struct IrcConnection {
     raw_tx: SyncSender<String>,
-    event_watchers: SyncSender<Box<EventWatcher+Send>>,
+    command_queue: SyncSender<IrcConnectionCommand>,
     has_registered: bool
 }
 
@@ -216,6 +216,12 @@ impl IrcConnectionInternalState {
 }
 
 
+pub enum IrcConnectionCommand {
+    AddWatcher(Box<EventWatcher+Send>),
+    AddBundler(Box<Bundler+Send>),
+}
+
+
 impl IrcConnection {
     pub fn new(host: &str, port: u16) -> IoResult<(IrcConnection, Receiver<IrcEvent>)> {
         let stream = match TcpStream::connect(host, port) {
@@ -223,7 +229,7 @@ impl IrcConnection {
             Err(err) => return Err(err)
         };
 
-        let (event_watchers_tx, event_watchers_rx) = sync_channel(10);
+        let (command_queue_tx, command_queue_rx) = sync_channel::<IrcConnectionCommand>(10);
         let (event_queue_tx, event_queue_rx) = sync_channel(1024);
         let (raw_tx, raw_rx) = sync_channel::<String>(1024);
         let reader = BufferedReader::new(stream.clone());
@@ -233,6 +239,7 @@ impl IrcConnection {
         spawn(proc() {
             let mut writer = LineBufferedWriter::new(tmp_stream);
             for message in raw_rx.iter() {
+                // println!("TX: {}", message.as_slice());
                 assert!(writer.write_str(message.append("\n").as_slice()).is_ok());
             }
         });
@@ -256,15 +263,21 @@ impl IrcConnection {
                     Ok(string) => string,
                     Err(err) => fail!("{}", err)
                 }.as_slice().trim_right());
+                // println!("RX: {}", string.as_slice());
 
                 loop {
-                    match event_watchers_rx.try_recv() {
-                        Ok(value) => {
+                    match command_queue_rx.try_recv() {
+                        Ok(AddWatcher(value)) => {
                             state.event_watchers.push(value);
+                        },
+                        Ok(AddBundler(value)) => {
+                            state.event_bundlers.push(value);
                         },
                         Err(_) => break
                     }
                 }
+                // let bundler: Box<Bundler+Send> = box WhoBundler::new(target);
+                // self.event_bundlers.send(bundler);
 
                 state.dispatch(match IrcMessage::from_str(string.as_slice()) {
                     Ok(message) => message,
@@ -278,7 +291,7 @@ impl IrcConnection {
 
         let conn = IrcConnection {
             raw_tx: raw_tx,
-            event_watchers: event_watchers_tx,
+            command_queue: command_queue_tx,
             has_registered: false
         };
         Ok((conn, event_queue_rx))
@@ -288,7 +301,7 @@ impl IrcConnection {
         let mut reg_watcher = RegisterEventWatcher::new();        
         let result_rx = reg_watcher.get_monitor();
         let watcher: Box<EventWatcher+Send> = box reg_watcher;
-        self.event_watchers.send(watcher);
+        self.command_queue.send(AddWatcher(watcher));
         self.write_str(format!("NICK {}", nick).as_slice());
         if !self.has_registered {
             self.write_str("USER rustbot 8 *: Rust Bot");
@@ -300,7 +313,7 @@ impl IrcConnection {
         let mut join_watcher = JoinEventWatcher::new(channel);
         let result_rx = join_watcher.get_monitor();
         let watcher: Box<EventWatcher+Send> = box join_watcher;
-        self.event_watchers.send(watcher);
+        self.command_queue.send(AddWatcher(watcher));
         self.write_str(format!("JOIN {}", channel).as_slice());
         result_rx.recv()
     }
@@ -309,7 +322,8 @@ impl IrcConnection {
         let mut who_watcher = WhoEventWatcher::new(target);
         let result_rx = who_watcher.get_monitor();
         let watcher: Box<EventWatcher+Send> = box who_watcher;
-        self.event_watchers.send(watcher);
+        self.command_queue.send(AddBundler(box WhoBundler::new(target)));
+        self.command_queue.send(AddWatcher(watcher));
         self.write_str(format!("WHO {}", target).as_slice());
         result_rx.recv()
     }

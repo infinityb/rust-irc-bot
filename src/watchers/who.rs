@@ -73,7 +73,7 @@ pub struct WhoBundler {
 
 
 impl WhoBundler {
-    fn new(channel: &str) -> WhoBundler {
+    pub fn new(channel: &str) -> WhoBundler {
         WhoBundler {
             target_channel: String::from_str(channel),
             who_records: vec![],
@@ -169,18 +169,18 @@ impl WhoEventWatcher {
 
 impl EventWatcher for WhoEventWatcher {
     fn on_event(&mut self, message: &IrcEvent) {
-        match *message {
-            IrcEventWhoBundle(ref result) => {
+        match message {
+            &IrcEventWhoBundle(ref result) => {
                 self.result = Some(result.clone());
                 self.dispatch_monitors();
+                self.finished = true;
             },
             _ => ()
         }
-        self.finished = true;
     }
 
     fn is_finished(&self) -> bool {
-        false
+        self.finished
     }
 
     fn get_name(&self) -> &'static str {
