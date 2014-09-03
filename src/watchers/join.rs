@@ -35,7 +35,7 @@ impl JoinBundlerTrigger {
 
 
 impl BundlerTrigger for JoinBundlerTrigger {
-    fn accept(&mut self, message: &IrcMessage) -> Vec<Box<Bundler+Send>> {
+    fn on_message(&mut self, message: &IrcMessage) -> Vec<Box<Bundler+Send>> {
         let mut out = Vec::new();
         if message.command() == "JOIN" {
             let channel = message.get_arg(0);
@@ -120,7 +120,7 @@ impl JoinBundler {
 
 
 impl Bundler for JoinBundler {
-    fn accept(&mut self, message: &IrcMessage) -> Vec<IrcEvent> {
+    fn on_message(&mut self, message: &IrcMessage) -> Vec<IrcEvent> {
         let new_state = match self.state {
             0 => self.accept_state0(message),
             1 => self.accept_state1(message),
@@ -202,7 +202,7 @@ impl JoinEventWatcher {
 
 
 impl EventWatcher for JoinEventWatcher {
-    fn accept(&mut self, message: &IrcEvent) {
+    fn on_event(&mut self, message: &IrcEvent) {
         match *message {
             IrcEventJoinBundle(ref result) => {
                 self.result = Some(result.clone());

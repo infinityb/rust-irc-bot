@@ -24,6 +24,9 @@ use watchers::{
     JoinBundler,
     JoinResult,
     JoinEventWatcher,
+    WhoBundler,
+    WhoResult,
+    WhoEventWatcher,
     EventWatcher,
     BundlerTrigger,
     IrcEvent,
@@ -68,8 +71,8 @@ fn bundler_trigger_impl(triggers: &mut Vec<Box<BundlerTrigger+Send>>,
                       ) -> Vec<Box<Bundler+Send>> {
 
     let mut activating: Vec<Box<Bundler+Send>> = Vec::new();
-    for trigger in triggers.mut_iter    () {
-        let mut new_bundlers = trigger.accept(message);
+    for trigger in triggers.mut_iter() {
+        let mut new_bundlers = trigger.on_message(message);
 
         activating.reserve_additional(new_bundlers.len());
         for bundler in new_bundlers.move_iter() {
@@ -89,7 +92,7 @@ fn watcher_accept_impl(buf: &mut RingBuf<Box<EventWatcher+Send>>,
     loop {
         match buf.pop_front() {
             Some(mut watcher) => {
-                watcher.accept(event);
+                watcher.on_event(event);
                 if watcher.is_finished() {
                     finished_watchers.push(watcher);
                 } else {
@@ -119,7 +122,7 @@ fn bundler_accept_impl(buf: &mut RingBuf<Box<Bundler+Send>>,
     loop {
         match buf.pop_front() {
             Some(mut bundler) => {
-                for event in bundler.accept(message).move_iter() {
+                for event in bundler.on_message(message).move_iter() {
                     emit_events.push(event);
                 }
                 if !bundler.is_finished() {
@@ -180,10 +183,6 @@ impl IrcConnectionInternalState {
             };
         }
 
-        // match IrcBundleJoinEvent::new(&message) {
-        //     Some(bundler) => self.event_bundlers.push(box bundler),
-        //     None => ()
-        // }
         let mut outgoing_events: Vec<IrcEvent> = Vec::new();
 
         for new_bundler in bundler_trigger_impl(&mut self.bundler_triggers, &message).move_iter() {
@@ -245,6 +244,7 @@ impl IrcConnection {
             let mut state = IrcConnectionInternalState::new(event_queue_tx, core_raw_tx);
 
             state.bundler_triggers.push(box JoinBundlerTrigger::new());
+
             state.command_mapper.register(box CtcpVersionResponderPlugin::new());
             state.command_mapper.register(box GreedPlugin::new());
             state.command_mapper.register(box SeenPlugin::new());
@@ -302,6 +302,15 @@ impl IrcConnection {
         let watcher: Box<EventWatcher+Send> = box join_watcher;
         self.event_watchers.send(watcher);
         self.write_str(format!("JOIN {}", channel).as_slice());
+        result_rx.recv()
+    }
+
+    pub fn who(&mut self, target: &str) -> WhoResult {
+        let mut who_watcher = WhoEventWatcher::new(target);
+        let result_rx = who_watcher.get_monitor();
+        let watcher: Box<EventWatcher+Send> = box who_watcher;
+        self.event_watchers.send(watcher);
+        self.write_str(format!("WHO {}", target).as_slice());
         result_rx.recv()
     }
 

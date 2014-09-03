@@ -146,7 +146,7 @@ impl RegisterEventWatcher {
 
 
 impl EventWatcher for RegisterEventWatcher {
-    fn accept(&mut self, event: &IrcEvent) {
+    fn on_event(&mut self, event: &IrcEvent) {
         match *event {
             IrcEventMessage(ref message) => {
                 self.accept_ircmessage(message);

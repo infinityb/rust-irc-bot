@@ -24,8 +24,16 @@ pub use self::register::{
     RegisterErrorType,
     RegisterEventWatcher,
 };
+pub use self::who::{
+    WhoResult,
+    WhoSuccess,
+    WhoError,
+    WhoBundler,
+    WhoEventWatcher
+};
 
 pub mod join;
 pub mod base;
 pub mod event;
 pub mod register;
+pub mod who;

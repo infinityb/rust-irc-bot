@@ -3,7 +3,7 @@ use watchers::event::IrcEvent;
 
 
 pub trait MessageWatcher {
-    fn accept(&mut self, message: &IrcMessage);
+    fn on_message(&mut self, message: &IrcMessage);
 
     /// If true, the `MessageWatcher` should be removed from the watcher set
     fn finished(&self) -> bool;
@@ -11,7 +11,7 @@ pub trait MessageWatcher {
 
 
 pub trait EventWatcher{
-    fn accept(&mut self, message: &IrcEvent);
+    fn on_event(&mut self, message: &IrcEvent);
 
     /// If true, the `EventWatcher` should be removed from the watcher set
     fn is_finished(&self) -> bool;
@@ -21,7 +21,7 @@ pub trait EventWatcher{
 
 
 pub trait Bundler {
-    fn accept(&mut self, message: &IrcMessage) -> Vec<IrcEvent>;
+    fn on_message(&mut self, message: &IrcMessage) -> Vec<IrcEvent>;
 
     /// If true, the `Bundler` should be removed from the bundler set
     fn is_finished(&mut self) -> bool;
@@ -29,5 +29,5 @@ pub trait Bundler {
 
 
 pub trait BundlerTrigger {
-	fn accept(&mut self, message: &IrcMessage) -> Vec<Box<Bundler+Send>>;
+	fn on_message(&mut self, message: &IrcMessage) -> Vec<Box<Bundler+Send>>;
 }
