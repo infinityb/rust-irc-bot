@@ -1,4 +1,5 @@
 use std::collections::{RingBuf, Deque};
+use std::task::TaskBuilder;
 use std::io::{TcpStream, IoResult, LineBufferedWriter, BufferedReader};
 use std::default::Default;
 use plugins::{
@@ -36,18 +37,17 @@ use watchers::{
 
 
 pub struct IrcConnection {
-    raw_tx: SyncSender<String>,
     command_queue: SyncSender<IrcConnectionCommand>,
     has_registered: bool
 }
 
 
+    // The output stream towards the server
+    // raw_sender: SyncSender<String>,
+
 struct IrcConnectionInternalState {
     // The output stream towards the user
     event_queue_tx: SyncSender<IrcEvent>,
-
-    // The output stream towards the server
-    raw_sender: SyncSender<String>,
 
     // Handles plugins and their command registrations
     command_mapper: PluginContainer,
@@ -143,13 +143,10 @@ fn bundler_accept_impl(buf: &mut RingBuf<Box<Bundler+Send>>,
 
 
 impl IrcConnectionInternalState {
-    pub fn new(event_queue_tx: SyncSender<IrcEvent>,
-               raw_sender: SyncSender<String>
-              ) -> IrcConnectionInternalState {
+    pub fn new(event_queue_tx: SyncSender<IrcEvent>) -> IrcConnectionInternalState {
 
         IrcConnectionInternalState {
             event_queue_tx: event_queue_tx,
-            raw_sender: raw_sender,
             command_mapper: PluginContainer::new(String::from_str("!")),
 
             event_watchers: Default::default(),
@@ -159,10 +156,10 @@ impl IrcConnectionInternalState {
         }
     }
 
-    fn dispatch(&mut self, message: IrcMessage) {
+    fn dispatch(&mut self, message: IrcMessage, raw_sender: &SyncSender<String>) {
         if message.command() == "PING" {
             let ping_body: &String = message.get_arg(0);
-            self.raw_sender.send(format!("PONG :{}\n", ping_body));
+            raw_sender.send(format!("PONG :{}\n", ping_body));
         }
 
         if message.command() == "001" {
@@ -204,7 +201,7 @@ impl IrcConnectionInternalState {
         match self.current_nick {
             Some(ref current_nick) => {
                 self.command_mapper.dispatch(
-                    current_nick.as_slice(), &self.raw_sender, &message);
+                    current_nick.as_slice(), raw_sender, &message);
             },
             None => ()
         }
@@ -217,6 +214,7 @@ impl IrcConnectionInternalState {
 
 
 pub enum IrcConnectionCommand {
+    RawWrite(String),
     AddWatcher(Box<EventWatcher+Send>),
     AddBundler(Box<Bundler+Send>),
 }
@@ -231,24 +229,27 @@ impl IrcConnection {
 
         let (command_queue_tx, command_queue_rx) = sync_channel::<IrcConnectionCommand>(10);
         let (event_queue_tx, event_queue_rx) = sync_channel(1024);
-        let (raw_tx, raw_rx) = sync_channel::<String>(1024);
+        
         let reader = BufferedReader::new(stream.clone());
 
         let tmp_stream = stream.clone();
+        let (raw_sender, raw_rx) = sync_channel::<String>(0);
 
-        spawn(proc() {
+        TaskBuilder::new().named("core-writer").spawn(proc() {
             let mut writer = LineBufferedWriter::new(tmp_stream);
-            for message in raw_rx.iter() {
-                // println!("TX: {}", message.as_slice());
-                assert!(writer.write_str(message.append("\n").as_slice()).is_ok());
+            loop {
+                match raw_rx.recv_opt() {
+                    Ok(message) => {
+                        assert!(writer.write_str(message.append("\n").as_slice()).is_ok());
+                    },
+                    Err(_) => break
+                }
             }
         });
 
-        let core_raw_tx = raw_tx.clone();
-        
-        spawn(proc() {
+        TaskBuilder::new().named("core-readerdispatch").spawn(proc() {
             let mut reader = reader;
-            let mut state = IrcConnectionInternalState::new(event_queue_tx, core_raw_tx);
+            let mut state = IrcConnectionInternalState::new(event_queue_tx);
 
             state.bundler_triggers.push(box JoinBundlerTrigger::new());
 
@@ -262,11 +263,13 @@ impl IrcConnection {
                 let string = String::from_str(match reader.read_line() {
                     Ok(string) => string,
                     Err(err) => fail!("{}", err)
-                }.as_slice().trim_right());
-                // println!("RX: {}", string.as_slice());
+                }.as_slice().trim_right_chars('\n'));
 
                 loop {
                     match command_queue_rx.try_recv() {
+                        Ok(RawWrite(value)) => {
+                            raw_sender.send(value);
+                        },
                         Ok(AddWatcher(value)) => {
                             state.event_watchers.push(value);
                         },
@@ -276,6 +279,7 @@ impl IrcConnection {
                         Err(_) => break
                     }
                 }
+
                 // let bundler: Box<Bundler+Send> = box WhoBundler::new(target);
                 // self.event_bundlers.send(bundler);
 
@@ -285,12 +289,11 @@ impl IrcConnection {
                         println!("Invalid IRC message: {} for {}", err, string);
                         continue;
                     }
-                });
+                }, &raw_sender);
             }
         });
 
         let conn = IrcConnection {
-            raw_tx: raw_tx,
             command_queue: command_queue_tx,
             has_registered: false
         };
@@ -329,6 +332,6 @@ impl IrcConnection {
     }
 
     pub fn write_str(&mut self, content: &str) {
-        self.raw_tx.send(String::from_str(content))
+        self.command_queue.send(RawWrite(String::from_str(content)))
     }
 }

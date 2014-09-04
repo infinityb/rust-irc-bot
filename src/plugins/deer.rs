@@ -1,11 +1,4 @@
-use command_mapper::{
-    RustBotPlugin,
-    CommandMapperDispatch,
-    IrcBotConfigurator
-};
-use message::{
-    IrcMessage
-};
+use std::task::TaskBuilder;
 use std::io::IoError;
 use std::collections::hashmap::HashMap;
 
@@ -18,6 +11,15 @@ use url::form_urlencoded::serialize_owned;
 
 use http::client::RequestWriter;
 use http::method::Get;
+
+use command_mapper::{
+    RustBotPlugin,
+    CommandMapperDispatch,
+    IrcBotConfigurator
+};
+use message::{
+    IrcMessage
+};
 
 
 static DEER: &'static str = concat!(
@@ -138,7 +140,7 @@ impl DeerInternalState {
 
         let (new_last_request, throttle_ok) = match self.last_request {
             Some(last_request) => {
-                if (now - last_request).sec < 60 {
+                if (now - last_request).num_seconds() < 60 {
                     (Some(last_request), true)
                 } else {
                     (Some(now), false)
@@ -235,7 +237,7 @@ impl RustBotPlugin for DeerPlugin {
         let (tx, rx) = sync_channel(10);
         self.sender = Some(tx);
 
-        spawn(proc() {
+        TaskBuilder::new().named("plugin-deer").spawn(proc() {
             let mut deer_internal_state = DeerInternalState::new();
             deer_internal_state.start(rx);
         });

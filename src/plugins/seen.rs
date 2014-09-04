@@ -104,18 +104,18 @@ fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
     let now = get_time();
     match (user_has_quit, prev_message) {
         (Some(when_quit), Some(record)) => {
-            let seconds = (now - record.when).sec;
-            let quit_seconds = (when_quit - record.when).sec;
+            let seconds = (now - record.when).num_seconds();
+            let quit_seconds = (when_quit - record.when).num_seconds();
             format!("{} said ``{}'' {} seconds ago before quitting {} seconds later",
                 nick, record.message.get_arg(1), seconds, quit_seconds)
         },
         (None, Some(record)) => {
             // let message_sent = format_message_sent(message);
-            let seconds = (now - record.when).sec;
+            let seconds = (now - record.when).num_seconds();
             format!("{} said ``{}'' {} seconds ago", nick, record.message.get_arg(1), seconds)
         },
         (Some(when_quit), None) => {
-            format!("{} quit {} seconds ago", nick, (now - when_quit).sec)
+            format!("{} quit {} seconds ago", nick, (now - when_quit).num_seconds())
         },
         (None, None) => {
             format!("Sorry, I am very confused about {}", nick)

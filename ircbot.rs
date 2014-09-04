@@ -112,18 +112,7 @@ fn main() {
         }
     }
 
-    loop {
-        println!("{:?}", event_queue.recv());
-        // match  {
-        //     IrcEventMessage(message) => {
-        //         println!("RX: {}", message);
-        //     },
-        //     IrcEventBundle(event) => {
-        //         // println!("got bundle back: {}", event.pretty_print());
-        //     },
-        //     IrcEventWatcherResponse(watcher) => {
-        //         // println!("got watcher back: {}", watcher.pretty_print());
-        //     }
-        // }
+    for event in event_queue.iter() {
+        println!("{:?}", event);
     }
 }

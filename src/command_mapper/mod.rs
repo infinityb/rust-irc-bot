@@ -150,9 +150,8 @@ impl PluginContainer {
                         Some(command) => {
                             if command == mapper.cmd_word.as_slice() {
                                 dispatch.command = Some(mapper.cmd_word.clone());
-                                println!("dispatching {} -> {}", dispatch.command, command);
                                 plugin.dispatch_cmd(&dispatch, message);
-                                dispatch.command = None
+                                dispatch.command = None;
                             }
                         }
                         None => ()
@@ -176,10 +175,10 @@ fn decompose_command<'a>(prefix: &str, first_word: &'a str) -> Option<&'a str> {
     if first_word.len() < prefix.len() {
         return None;
     }
-    if prefix != first_word.slice_to(prefix.len()) {
+    if prefix != first_word.slice_chars(0, prefix.char_len()) {
         return None;
     }
-    Some(first_word.slice_from(prefix.len()))
+    Some(first_word.slice_chars(prefix.char_len(), first_word.char_len()))
 }
 
 
@@ -196,4 +195,5 @@ fn test_decompose_command() {
     assert_eq!(decompose_command("@", "!deer"), None);
     assert_eq!(decompose_command("", "deer"), Some("deer"));
     assert_eq!(decompose_command("!", ""), None);
+    assert_eq!(decompose_command("!", "•"), None);
 }

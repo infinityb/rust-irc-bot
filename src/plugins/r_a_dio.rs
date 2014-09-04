@@ -1,6 +1,8 @@
+use std::task::TaskBuilder;
 use std::io::IoError;
 use std::collections::hashmap::HashSet;
 use std::default::Default;
+use std::time::Duration;
 
 use serialize::json;
 use serialize::json::DecoderError;
@@ -122,13 +124,13 @@ impl RadioMonitorState {
     }
 
     #[inline]
-    fn age(&self) -> Timespec {
+    fn age(&self) -> Duration {
         get_time() - self.last_update
     }
 
     #[inline]
     fn is_old(&self) -> bool {
-        300 < self.age().sec
+        300 < self.age().num_seconds()
     }
 }
 
@@ -256,7 +258,7 @@ impl RustBotPlugin for RadioPlugin {
         let (tx, rx) = sync_channel(10);
         self.sender = Some(tx);
 
-        spawn(proc() {
+        TaskBuilder::new().named("plugin-radio").spawn(proc() {
             let mut internal_state = RadioInternalState::new();
             internal_state.start(rx);
         });
