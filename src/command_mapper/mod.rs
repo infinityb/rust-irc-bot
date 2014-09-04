@@ -196,4 +196,5 @@ fn test_decompose_command() {
     assert_eq!(decompose_command("", "deer"), Some("deer"));
     assert_eq!(decompose_command("!", ""), None);
     assert_eq!(decompose_command("!", "•"), None);
+    assert_eq!(decompose_command("!", "!•"), Some("•"));
 }

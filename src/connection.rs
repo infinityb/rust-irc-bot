@@ -237,13 +237,8 @@ impl IrcConnection {
 
         TaskBuilder::new().named("core-writer").spawn(proc() {
             let mut writer = LineBufferedWriter::new(tmp_stream);
-            loop {
-                match raw_rx.recv_opt() {
-                    Ok(message) => {
-                        assert!(writer.write_str(message.append("\n").as_slice()).is_ok());
-                    },
-                    Err(_) => break
-                }
+            for message in raw_rx.iter() {
+                assert!(writer.write_str(message.append("\n").as_slice()).is_ok());
             }
         });
 
@@ -263,7 +258,7 @@ impl IrcConnection {
                 let string = String::from_str(match reader.read_line() {
                     Ok(string) => string,
                     Err(err) => fail!("{}", err)
-                }.as_slice().trim_right_chars('\n'));
+                }.as_slice().trim_right());
 
                 loop {
                     match command_queue_rx.try_recv() {

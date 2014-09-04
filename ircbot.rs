@@ -113,6 +113,6 @@ fn main() {
     }
 
     for event in event_queue.iter() {
-        println!("{:?}", event);
+        // println!("{:?}", event);
     }
 }
