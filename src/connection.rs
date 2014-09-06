@@ -12,17 +12,13 @@ use plugins::{
 use core_plugins::CtcpVersionResponderPlugin;
 
 use message::IrcMessage;
-use command_mapper::{
-    PluginContainer,
-    RustBotPlugin,
-};
+use command_mapper::PluginContainer;
 
 use watchers::{
     Bundler,
     RegisterError,
     RegisterEventWatcher,
     JoinBundlerTrigger,
-    JoinBundler,
     JoinResult,
     JoinEventWatcher,
     WhoBundler,
@@ -31,8 +27,7 @@ use watchers::{
     EventWatcher,
     BundlerTrigger,
     IrcEvent,
-    IrcEventMessage,
-    IrcEventWatcherResponse
+    IrcEventMessage
 };
 
 
@@ -41,9 +36,6 @@ pub struct IrcConnection {
     has_registered: bool
 }
 
-
-    // The output stream towards the server
-    // raw_sender: SyncSender<String>,
 
 struct IrcConnectionInternalState {
     // The output stream towards the user
@@ -72,8 +64,7 @@ fn bundler_trigger_impl(triggers: &mut Vec<Box<BundlerTrigger+Send>>,
 
     let mut activating: Vec<Box<Bundler+Send>> = Vec::new();
     for trigger in triggers.mut_iter() {
-        let mut new_bundlers = trigger.on_message(message);
-
+        let new_bundlers = trigger.on_message(message);
         activating.reserve_additional(new_bundlers.len());
         for bundler in new_bundlers.move_iter() {
             activating.push(bundler);

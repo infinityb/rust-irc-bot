@@ -1,17 +1,11 @@
 use message::IrcMessage;
 
-use watchers::base::{
-    MessageWatcher,
-    EventWatcher,
-    Bundler,
-    BundlerTrigger
-};
+use watchers::base::MessageWatcher;
 use watchers::join::JoinResult;
 use watchers::who::WhoResult;
 
 
 pub enum IrcEvent {
-    // TODO: Why is IrcMessage boxed?
     IrcEventMessage(IrcMessage),
     IrcEventJoinBundle(JoinResult),
     IrcEventWhoBundle(WhoResult),

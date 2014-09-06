@@ -263,27 +263,6 @@ impl RustBotPlugin for GreedPlugin {
             None => ()
         }
     }
+
+    // fn save_instance_state(&mut self, 
 }
-
-
-
-// fn get_score(roll: &RollResult) -> int {
-//     total_score(&get_scores(roll))
-// }
-// #[test]
-// fn test_greed_matchers() {
-//     assert!(is_prefix(&SCORING_TABLE[0], &[1, 2, 3, 4, 5, 6], 0));
-//     assert!(is_prefix(&SCORING_TABLE[1], &[2, 2, 3, 3, 4, 4], 0));
-//     assert!(is_prefix(&SCORING_TABLE[2], &[1, 1, 1, 1, 1, 1], 0));
-//     assert!(is_prefix(&SCORING_TABLE[5], &[1, 1, 1, 2, 2, 2], 0));
-//     assert!(is_prefix(&SCORING_TABLE[5], &[1, 1, 1, 0, 0, 0], 0));
-//     assert!(is_prefix(&SCORING_TABLE[5], &[0, 0, 0, 1, 1, 1], 3));
-//     assert_eq!(get_score(&[1, 1, 1, 2, 4, 5]), 1050);
-//     assert_eq!(get_score(&[1, 3, 4, 5, 5, 6]), 200);
-//     assert_eq!(get_score(&[1, 2, 3, 4, 5, 6]), 1200);
-//     assert_eq!(get_score(&[1, 1, 1, 2, 3, 5]), 1050);
-//     assert_eq!(get_score(&[2, 2, 3, 4, 5, 6]), 50);
-//     assert_eq!(get_score(&[1, 3, 4, 5, 6, 6]), 150);
-//     assert_eq!(get_score(&[1, 1, 1, 3, 3, 3]), 1300);
-// }
-

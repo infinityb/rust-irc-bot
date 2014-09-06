@@ -1,19 +1,26 @@
-use std::fmt;
-use std::collections::{TreeMap, RingBuf, Deque};
-
-use watchers::base::{Bundler, BundlerTrigger, EventWatcher};
-use watchers::event::{IrcEvent, IrcEventMessage, IrcEventWhoBundle};
+use watchers::base::{Bundler, EventWatcher};
+use watchers::event::{IrcEvent, IrcEventWhoBundle};
 
 use message::{
     IrcMessage,
-    IrcProtocolMessage,
-    IrcHostmaskPrefix,
-    IrcOtherPrefix,
+    IrcProtocolMessage
 };
 
 
 pub type WhoResult = Result<WhoSuccess, WhoError>;
 
+trait ChannelTargeted {
+    fn get_channel(&self) -> &str;
+}
+
+impl ChannelTargeted for WhoResult {
+    fn get_channel(&self) -> &str {
+        match self {
+            &Ok(ref join_succ) => join_succ.channel.as_slice(),
+            &Err(ref join_err) => join_err.channel.as_slice()
+        }
+    }
+}
 
 #[deriving(Clone)]
 pub struct WhoSuccess {
@@ -33,11 +40,13 @@ impl WhoSuccess {
 
 // Does /WHO even error? 
 #[deriving(Clone)]
-pub struct WhoError;
+pub struct WhoError {
+    pub channel: String
+}
 
 
 #[deriving(Clone)]
-struct WhoRecord {
+pub struct WhoRecord {
     hostname: String,
     server: String,
     nick: String,
@@ -105,7 +114,7 @@ impl Bundler for WhoBundler {
                 self.add_record(message);
                 Vec::new()
             },
-            IrcProtocolMessage::Numeric(315, ref message) => {
+            IrcProtocolMessage::Numeric(315, ref _message) => {
                 self.finished = true;
                 let mut out = Vec::new();
                 out.push(IrcEventWhoBundle(Ok(WhoSuccess::from_bundler(self.clone()))));
@@ -171,9 +180,11 @@ impl EventWatcher for WhoEventWatcher {
     fn on_event(&mut self, message: &IrcEvent) {
         match message {
             &IrcEventWhoBundle(ref result) => {
-                self.result = Some(result.clone());
-                self.dispatch_monitors();
-                self.finished = true;
+                if result.get_channel() == self.channel.as_slice() {
+                    self.result = Some(result.clone());
+                    self.dispatch_monitors();
+                    self.finished = true;
+                }
             },
             _ => ()
         }
@@ -219,7 +230,7 @@ impl EventWatcher for WhoEventWatcher {
 //         }
 //     }
 
-//     fn update(&mut self, message: &IrcMessage) {
+//     fn update(&mut self, message: &IrcMessage) {s
 //         match message.get_prefix() {
 //             Some(&IrcHostmaskPrefix(ref mask)) => {
 //                 println!("{}", mask);

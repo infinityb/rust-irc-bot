@@ -2,12 +2,7 @@ use std::fmt;
 
 use numerics;
 use message::{IrcMessage, IrcProtocolMessage};
-use watchers::base::{
-    MessageWatcher,
-    EventWatcher,
-    Bundler,
-    BundlerTrigger
-};
+use watchers::base::EventWatcher;
 use watchers::event::{
     IrcEvent,
     IrcEventMessage,
@@ -32,8 +27,9 @@ impl RegisterError {
     }
 }
 
-
 pub type RegisterErrorType = self::RegisterErrorType::RegisterErrorType;
+
+#[allow(non_snake_case)]
 pub mod RegisterErrorType {
     use numerics;
 

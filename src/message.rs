@@ -2,8 +2,8 @@ use std::string::{String};
 use std::fmt;
 
 
-#[allow(dead_code)]
 pub type IrcProtocolMessage = self::IrcProtocolMessage::IrcProtocolMessage;
+#[allow(non_snake_case)]
 pub mod IrcProtocolMessage {
     #[deriving(Clone)]
     pub enum IrcProtocolMessage {

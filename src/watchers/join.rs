@@ -1,5 +1,5 @@
 use std::fmt;
-use message::{IrcMessage, IrcProtocolMessage};
+use message::IrcMessage;
 use watchers::base::{Bundler, BundlerTrigger, EventWatcher};
 use watchers::event::{
     IrcEvent,
@@ -9,6 +9,18 @@ use watchers::event::{
 
 pub type JoinResult = Result<JoinSuccess, JoinError>;
 
+trait ChannelTargeted {
+    fn get_channel(&self) -> &str;
+}
+
+impl ChannelTargeted for JoinResult {
+    fn get_channel(&self) -> &str {
+        match self {
+            &Ok(ref join_succ) => join_succ.channel.as_slice(),
+            &Err(ref join_err) => join_err.channel.as_slice()
+        }
+    }
+}
 
 #[deriving(Clone)]
 pub struct JoinSuccess {
@@ -19,6 +31,7 @@ pub struct JoinSuccess {
 
 #[deriving(Clone)]
 pub struct JoinError {
+    pub channel: String,
     pub errcode: i16,
     pub message: String
 }
@@ -74,6 +87,7 @@ impl JoinBundler {
 
         if failure {
             self.result = Some(Err(JoinError {
+                channel: String::from_str(self.channel.as_slice()),
                 errcode: 0,
                 message: String::from_str("")
             }));
@@ -205,8 +219,10 @@ impl EventWatcher for JoinEventWatcher {
     fn on_event(&mut self, message: &IrcEvent) {
         match *message {
             IrcEventJoinBundle(ref result) => {
-                self.result = Some(result.clone());
-                self.dispatch_monitors();
+                if result.get_channel() == self.channel.as_slice() {
+                    self.result = Some(result.clone());
+                    self.dispatch_monitors();
+                }
             },
             _ => ()
         }
