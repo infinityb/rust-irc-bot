@@ -224,17 +224,29 @@ impl IrcConnection {
         let reader = BufferedReader::new(stream.clone());
 
         let tmp_stream = stream.clone();
-        let (raw_sender, raw_rx) = sync_channel::<String>(0);
+        let (raw_writer_tx, raw_writer_rx) = sync_channel::<String>(0);
+        let (raw_reader_tx, raw_reader_rx) = sync_channel::<String>(0);
+
 
         TaskBuilder::new().named("core-writer").spawn(proc() {
             let mut writer = LineBufferedWriter::new(tmp_stream);
-            for message in raw_rx.iter() {
+            for message in raw_writer_rx.iter() {
                 assert!(writer.write_str(message.append("\n").as_slice()).is_ok());
             }
         });
 
-        TaskBuilder::new().named("core-readerdispatch").spawn(proc() {
+        TaskBuilder::new().named("core-reader").spawn(proc() {
             let mut reader = reader;
+            loop {
+                let string = String::from_str(match reader.read_line() {
+                        Ok(string) => string,
+                        Err(err) => fail!("{}", err)
+                    }.as_slice().trim_right());
+                raw_reader_tx.send(string);
+            }
+        });
+
+        TaskBuilder::new().named("core-dispatch").spawn(proc() {
             let mut state = IrcConnectionInternalState::new(event_queue_tx);
 
             state.bundler_triggers.push(box JoinBundlerTrigger::new());
@@ -246,36 +258,30 @@ impl IrcConnection {
             state.command_mapper.register(box RadioPlugin::new());
 
             loop {
-                let string = String::from_str(match reader.read_line() {
-                    Ok(string) => string,
-                    Err(err) => fail!("{}", err)
-                }.as_slice().trim_right());
-
-                loop {
-                    match command_queue_rx.try_recv() {
-                        Ok(RawWrite(value)) => {
-                            raw_sender.send(value);
-                        },
-                        Ok(AddWatcher(value)) => {
-                            state.event_watchers.push(value);
-                        },
-                        Ok(AddBundler(value)) => {
-                            state.event_bundlers.push(value);
-                        },
-                        Err(_) => break
+                select! {
+                    command = command_queue_rx.recv() => {
+                        match command {
+                            RawWrite(value) => {
+                                raw_writer_tx.send(value);
+                            },
+                            AddWatcher(value) => {
+                                state.event_watchers.push(value);
+                            },
+                            AddBundler(value) => {
+                                state.event_bundlers.push(value);
+                            }
+                        }
+                    },
+                    string = raw_reader_rx.recv() => {
+                        state.dispatch(match IrcMessage::from_str(string.as_slice()) {
+                            Ok(message) => message,
+                            Err(err) => {
+                                println!("Invalid IRC message: {} for {}", err, string);
+                                continue;
+                            }
+                        }, &raw_writer_tx);
                     }
                 }
-
-                // let bundler: Box<Bundler+Send> = box WhoBundler::new(target);
-                // self.event_bundlers.send(bundler);
-
-                state.dispatch(match IrcMessage::from_str(string.as_slice()) {
-                    Ok(message) => message,
-                    Err(err) => {
-                        println!("Invalid IRC message: {} for {}", err, string);
-                        continue;
-                    }
-                }, &raw_sender);
             }
         });
 
@@ -303,7 +309,7 @@ impl IrcConnection {
         let result_rx = join_watcher.get_monitor();
         let watcher: Box<EventWatcher+Send> = box join_watcher;
         self.command_queue.send(AddWatcher(watcher));
-        self.write_str(format!("JOIN {}", channel).as_slice());
+        self.command_queue.send(RawWrite(format!("JOIN {}", channel.as_slice())));
         result_rx.recv()
     }
 
@@ -313,7 +319,7 @@ impl IrcConnection {
         let watcher: Box<EventWatcher+Send> = box who_watcher;
         self.command_queue.send(AddBundler(box WhoBundler::new(target)));
         self.command_queue.send(AddWatcher(watcher));
-        self.write_str(format!("WHO {}", target).as_slice());
+        self.command_queue.send(RawWrite(format!("WHO {}", target)));
         result_rx.recv()
     }
 

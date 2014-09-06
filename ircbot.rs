@@ -90,6 +90,10 @@ fn main() {
     }
     
     for channel in botconfig.channels.iter() {
+        println!("want join: {}", channel);
+    }
+
+    for channel in botconfig.channels.iter() {
         println!("joining {}...", channel);
         match conn.join(channel.as_slice()) {
             Ok(res) => {
@@ -110,6 +114,7 @@ fn main() {
                 fail!("failed to join channel.. dying");
             }
         }
+        println!("END joining {}...", channel);
     }
 
     for event in event_queue.iter() {
