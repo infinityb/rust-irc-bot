@@ -135,21 +135,48 @@ impl DeerInternalState {
         }
     }
 
-    fn throttle(&mut self) -> bool {
+    fn throttle_ok(&mut self) -> bool {
         let now = get_time();
 
         let (new_last_request, throttle_ok) = match self.last_request {
             Some(last_request) => {
                 if (now - last_request).num_seconds() < 60 {
-                    (Some(last_request), true)
+                    (Some(last_request), false)
                 } else {
-                    (Some(now), false)
+                    (Some(now), true)
                 }                
             },
-            None => (Some(now), false)
+            None => (Some(now), true)
         };
         self.last_request = new_last_request;
         throttle_ok
+    }
+
+    fn handle_command<'a>(&mut self, m: &CommandMapperDispatch, cmd: &'a DeerCommandType) {
+        match cmd {
+            &Deer => {
+                for deer_line in DEER.split('\n') {
+                    m.reply(String::from_str(deer_line));
+                    self.lines_sent += 1;
+                }
+            },
+            &Deerkins(deer_name) => {
+                match get_deer(self, deer_name) {
+                    Ok(deer_data) => {
+                        for deer_line in deer_data.irccode.as_slice().split('\n') {
+                            m.reply(String::from_str(deer_line));
+                            self.lines_sent += 1;
+                        }
+                    },
+                    Err(err) => {
+                        m.reply(format!("error: {}", err));
+                    }
+                } 
+            },
+            &DeerStats => {
+                m.reply(format!("lines sent: {}", self.lines_sent));
+            }
+        };
     }
 
     fn start(&mut self, rx: Receiver<(CommandMapperDispatch, IrcMessage)>) {
@@ -157,43 +184,16 @@ impl DeerInternalState {
             if message.get_args().len() < 2 {
                 continue
             }
-            let command_data = match parse_command(&m, &message) {
-                Some(DeerStats) => Some(DeerStats),
-                Some(command_data) => {
-                    if self.throttle() {
-                        m.reply(String::from_str("2deer4plus"));
-                        None
+            match parse_command(&m, &message) {
+                Some(ref command) => {
+                    if self.throttle_ok() {
+                        self.handle_command(&m, command);
                     } else {
-                        Some(command_data)
+                        m.reply(String::from_str("2deer4plus"))
                     }
                 },
-                None => None
-            };
-            match command_data {
-                Some(Deer) => {
-                    for deer_line in DEER.split('\n') {
-                        m.reply(String::from_str(deer_line));
-                        self.lines_sent += 1;
-                    }
-                },
-                Some(Deerkins(deer_name)) => {
-                    match get_deer(self, deer_name) {
-                        Ok(deer_data) => {
-                            for deer_line in deer_data.irccode.as_slice().split('\n') {
-                                m.reply(String::from_str(deer_line));
-                                self.lines_sent += 1;
-                            }
-                        },
-                        Err(err) => {
-                            m.reply(format!("error: {}", err));
-                        }
-                    } 
-                },
-                Some(DeerStats) => {
-                    m.reply(format!("lines sent: {}", self.lines_sent));
-                }
-                None => continue
-            };
+                None => ()
+            }
         }
     }
 }
