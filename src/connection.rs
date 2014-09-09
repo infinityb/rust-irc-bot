@@ -250,7 +250,6 @@ impl IrcConnection {
             let mut state = IrcConnectionInternalState::new(event_queue_tx);
 
             state.bundler_triggers.push(box JoinBundlerTrigger::new());
-
             state.command_mapper.register(box CtcpVersionResponderPlugin::new());
             state.command_mapper.register(box GreedPlugin::new());
             state.command_mapper.register(box SeenPlugin::new());
@@ -317,6 +316,8 @@ impl IrcConnection {
         let mut who_watcher = WhoEventWatcher::new(target);
         let result_rx = who_watcher.get_monitor();
         let watcher: Box<EventWatcher+Send> = box who_watcher;
+        // TODO: we should probably make this a bundle-trigger.  We need to 
+        // ensure bundle gets the message that triggers the bundle-trigger
         self.command_queue.send(AddBundler(box WhoBundler::new(target)));
         self.command_queue.send(AddWatcher(watcher));
         self.command_queue.send(RawWrite(format!("WHO {}", target)));
