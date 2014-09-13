@@ -7,6 +7,7 @@ use plugins::{
     GreedPlugin,
     SeenPlugin,
     RadioPlugin,
+    PingPlugin
 };
 
 use core_plugins::CtcpVersionResponderPlugin;
@@ -251,6 +252,7 @@ impl IrcConnection {
 
             state.bundler_triggers.push(box JoinBundlerTrigger::new());
             state.command_mapper.register(box CtcpVersionResponderPlugin::new());
+            state.command_mapper.register(box PingPlugin::new());
             state.command_mapper.register(box GreedPlugin::new());
             state.command_mapper.register(box SeenPlugin::new());
             state.command_mapper.register(box DeerPlugin::new());
