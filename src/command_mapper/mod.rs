@@ -93,11 +93,9 @@ impl CommandMapperDispatch {
 
 pub struct CommandMapperRecord {
     cmd_word: String,
-    // sender: SyncSender<(CommandMapperDispatch, IrcMessage)>,
 }
 
 
-#[deriving(Send)]
 pub struct PluginContainer {
     cmd_prefix: String,
     plugins: Vec<(Box<RustBotPlugin+'static>, Vec<CommandMapperRecord>)>,
@@ -139,7 +137,7 @@ impl PluginContainer {
             }
         };
 
-        for pair in self.plugins.mut_iter() {
+        for pair in self.plugins.iter_mut() {
             let (ref mut plugin, ref mut mappers) = *pair;
             plugin.accept(&dispatch, message);
 

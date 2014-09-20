@@ -51,7 +51,7 @@ fn trim_vec<T>(vec: Vec<T>) -> Vec<T> {
         return vec;
     }
     let excess_elem = vec.len() - MAX_USER_RECORDS_KEPT;
-    vec.move_iter().skip(excess_elem).collect()
+    vec.into_iter().skip(excess_elem).collect()
 }
 
 

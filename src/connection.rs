@@ -64,10 +64,10 @@ fn bundler_trigger_impl(triggers: &mut Vec<Box<BundlerTrigger+Send>>,
                       ) -> Vec<Box<Bundler+Send>> {
 
     let mut activating: Vec<Box<Bundler+Send>> = Vec::new();
-    for trigger in triggers.mut_iter() {
+    for trigger in triggers.iter_mut() {
         let new_bundlers = trigger.on_message(message);
         activating.reserve_additional(new_bundlers.len());
-        for bundler in new_bundlers.move_iter() {
+        for bundler in new_bundlers.into_iter() {
             activating.push(bundler);
         }
     }
@@ -114,7 +114,7 @@ fn bundler_accept_impl(buf: &mut RingBuf<Box<Bundler+Send>>,
     loop {
         match buf.pop_front() {
             Some(mut bundler) => {
-                for event in bundler.on_message(message).move_iter() {
+                for event in bundler.on_message(message).into_iter() {
                     emit_events.push(event);
                 }
                 if !bundler.is_finished() {
@@ -174,18 +174,18 @@ impl IrcConnectionInternalState {
 
         let mut outgoing_events: Vec<IrcEvent> = Vec::new();
 
-        for new_bundler in bundler_trigger_impl(&mut self.bundler_triggers, &message).move_iter() {
+        for new_bundler in bundler_trigger_impl(&mut self.bundler_triggers, &message).into_iter() {
             self.event_bundlers.push(new_bundler);
         }
 
-        for event in bundler_accept_impl(&mut self.event_bundlers, &message).move_iter() {
+        for event in bundler_accept_impl(&mut self.event_bundlers, &message).into_iter() {
             outgoing_events.push(event);
         }
 
         outgoing_events.push(IrcEventMessage(message.clone()));
 
         for event in outgoing_events.iter() {
-            for watcher in watcher_accept_impl(&mut self.event_watchers, event).move_iter() {
+            for watcher in watcher_accept_impl(&mut self.event_watchers, event).into_iter() {
                 drop(watcher);
             }
         }
@@ -198,7 +198,7 @@ impl IrcConnectionInternalState {
             None => ()
         }
 
-        for event in outgoing_events.move_iter() {
+        for event in outgoing_events.into_iter() {
             self.event_queue_tx.send(event);
         }
     }

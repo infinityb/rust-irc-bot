@@ -2,8 +2,8 @@
 name = "irc"
 version = "0.1.0"
 dependencies = [
- "http 0.1.0-pre (git+https://github.com/chris-morgan/rust-http#6fa402df447942c7909773c9ee8295d339b117f0)",
- "toml 0.1.0 (git+https://github.com/alexcrichton/toml-rs#d40724ad2d6516d7b6750515153b4c360d63afe9)",
+ "http 0.1.0-pre (git+https://github.com/chris-morgan/rust-http#c1d601c1150ec6e10067dc0e022590277985b785)",
+ "toml 0.1.0 (git+https://github.com/alexcrichton/toml-rs#1ca52c5ea44d37354af024f1c790c2f042504c5b)",
 ]
 
 [[package]]
@@ -14,26 +14,26 @@ source = "git+https://github.com/lifthrasiir/rust-encoding#35f0d70f65f73ba16f296
 [[package]]
 name = "http"
 version = "0.1.0-pre"
-source = "git+https://github.com/chris-morgan/rust-http#6fa402df447942c7909773c9ee8295d339b117f0"
+source = "git+https://github.com/chris-morgan/rust-http#c1d601c1150ec6e10067dc0e022590277985b785"
 dependencies = [
- "openssl 0.0.0 (git+https://github.com/sfackler/rust-openssl.git#0a18409cdb88d726c8340d0580b09b061ac4c54c)",
- "url 0.1.0 (git+https://github.com/servo/rust-url#d894135cac4e0085f41ba3a816240b792f9e6154)",
+ "openssl 0.0.0 (git+https://github.com/sfackler/rust-openssl.git#a495465b75ffb18ff2303c5a11a103e00a15a13d)",
+ "url 0.1.0 (git+https://github.com/servo/rust-url#bfdf809365600a7941a77524f9bb065886de3379)",
 ]
 
 [[package]]
 name = "openssl"
 version = "0.0.0"
-source = "git+https://github.com/sfackler/rust-openssl.git#0a18409cdb88d726c8340d0580b09b061ac4c54c"
+source = "git+https://github.com/sfackler/rust-openssl.git#a495465b75ffb18ff2303c5a11a103e00a15a13d"
 
 [[package]]
 name = "toml"
 version = "0.1.0"
-source = "git+https://github.com/alexcrichton/toml-rs#d40724ad2d6516d7b6750515153b4c360d63afe9"
+source = "git+https://github.com/alexcrichton/toml-rs#1ca52c5ea44d37354af024f1c790c2f042504c5b"
 
 [[package]]
 name = "url"
 version = "0.1.0"
-source = "git+https://github.com/servo/rust-url#d894135cac4e0085f41ba3a816240b792f9e6154"
+source = "git+https://github.com/servo/rust-url#bfdf809365600a7941a77524f9bb065886de3379"
 dependencies = [
  "encoding 0.1.0 (git+https://github.com/lifthrasiir/rust-encoding#35f0d70f65f73ba16f296f9ec675eddee661ba79)",
 ]

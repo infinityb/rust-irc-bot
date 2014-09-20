@@ -93,7 +93,7 @@ fn dice_roll() -> RollResult {
     let mut rng = rand::task_rng();
     let mut out: RollResult = [0u8, ..6];
     let mut between = Range::new(1u8, 7u8);
-    for val in out.mut_iter() {
+    for val in out.iter_mut() {
         *val = between.sample(&mut rng);
     }
     out.sort();
@@ -152,7 +152,7 @@ fn find_or_create_state<'a>(states: &'a mut Vec<GreedState>, channel: &str) -> &
                 channel: String::from_str(channel),
                 last_played: None
             });
-            states.mut_last().unwrap()
+            states.last_mut().unwrap()
         }
     }
 }

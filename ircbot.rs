@@ -118,6 +118,7 @@ fn main() {
     }
 
     for event in event_queue.iter() {
+        drop(event);
         // println!("{:?}", event);
     }
 }
