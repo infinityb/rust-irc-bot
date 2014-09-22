@@ -1,5 +1,7 @@
 use std::collections::TreeMap;
+use std::time::Duration;
 use time::{get_time, Timespec};
+
 
 use command_mapper::{
     RustBotPlugin,
@@ -88,11 +90,11 @@ fn parse_command<'a>(m: &CommandMapperDispatch, message: &'a IrcMessage) -> Opti
 }
 
 fn duration_to_string(dur: Duration) -> String {
-    let seconds = ts.num_seconds();
+    let seconds = dur.num_seconds();
 
-    let days = ts.num_days();
-    let hours = ts.num_hours();
-    let minutes = ts.num_minutes();
+    let days = dur.num_days();
+    let hours = dur.num_hours();
+    let minutes = dur.num_minutes();
 
     let mut string = String::new();
     if days > 0 {
