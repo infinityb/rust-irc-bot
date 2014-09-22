@@ -87,6 +87,29 @@ fn parse_command<'a>(m: &CommandMapperDispatch, message: &'a IrcMessage) -> Opti
     }
 }
 
+fn duration_to_string(dur: Duration) -> String {
+    let seconds = ts.num_seconds();
+
+    let days = ts.num_days();
+    let hours = ts.num_hours();
+    let minutes = ts.num_minutes();
+
+    let mut string = String::new();
+    if days > 0 {
+        string = string.append(format!("{:d}d", days).as_slice());
+    }
+    if hours > 0 {
+        string = string.append(format!("{:02d}h", hours).as_slice());
+    }
+    if minutes > 0 {
+        string = string.append(format!("{:02d}m", minutes).as_slice());
+    }
+    if string.len() == 0 || seconds > 0 {
+        string = string.append(format!("{:02d}s", seconds).as_slice());
+    }
+    string
+}
+
 
 fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
     let mut user_has_quit: Option<Timespec> = None;
@@ -104,18 +127,26 @@ fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
     let now = get_time();
     match (user_has_quit, prev_message) {
         (Some(when_quit), Some(record)) => {
-            let seconds = (now - record.when).num_seconds();
-            let quit_seconds = (when_quit - record.when).num_seconds();
-            format!("{} said ``{}'' {} seconds ago before quitting {} seconds later",
-                nick, record.message.get_arg(1), seconds, quit_seconds)
+            format!(
+                "{} said ``{}'' {} ago before quitting {} later",
+                nick,
+                record.message.get_arg(1),
+                duration_to_string(now - record.when),
+                duration_to_string(when_quit - record.when))
         },
         (None, Some(record)) => {
             // let message_sent = format_message_sent(message);
-            let seconds = (now - record.when).num_seconds();
-            format!("{} said ``{}'' {} seconds ago", nick, record.message.get_arg(1), seconds)
+            format!(
+                "{} said ``{}'' {} ago",
+                nick,
+                record.message.get_arg(1),
+                duration_to_string(now - record.when))
         },
         (Some(when_quit), None) => {
-            format!("{} quit {} seconds ago", nick, (now - when_quit).num_seconds())
+            format!(
+                "{} quit {} seconds ago",
+                nick,
+                duration_to_string(now - when_quit))
         },
         (None, None) => {
             format!("Sorry, I am very confused about {}", nick)
