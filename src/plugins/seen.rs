@@ -90,11 +90,10 @@ fn parse_command<'a>(m: &CommandMapperDispatch, message: &'a IrcMessage) -> Opti
 }
 
 fn duration_to_string(dur: Duration) -> String {
-    let seconds = dur.num_seconds();
-
     let days = dur.num_days();
-    let hours = dur.num_hours();
-    let minutes = dur.num_minutes();
+    let hours = dur.num_hours() % 24;
+    let minutes = dur.num_minutes() % 60;
+    let seconds = dur.num_seconds() % 60;
 
     let mut string = String::new();
     if days > 0 {
