@@ -164,9 +164,9 @@ fn format_score_component_bare(roll_result: &RollResult) -> String {
         if *value == 0 {
             break
         }
-        rolls = rolls.append(format!("{}, ", value).as_slice());
+        rolls.push_str(format!("{}, ", value).as_slice());
     }
-    rolls.pop_char(); rolls.pop_char();
+    rolls.pop(); rolls.pop();
     format!("{}", rolls.as_slice())
 }
 
@@ -181,13 +181,13 @@ fn format_score(score_components: &Vec<&ScoreRec>) -> String {
     let mut output = String::new();
     for tuple in score_components.iter() {
         let (_, _, score) = **tuple;
-        output = output.append(format!(
+        output.push_str(format!(
             "[{} => {}], ",
             format_score_component(*tuple).as_slice(),
             score
         ).as_slice());
     }
-    output.pop_char(); output.pop_char();
+    output.pop(); output.pop();
     output
 }
 

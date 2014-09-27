@@ -97,16 +97,16 @@ fn duration_to_string(dur: Duration) -> String {
 
     let mut string = String::new();
     if days > 0 {
-        string = string.append(format!("{:d}d", days).as_slice());
+        string.push_str(format!("{:d}d", days).as_slice());
     }
     if hours > 0 {
-        string = string.append(format!("{:02d}h", hours).as_slice());
+        string.push_str(format!("{:02d}h", hours).as_slice());
     }
     if minutes > 0 {
-        string = string.append(format!("{:02d}m", minutes).as_slice());
+        string.push_str(format!("{:02d}m", minutes).as_slice());
     }
     if string.len() == 0 || seconds > 0 {
-        string = string.append(format!("{:02d}s", seconds).as_slice());
+        string.push_str(format!("{:02d}s", seconds).as_slice());
     }
     string
 }

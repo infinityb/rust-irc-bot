@@ -232,7 +232,9 @@ impl IrcConnection {
         TaskBuilder::new().named("core-writer").spawn(proc() {
             let mut writer = LineBufferedWriter::new(tmp_stream);
             for message in raw_writer_rx.iter() {
-                assert!(writer.write_str(message.append("\n").as_slice()).is_ok());
+                let mut message = message.clone();
+                message.push_str("\n");
+                assert!(writer.write_str(message.as_slice()).is_ok());
             }
         });
 

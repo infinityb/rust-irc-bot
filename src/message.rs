@@ -245,11 +245,11 @@ impl IrcMessage {
 impl fmt::Show for IrcMessage {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut arg_string = String::new();
-        arg_string = arg_string.append("[");
+        arg_string.push_str("[");
         for part in self.args.iter().map(|s| s.as_slice()) {
-            arg_string = arg_string.append(format!("{}, ", part.as_slice()).as_slice());
+            arg_string.push_str(format!("{}, ", part.as_slice()).as_slice());
         }
-        arg_string = arg_string.append("]");
+        arg_string.push_str("]");
 
         match self.prefix_raw {
             Some(ref prefix) => write!(f, "IrcMessage({}, {}, {})",

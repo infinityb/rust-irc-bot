@@ -81,7 +81,7 @@ fn main() {
             }
             Err(err) => {
                 if err.should_pick_new_nickname() {
-                    nick = nick.append("`");
+                    nick.push_str("`");
                 } else {
                     fail!("{:?}", err)
                 }
