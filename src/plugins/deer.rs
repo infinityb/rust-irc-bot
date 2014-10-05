@@ -64,7 +64,7 @@ fn get_deer_nocache(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> 
     };
     url.query = Some(serialize_owned(vec![
         (String::from_str("deer"), String::from_str(deer_name)),
-    ].as_slice()));
+    ][]));
 
     let request: RequestWriter = RequestWriter::new(Get, url).unwrap();
 
@@ -81,7 +81,7 @@ fn get_deer_nocache(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> 
         Err(_err) => return Err(ResponseDecodeError)
     };
 
-    match json::decode::<DeerApiResponse>(body.as_slice()) {
+    match json::decode::<DeerApiResponse>(body[]) {
         Ok(result) => Ok(result),
         Err(error) => Err(ResponseDeserializeError(error))
     }
@@ -163,7 +163,7 @@ impl DeerInternalState {
             &Deerkins(deer_name) => {
                 match get_deer(self, deer_name) {
                     Ok(deer_data) => {
-                        for deer_line in deer_data.irccode.as_slice().split('\n') {
+                        for deer_line in deer_data.irccode[].split('\n') {
                             m.reply(String::from_str(deer_line));
                             self.lines_sent += 1;
                         }
@@ -207,7 +207,7 @@ enum DeerCommandType<'a> {
 
 
 fn parse_deerkins<'a>(message: &'a IrcMessage) -> Option<DeerCommandType<'a>> {
-    let message_body = message.get_arg(1).as_slice();
+    let message_body = message.get_arg(1)[];
     match message_body.find(' ') {
         Some(idx) => Some(Deerkins(message_body.slice_from(idx + 1))),
         None => None

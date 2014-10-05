@@ -148,7 +148,7 @@ impl IrcMessage {
         let message_args = args.clone();
 
         let message = match (command.as_slice(), args.len()) {
-            ("PING", 1..2) => {
+            ("PING", 1...2) => {
                 IrcProtocolMessage::Ping(args.remove(0).unwrap(), args.remove(0))
             },
             ("PING", _) => return Err(from_str(
