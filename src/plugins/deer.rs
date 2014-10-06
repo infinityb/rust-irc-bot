@@ -15,7 +15,9 @@ use http::method::Get;
 use command_mapper::{
     RustBotPlugin,
     CommandMapperDispatch,
-    IrcBotConfigurator
+    IrcBotConfigurator,
+    Format,
+    StringValue
 };
 use message::{
     IrcMessage
@@ -153,15 +155,15 @@ impl DeerInternalState {
     }
 
     fn handle_command<'a>(&mut self, m: &CommandMapperDispatch, cmd: &'a DeerCommandType) {
-        match cmd {
-            &Deer => {
+        match *cmd {
+            Deer => {
                 for deer_line in DEER.split('\n') {
                     m.reply(String::from_str(deer_line));
                     self.lines_sent += 1;
                 }
             },
-            &Deerkins(deer_name) => {
-                match get_deer(self, deer_name) {
+            Deerkins(ref deer_name) => {
+                match get_deer(self, deer_name[]) {
                     Ok(deer_data) => {
                         for deer_line in deer_data.irccode[].split('\n') {
                             m.reply(String::from_str(deer_line));
@@ -173,18 +175,15 @@ impl DeerInternalState {
                     }
                 } 
             },
-            &DeerStats => {
+            DeerStats => {
                 m.reply(format!("lines sent: {}", self.lines_sent));
             }
         };
     }
 
     fn start(&mut self, rx: Receiver<(CommandMapperDispatch, IrcMessage)>) {
-        for (m, message) in rx.iter() {
-            if message.get_args().len() < 2 {
-                continue
-            }
-            match parse_command(&m, &message) {
+        for (m, _) in rx.iter() {
+            match parse_command(&m) {
                 Some(ref command) => {
                     if self.throttle_ok() {
                         self.handle_command(&m, command);
@@ -199,38 +198,40 @@ impl DeerInternalState {
 }
 
 
-enum DeerCommandType<'a> {
+enum DeerCommandType {
     Deer,
-    Deerkins(&'a str),
+    Deerkins(String),
     DeerStats
 }
 
-
-fn parse_deerkins<'a>(message: &'a IrcMessage) -> Option<DeerCommandType<'a>> {
-    let message_body = message.get_arg(1)[];
-    match message_body.find(' ') {
-        Some(idx) => Some(Deerkins(message_body.slice_from(idx + 1))),
-        None => None
-    }
-}
-
-
-fn parse_command<'a>(m: &CommandMapperDispatch, message: &'a IrcMessage) -> Option<DeerCommandType<'a>> {
-    match m.command() {
-        Some("deer") => Some(Deer),
-        Some("deerkins") => parse_deerkins(message),
-        Some("deerstats") => Some(DeerStats),
-        Some(_) => None,
-        None => None
+fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<DeerCommandType> {
+    let command_phrase = match m.command() {
+        Some(command_phrase) => command_phrase,
+        None => return None
+    };
+    match command_phrase.command[] {
+        "deer" => Some(Deer),
+        "deerkins" => {
+            Some(Deerkins(match command_phrase.args.find(&"deername".to_string()) {
+                Some(&StringValue(ref rest)) => rest.clone(),
+                Some(_) => return None,
+                None => return None
+            }))
+        },
+        "deerstats" => Some(DeerStats),
+        _ => None
     }
 }
 
 
 impl RustBotPlugin for DeerPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
-        conf.map("deer");
-        conf.map("deerstats");
-        conf.map("deerkins");
+        conf.map_format(Format::from_str("deer").unwrap());
+        conf.map_format(Format::from_str("deerstats").unwrap());
+        conf.map_format(match Format::from_str("deerkins {*deername}") {
+            Ok(format) => format,
+            Err(err) => fail!("error building deerkins format: {}" , err)
+        });
     }
 
     fn start(&mut self) {

@@ -1,7 +1,8 @@
 use command_mapper::{
     RustBotPlugin,
     CommandMapperDispatch,
-    IrcBotConfigurator
+    IrcBotConfigurator,
+    Format,
 };
 use message::{
     IrcMessage
@@ -21,23 +22,25 @@ enum PingCommandType {
     Ping
 }
 
-
-fn parse_command<'a>(m: &CommandMapperDispatch, _message: &'a IrcMessage) -> Option<PingCommandType> {
-    match m.command() {
-        Some("ping") => Some(Ping),
-        Some(_) => None,
-        None => None
+fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<PingCommandType> {
+    let command_phrase = match m.command() {
+        Some(command_phrase) => command_phrase,
+        None => return None
+    };
+    match command_phrase.command[] {
+        "ping" => Some(Ping),
+        _ => None
     }
 }
 
 
 impl RustBotPlugin for PingPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
-        conf.map("ping");
+        conf.map_format(Format::from_str("ping").unwrap());
     }
 
-    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
-        match parse_command(m, message) {
+    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, _: &IrcMessage) {
+        match parse_command(m) {
             Some(Ping) => m.reply(format!("pong")),
             None => return
         }

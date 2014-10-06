@@ -6,7 +6,9 @@ use time::{get_time, Timespec};
 use command_mapper::{
     RustBotPlugin,
     CommandMapperDispatch,
-    IrcBotConfigurator
+    IrcBotConfigurator,
+    Format,
+    StringValue
 };
 use message::{
     IrcMessage
@@ -67,27 +69,10 @@ fn is_message_interesting(message: &IrcMessage) -> bool {
     }
 }
 
-enum SeenCommandType<'a> {
-    Seen(&'a str)
+enum SeenCommandType {
+    Seen(String)
 }
 
-
-fn parse_seen<'a>(message: &'a IrcMessage) -> Option<SeenCommandType<'a>> {
-    let message_body = message.get_arg(1).as_slice();
-    match message_body.find(' ') {
-        Some(idx) => Some(Seen(message_body.slice_from(idx + 1))),
-        None => None
-    }
-}
-
-
-fn parse_command<'a>(m: &CommandMapperDispatch, message: &'a IrcMessage) -> Option<SeenCommandType<'a>> {
-    match m.command() {
-        Some("seen") => parse_seen(message),
-        Some(_) => None,
-        None => None
-    }
-}
 
 fn duration_to_string(dur: Duration) -> String {
     let days = dur.num_days();
@@ -158,7 +143,7 @@ fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
 
 impl RustBotPlugin for SeenPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
-        conf.map("seen");
+        conf.map_format(Format::from_str("seen {nick:s}").unwrap());
     }
 
     fn accept(&mut self, _m: &CommandMapperDispatch, message: &IrcMessage) {
@@ -195,26 +180,38 @@ impl RustBotPlugin for SeenPlugin {
             return;
         }
         
-        match parse_command(m, message) {
+        let command_phrase = match m.command() {
+            Some(command_phrase) => command_phrase,
+            None => return
+        };
+        let parsed_command = match command_phrase.command[] {
+            "seen" => Some(Seen(match command_phrase.args.find(&"nick".to_string()) {
+                Some(&StringValue(ref rest)) => rest.clone(),
+                Some(_) => return,
+                None => return
+            })),
+            _ => None
+        };
+
+        match parsed_command {
             Some(Seen(target_nick)) => {
-                if source_nick.as_slice() == target_nick {
+                if source_nick == target_nick {
                     m.reply(format!("Looking for yourself, {}?", source_nick));
                     return;
                 }
 
-                if m.current_nick() == target_nick {
+                if m.current_nick() == target_nick[] {
                     m.reply(format!("You found me, {}!", source_nick));
                     return;
                 }
-                let target_nick_str = String::from_str(target_nick);
-                let activity = match self.map.find(&target_nick_str) {
+                let activity = match self.map.find(&target_nick) {
                     Some(val) => val,
                     None => {
                         m.reply(format!("{} is unknown", target_nick));
                         return
                     }
                 };
-                m.reply(format_activity(target_nick.as_slice(), activity));
+                m.reply(format_activity(target_nick[], activity));
             },
             None => return
         }

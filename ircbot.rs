@@ -9,9 +9,6 @@ use std::path::Path;
 use std::io::fs::File;
 use std::os::args_as_bytes;
 
-use toml::Parser;
-
-
 use irc::{
     IrcConnection,
 };
@@ -41,7 +38,7 @@ fn parse_botconfig() -> Option<BotConfig> {
         Ok(contents) => contents,
         Err(err) => fail!("{}", err)
     };
-    let mut parser = Parser::new(contents.as_slice());
+    let mut parser = toml::Parser::new(contents.as_slice());
     let table = match parser.parse() {
         Some(table) => {
             let core_key = String::from_str("core");

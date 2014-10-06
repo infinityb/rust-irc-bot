@@ -15,7 +15,8 @@ use time::{get_time, Timespec};
 use command_mapper::{
     RustBotPlugin,
     CommandMapperDispatch,
-    IrcBotConfigurator
+    IrcBotConfigurator,
+    Format,
 };
 use message::{
     IrcMessage
@@ -36,22 +37,6 @@ struct RadioStreamApiResponse {
     np: String,
     listeners: uint,
     djname: String
-}
-
-
-enum RadioCommandType {
-    Dj,
-    DjWatch
-}
-
-
-fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<RadioCommandType> {
-    match m.command() {
-        Some("dj") => Some(Dj),
-        Some("djwatch") => Some(DjWatch),
-        Some(_) => None,
-        None => None
-    }
 }
 
 
@@ -205,12 +190,12 @@ impl RadioInternalState {
         }
     }
 
-    fn handle_subscribe(&mut self, m: &CommandMapperDispatch, msg: &IrcMessage) {
+    fn handle_subscribe(&mut self, m: &CommandMapperDispatch) {
         if self.subscribed_channels.len() == 0 {
             self.monitor_state = None;
         }
-        let channel_name = match msg.channel() {
-            Some(channel_name) => String::from_str(channel_name),
+        let channel_name = match m.channel {
+            Some(ref channel_name) => channel_name.clone(),
             None => return
         };
         let is_removed = self.subscribed_channels.remove(&channel_name);
@@ -222,20 +207,23 @@ impl RadioInternalState {
         }
     }
 
-    fn start(&mut self, rx: Receiver<(CommandMapperDispatch, IrcMessage)>) {
-        for (m, message) in rx.iter() {
-            match parse_command(&m) {
-                Some(Dj) => self.handle_dj(&m),
-                Some(DjWatch) => self.handle_subscribe(&m, &message),
-                None => self.handle_watcher(&m)
+    fn start(&mut self, rx: Receiver<CommandMapperDispatch>) {
+        for m in rx.iter() {
+            let command_phrase = match m.command() {
+                Some(command_phrase) => command_phrase,
+                None => continue
+            };
+            match command_phrase.command[] {
+                "dj" => self.handle_dj(&m),
+                "djwatch" => self.handle_subscribe(&m),
+                _ => self.handle_watcher(&m)
             }
         }
     }
 }
 
-
 pub struct RadioPlugin {
-    sender: Option<SyncSender<(CommandMapperDispatch, IrcMessage)>>
+    sender: Option<SyncSender<CommandMapperDispatch>>
 }
 
 
@@ -250,30 +238,29 @@ impl RadioPlugin {
 
 impl RustBotPlugin for RadioPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
-        conf.map("dj");
-        conf.map("djwatch");
+        conf.map_format(Format::from_str("dj").unwrap());
+        conf.map_format(Format::from_str("djwatch").unwrap());
     }
 
     fn start(&mut self) {
         let (tx, rx) = sync_channel(10);
-        self.sender = Some(tx);
-
         TaskBuilder::new().named("plugin-radio").spawn(proc() {
             let mut internal_state = RadioInternalState::new();
             internal_state.start(rx);
         });
+        self.sender = Some(tx);
     }
 
-    fn accept(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
+    fn accept(&mut self, m: &CommandMapperDispatch, _message: &IrcMessage) {
         match self.sender {
-            Some(ref sender) => sender.send((m.clone(), message.clone())),
+            Some(ref sender) => sender.send(m.clone()),
             None => ()
         };
     }
 
-    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
+    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, _message: &IrcMessage) {
         match self.sender {
-            Some(ref sender) => sender.send((m.clone(), message.clone())),
+            Some(ref sender) => sender.send(m.clone()),
             None => ()
         };
     }

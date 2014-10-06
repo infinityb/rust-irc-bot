@@ -7,7 +7,7 @@ use plugins::{
     GreedPlugin,
     SeenPlugin,
     RadioPlugin,
-    PingPlugin
+    PingPlugin,
 };
 
 use core_plugins::CtcpVersionResponderPlugin;

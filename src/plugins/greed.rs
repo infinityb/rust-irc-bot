@@ -5,7 +5,8 @@ use std::rand;
 use command_mapper::{
     RustBotPlugin,
     CommandMapperDispatch,
-    IrcBotConfigurator
+    IrcBotConfigurator,
+    Format,
 };
 use message::{
     IrcMessage
@@ -59,19 +60,21 @@ pub struct GreedPlugin {
 }
 
 
-enum GreedCommandType<'a> {
+enum GreedCommandType {
     Greed
 }
 
 
-fn parse_command<'a>(m: &CommandMapperDispatch, _message: &'a IrcMessage) -> Option<GreedCommandType<'a>> {
-    match m.command() {
-        Some("greed") => Some(Greed),
-        Some(_) => None,
-        None => None
+fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<GreedCommandType> {
+    let command_phrase = match m.command() {
+        Some(command_phrase) => command_phrase,
+        None => return None
+    };
+    match command_phrase.command[] {
+        "greed" => Some(Greed),
+        _ => None
     }
 }
-
 
 #[inline]
 fn is_prefix(rec: &ScoreRec, roll: &RollResult, start_idx: uint) -> bool {
@@ -254,11 +257,11 @@ impl GreedPlugin {
 
 impl RustBotPlugin for GreedPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
-        conf.map("greed");
+        conf.map_format(Format::from_str("greed").unwrap());
     }
     
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
-        match parse_command(m, message) {
+        match parse_command(m) {
             Some(Greed) => self.dispatch_cmd_greed(m, message),
             None => ()
         }

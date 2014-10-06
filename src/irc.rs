@@ -29,7 +29,6 @@ pub use self::watchers::{
 
 pub use self::command_mapper::{
     CommandMapperDispatch,
-    CommandMapperRecord,
     PluginContainer,
     IrcBotConfigurator
 };
