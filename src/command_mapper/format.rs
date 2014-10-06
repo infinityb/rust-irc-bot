@@ -273,7 +273,8 @@ fn cons_the_basics() {
             Err(err) => fail!("parse failure: {}", err)
         };
         let cmdlet = match fmt.parse("articles bar test article argument") {
-            Ok(cmdlet) => cmdlet,
+            Ok(Some(cmdlet)) => cmdlet,
+            Ok(None) => fail!("doesn't match when it should"),
             Err(err) => fail!("parse failure: {}", err)
         };
         assert_eq!(cmdlet.command[], "articles");
@@ -301,7 +302,8 @@ fn parse_the_basics() {
         assert!(fmt.matches_maybe(cmd_str));
 
         let cmdlet = match fmt.parse(cmd_str) {
-            Ok(cmdlet) => cmdlet,
+            Ok(Some(cmdlet)) => cmdlet,
+            Ok(None) => fail!("doesn't match when it should"),
             Err(err) => fail!("parse failure: {}", err)
         };
         assert_eq!(cmdlet.command[], "articles");
