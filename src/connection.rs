@@ -8,6 +8,7 @@ use plugins::{
     SeenPlugin,
     RadioPlugin,
     PingPlugin,
+    WserverPlugin,
 };
 
 use core_plugins::CtcpVersionResponderPlugin;
@@ -28,7 +29,7 @@ use watchers::{
     EventWatcher,
     BundlerTrigger,
     IrcEvent,
-    IrcEventMessage
+    IrcEventMessage,
 };
 
 
@@ -259,6 +260,7 @@ impl IrcConnection {
             state.command_mapper.register(box SeenPlugin::new());
             state.command_mapper.register(box DeerPlugin::new());
             state.command_mapper.register(box RadioPlugin::new());
+            state.command_mapper.register(box WserverPlugin::new());
 
             loop {
                 select! {
