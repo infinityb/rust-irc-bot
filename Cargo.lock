@@ -2,39 +2,39 @@
 name = "irc"
 version = "0.1.0"
 dependencies = [
- "http 0.1.0-pre (git+https://github.com/chris-morgan/rust-http#5c376e1484ea39ac7911f89952d38af78c25b400)",
- "toml 0.1.0 (git+https://github.com/alexcrichton/toml-rs#05c1eb420f54569336b8481c28a46b5a7c51ec99)",
+ "http 0.1.0-pre (git+https://github.com/chris-morgan/rust-http#ba43e05a5abdcc62b4a04b6a7fd6c634a8a4605a)",
+ "toml 0.1.0 (git+https://github.com/alexcrichton/toml-rs#8a3ba4c65cfa22a3d924293a1fb3a70bfac5e66c)",
 ]
 
 [[package]]
 name = "encoding"
 version = "0.1.0"
-source = "git+https://github.com/lifthrasiir/rust-encoding#97e5a56658d11e6386d0d17386560094490b1daf"
+source = "git+https://github.com/lifthrasiir/rust-encoding#4368ee5d0e7599964d98f874df22c86f4005c9ae"
 
 [[package]]
 name = "http"
 version = "0.1.0-pre"
-source = "git+https://github.com/chris-morgan/rust-http#5c376e1484ea39ac7911f89952d38af78c25b400"
+source = "git+https://github.com/chris-morgan/rust-http#ba43e05a5abdcc62b4a04b6a7fd6c634a8a4605a"
 dependencies = [
- "openssl 0.0.0 (git+https://github.com/sfackler/rust-openssl.git#d6578469a85bcc06a5761c1e25a73036427affef)",
+ "openssl 0.0.0 (git+https://github.com/sfackler/rust-openssl.git#6277635e5c579c5842fc5f921a3b27a544a7b346)",
  "url 0.1.0 (git+https://github.com/servo/rust-url#55b18b796ef2cef5490069dd450c60c2cc2c0c1b)",
 ]
 
 [[package]]
 name = "openssl"
 version = "0.0.0"
-source = "git+https://github.com/sfackler/rust-openssl.git#d6578469a85bcc06a5761c1e25a73036427affef"
+source = "git+https://github.com/sfackler/rust-openssl.git#6277635e5c579c5842fc5f921a3b27a544a7b346"
 
 [[package]]
 name = "toml"
 version = "0.1.0"
-source = "git+https://github.com/alexcrichton/toml-rs#05c1eb420f54569336b8481c28a46b5a7c51ec99"
+source = "git+https://github.com/alexcrichton/toml-rs#8a3ba4c65cfa22a3d924293a1fb3a70bfac5e66c"
 
 [[package]]
 name = "url"
 version = "0.1.0"
 source = "git+https://github.com/servo/rust-url#55b18b796ef2cef5490069dd450c60c2cc2c0c1b"
 dependencies = [
- "encoding 0.1.0 (git+https://github.com/lifthrasiir/rust-encoding#97e5a56658d11e6386d0d17386560094490b1daf)",
+ "encoding 0.1.0 (git+https://github.com/lifthrasiir/rust-encoding#4368ee5d0e7599964d98f874df22c86f4005c9ae)",
 ]
 

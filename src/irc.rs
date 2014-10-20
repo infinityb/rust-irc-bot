@@ -1,11 +1,10 @@
 #![crate_name = "irc"]
 #![crate_type = "dylib"]
 #![license = "MIT"]
-
+#![feature(slicing_syntax)]
 
 extern crate time;
 extern crate serialize;
-extern crate debug;
 extern crate http;
 extern crate url;
 
