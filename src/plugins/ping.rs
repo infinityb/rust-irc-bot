@@ -4,7 +4,7 @@ use command_mapper::{
     IrcBotConfigurator,
     Format,
 };
-use message::{
+use irc::message::{
     IrcMessage
 };
 

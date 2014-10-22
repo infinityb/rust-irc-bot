@@ -1,24 +1,30 @@
 [root]
-name = "irc"
+name = "ircbot"
 version = "0.1.0"
 dependencies = [
- "http 0.1.0-pre (git+https://github.com/chris-morgan/rust-http#ba43e05a5abdcc62b4a04b6a7fd6c634a8a4605a)",
+ "http 0.1.0-pre (git+https://github.com/chris-morgan/rust-http#85689a9f69132655cf5ed8dc11af1a7c58709046)",
+ "irc 0.1.0 (git+https://github.com/infinityb/rust-irc#bdbcf7424266f3fd96501e50185b1eb4f4e9c006)",
  "toml 0.1.0 (git+https://github.com/alexcrichton/toml-rs#8a3ba4c65cfa22a3d924293a1fb3a70bfac5e66c)",
 ]
 
 [[package]]
 name = "encoding"
 version = "0.1.0"
-source = "git+https://github.com/lifthrasiir/rust-encoding#4368ee5d0e7599964d98f874df22c86f4005c9ae"
+source = "git+https://github.com/lifthrasiir/rust-encoding#dd6183298e20b038fcd1cc4ab91405b3c72e49db"
 
 [[package]]
 name = "http"
 version = "0.1.0-pre"
-source = "git+https://github.com/chris-morgan/rust-http#ba43e05a5abdcc62b4a04b6a7fd6c634a8a4605a"
+source = "git+https://github.com/chris-morgan/rust-http#85689a9f69132655cf5ed8dc11af1a7c58709046"
 dependencies = [
  "openssl 0.0.0 (git+https://github.com/sfackler/rust-openssl.git#6277635e5c579c5842fc5f921a3b27a544a7b346)",
- "url 0.1.0 (git+https://github.com/servo/rust-url#55b18b796ef2cef5490069dd450c60c2cc2c0c1b)",
+ "url 0.1.0 (git+https://github.com/servo/rust-url#7f1991d847fb8cf8648def2ff121bae90b89131f)",
 ]
+
+[[package]]
+name = "irc"
+version = "0.1.0"
+source = "git+https://github.com/infinityb/rust-irc#bdbcf7424266f3fd96501e50185b1eb4f4e9c006"
 
 [[package]]
 name = "openssl"
@@ -33,8 +39,8 @@ source = "git+https://github.com/alexcrichton/toml-rs#8a3ba4c65cfa22a3d924293a1f
 [[package]]
 name = "url"
 version = "0.1.0"
-source = "git+https://github.com/servo/rust-url#55b18b796ef2cef5490069dd450c60c2cc2c0c1b"
+source = "git+https://github.com/servo/rust-url#7f1991d847fb8cf8648def2ff121bae90b89131f"
 dependencies = [
- "encoding 0.1.0 (git+https://github.com/lifthrasiir/rust-encoding#4368ee5d0e7599964d98f874df22c86f4005c9ae)",
+ "encoding 0.1.0 (git+https://github.com/lifthrasiir/rust-encoding#dd6183298e20b038fcd1cc4ab91405b3c72e49db)",
 ]
 

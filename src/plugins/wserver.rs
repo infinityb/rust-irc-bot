@@ -13,7 +13,7 @@ use command_mapper::{
     Format,
     StringValue,
 };
-use message::{
+use irc::message::{
     IrcMessage
 };
 

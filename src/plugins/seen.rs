@@ -10,9 +10,10 @@ use command_mapper::{
     Format,
     StringValue
 };
-use message::{
+use irc::message::{
     IrcMessage
 };
+
 
 static MAX_USER_RECORDS_KEPT: uint = 5;
 

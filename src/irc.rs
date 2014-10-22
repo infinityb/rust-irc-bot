@@ -7,17 +7,17 @@ extern crate time;
 extern crate serialize;
 extern crate http;
 extern crate url;
+extern crate irc;
 
 
-pub use self::message::{
+pub use irc::message::{
     IrcMessage,
     IrcProtocolMessage
 };
 
+pub use self::botcore::BotConnection;
 
-pub use self::connection::IrcConnection;
-
-pub use self::watchers::{
+pub use irc::watchers::{
     MessageWatcher,
     JoinBundler,
     RegisterError,
@@ -33,10 +33,6 @@ pub use self::command_mapper::{
 };
 
 pub mod plugins;
-pub mod numerics;
 pub mod connection;
-pub mod message;
-// pub mod state;
-pub mod watchers;
 pub mod command_mapper;
-pub mod core_plugins;
+pub mod botcore;
