@@ -180,7 +180,9 @@ impl Format {
                         (Some(name), Ok(Some(value))) => {
                             args_map.insert(name.to_string(), value);
                         },
-                        (Some(name), Ok(None)) => fail!("named atom with Ok(None) value"),
+                        (Some(name), Ok(None)) => {
+                            fail!("named ({}) atom with Ok(None) value", name);
+                        },
                         (None, Ok(_)) => (),
                         (_, Err(err)) => return Err(err)
                     };

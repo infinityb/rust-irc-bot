@@ -152,7 +152,7 @@ impl PluginContainer {
             println!("dispatcher dispatching {}", message);
             for mapper_format in mappers.iter() {
                 if is_command_message(message, self.cmd_prefix[]) {
-                    let message_body = message.get_arg(1)[self.cmd_prefix.len()..];
+                    let message_body = message.get_args()[1][self.cmd_prefix.len()..];
                     match mapper_format.parse(message_body) {
                         Ok(Some(command_phrase)) => {
                             dispatch.command = Some(command_phrase);
@@ -173,5 +173,5 @@ fn is_command_message(message: &IrcMessage, prefix: &str) -> bool {
     if message.get_args().len() < 2 {
         return false;
     }
-    return message.get_arg(1).as_slice().starts_with(prefix);
+    return message.get_args()[1].starts_with(prefix);
 }

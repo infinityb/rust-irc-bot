@@ -117,7 +117,7 @@ fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
             format!(
                 "{} said ``{}'' {} ago before quitting {} later",
                 nick,
-                record.message.get_arg(1),
+                record.message.get_args()[1],
                 duration_to_string(now - record.when),
                 duration_to_string(when_quit - record.when))
         },
@@ -126,7 +126,7 @@ fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
             format!(
                 "{} said ``{}'' {} ago",
                 nick,
-                record.message.get_arg(1),
+                record.message.get_args()[1],
                 duration_to_string(now - record.when))
         },
         (Some(when_quit), None) => {

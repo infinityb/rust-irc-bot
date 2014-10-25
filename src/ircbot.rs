@@ -14,8 +14,6 @@ use std::path::Path;
 use std::io::fs::File;
 use std::os::args_as_bytes;
 
-use irc::IrcConnection;
-use irc::watchers::IrcEventMessage;
 use botcore::{BotConfig, BotConnection};
 
 mod botcore;
@@ -77,8 +75,9 @@ fn main() {
     };
 
     let conn = BotConnection::new(&botconfig);
-    let mut conn = match conn {
+    let conn = match conn {
         Ok(stream) => stream,
         Err(err) => fail!("{}", err)
     };
+    drop(conn);
 }
