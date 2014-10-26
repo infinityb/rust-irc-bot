@@ -402,22 +402,26 @@ mod tests {
 
 		let mut state = State::new();
 		
-		for rec in iterator {
-			if marker_match(&rec, "should have a channel `#test` with 7 users") {
-				break;
-			}
-			if let ContentLine(ref content) = rec {
-				for event in bundler.on_message(content).iter() {
-					state.on_event(event);
+		let it = |target: &str, statefunc: |&mut State|| {
+        	for rec in iterator {
+				if marker_match(&rec, target) {
+					break;
+				}
+				if let ContentLine(ref content) = rec {
+					for event in bundler.on_message(content).iter() {
+						state.on_event(event);
+					}
 				}
 			}
-		}
+			statefunc(&mut state);
+        };
+
 
 		let mut random_user_id_hist = Vec::new();
 		let mut chan_test_id_hist = Vec::new();
 
-		/* borrowck appeasement */ {
-			let channel_id = match state.channel_map.find(&"#test".to_string()) {
+        it("should have a channel `#test` with 7 users", |state| {
+        	let channel_id = match state.channel_map.find(&"#test".to_string()) {
 				Some(channel_id) => *channel_id,
 				None => fail!("channel `#test` not found.")
 			};
@@ -428,20 +432,9 @@ mod tests {
 				None => fail!("channel `#test` had Id but no state")
 			};
 			assert_eq!(channel_state.users.len(), 7);
-		}
-
-		for rec in iterator {
-			if marker_match(&rec, "should have a user `randomuser` after JOIN") {
-				break;
-			}
-			if let ContentLine(ref content) = rec {
-				for event in bundler.on_message(content).iter() {
-					state.on_event(event);
-				}
-			}
-		}
-		{
-			let randomuser_id = state.identify_nick("randomuser").unwrap();
+        });
+        it("should have a user `randomuser` after JOIN", |state| {
+        	let randomuser_id = state.identify_nick("randomuser").unwrap();
 			if random_user_id_hist.contains(&randomuser_id) {
 				assert!(false, "nick `randomuser` BotUserId must change between losses in view");
 			}
@@ -454,89 +447,38 @@ mod tests {
 				},
 				None => fail!("inconsistent state. state = {}", state)
 			}
-		}
-		for rec in iterator {
-			if marker_match(&rec, "should not have a user `randomuser` after PART") {
-				break;
-			}
-			if let ContentLine(ref content) = rec {
-				for event in bundler.on_message(content).iter() {
-					state.on_event(event);
-				}
-			}
-		}
+        });
 
-		for rec in iterator {
-			if marker_match(&rec, "should have the channel `#test` once again") {
-				break;
-			}
-			if let ContentLine(ref content) = rec {
-				for event in bundler.on_message(content).iter() {
-					state.on_event(event);
-				}
-			}
-		}
-		{
-			let test_id = state.identify_channel("#test").unwrap();
+        it("should not have a user `randomuser` after PART", |state| {
+        });
+
+        it("should have the channel `#test` once again", |state| {
+        	let test_id = state.identify_channel("#test").unwrap();
 			if chan_test_id_hist.contains(&test_id) {
 				assert!(false, "channel `#test` BotChannelId must change between losses in view");
 			}
 			chan_test_id_hist.push(test_id);
-		}
+        });
 
-		let randomuser_id;
-		for rec in iterator {
-			if marker_match(&rec, "should have a channel `#test2` with 2 users") {
-				break;
-			}
-			if let ContentLine(ref content) = rec {
-				for event in bundler.on_message(content).iter() {
-					state.on_event(event);
-				}
-			}
-		}
-		{
+		let mut randomuser_id: Option<BotUserId> = None;
+		it("should have a channel `#test2` with 2 users", |state| {
 			assert!(state.identify_channel("#test2").is_some());
-			randomuser_id = match state.identify_nick("randomuser") {
-				Some(id) => id,
-				None => fail!("randomuser wasn't found!")
-			};
-		}
+			randomuser_id = state.identify_nick("randomuser");
+			assert!(randomuser_id.is_some(), "randomuser wasn't found!");
+        });
 
-		for rec in iterator {
-			if marker_match(&rec, "randomuser should have the same ID as before") {
-				break;
-			}
-			if let ContentLine(ref content) = rec {
-				for event in bundler.on_message(content).iter() {
-					state.on_event(event);
-				}
-			}
-		}
-		{
+        it("randomuser should have the same ID as before", |state| {
 			assert!(state.identify_channel("#test2").is_some());
 			assert_eq!(
 				state.identify_nick("randomuser").unwrap(),
-				randomuser_id);
-		}
+				randomuser_id.unwrap());
+        });
 
-		for rec in iterator {
-			if marker_match(&rec, "randomuser should not have the same ID as before") {
-				break;
-			}
-			if let ContentLine(ref content) = rec {
-				for event in bundler.on_message(content).iter() {
-					state.on_event(event);
-				}
-			}
-		}
-		{
+        it("randomuser should not have the same ID as before", |state| {
 			assert!(state.identify_channel("#test2").is_some());
-			if state.identify_nick("randomuser").unwrap() == randomuser_id {
+			if state.identify_nick("randomuser") == randomuser_id {
 				assert!(false, "randomuser should be different now");
 			}
-		}
-
-		// fail!();
+        });
 	}
 }
