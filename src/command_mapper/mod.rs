@@ -3,6 +3,14 @@ use std::string;
 use irc::message::{
     IrcMessage
 };
+use state::{
+    State,
+    MessageEndpoint,
+    KnownUser,
+    KnownChannel,
+    AnonymousUser,
+};
+
 pub use self::format::{
     InvalidAtom,
     Unspecified,
@@ -72,7 +80,9 @@ pub struct CommandMapperDispatch {
     bot_nick: string::String,
     pub command: Option<CommandPhrase>,
     sender:  SyncSender<string::String>,
-    pub channel: Option<string::String>
+    pub channel: Option<string::String>,
+    pub source: Option<MessageEndpoint>,
+    pub target: Option<MessageEndpoint>
 }
 
 
@@ -130,25 +140,49 @@ impl PluginContainer {
 
     /// Dispatches messages to plugins, if they have expressed interest in the message.
     /// Interest is expressed via calling map during the configuration phase.
-    pub fn dispatch(&mut self, bot_nick: &str, raw_tx: &SyncSender<string::String>, message: &IrcMessage) {
+    pub fn dispatch(&mut self, bot_state: &State, raw_tx: &SyncSender<string::String>, message: &IrcMessage) {
         let channel = match message.channel() {
             Some(channel) => Some(string::String::from_str(channel)),
             None => None
         };
 
+        let mut source: Option<MessageEndpoint> = None;
+        let mut target: Option<MessageEndpoint> = None;
+
+        if let Some(source_nick) = message.source_nick() {
+            source = match bot_state.identify_nick(source_nick) {
+                Some(bot_user) => Some(KnownUser(bot_user)),
+                None => Some(AnonymousUser)
+            };
+        }
+
+        // We don't really support incoming PMs atm...
+        if let Some(ref target_chan) = channel {
+            target = match bot_state.identify_channel(target_chan.as_slice()) {
+                Some(channel_id) => Some(KnownChannel(channel_id)),
+                None => {
+                    warn!("message from unknown channel {}", target_chan);
+                    None
+                }
+            };
+        }
+
         let mut dispatch = CommandMapperDispatch {
             command: None,
-            bot_nick: string::String::from_str(bot_nick),
+            bot_nick: bot_state.get_bot_nick().to_string(),
             sender: raw_tx.clone(),
             channel: match channel {
                 Some(ref channel) => Some(channel.clone()),
                 None => None
-            }
+            },
+            source: source,
+            target: target,
         };
 
         for pair in self.plugins.iter_mut() {
             let (ref mut plugin, ref mut mappers) = *pair;
             plugin.accept(&dispatch, message);
+            
             for mapper_format in mappers.iter() {
                 if is_command_message(message, self.cmd_prefix[]) {
                     let message_body = message.get_args()[1][self.cmd_prefix.len()..];

@@ -4,6 +4,7 @@ pub use self::seen::SeenPlugin;
 pub use self::r_a_dio::RadioPlugin;
 pub use self::ping::PingPlugin;
 pub use self::wserver::WserverPlugin;
+pub use self::whoami::WhoAmIPlugin;
 
 mod deer;
 mod greed;
@@ -11,3 +12,4 @@ mod seen;
 mod r_a_dio;
 mod ping;
 mod wserver;
+mod whoami;

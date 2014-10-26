@@ -1,6 +1,10 @@
 use std::task::TaskBuilder;
 use std::io::IoError;
-use std::collections::hashmap::HashMap;
+use std::collections::hashmap::{
+    HashMap,
+    Vacant,
+    Occupied,
+};
 
 use serialize::json;
 use serialize::json::DecoderError;
@@ -12,6 +16,12 @@ use url::form_urlencoded::serialize_owned;
 use http::client::RequestWriter;
 use http::method::Get;
 
+use state::{
+    KnownUser,
+    KnownChannel,
+    BotUserId,
+    BotChannelId
+};
 use command_mapper::{
     RustBotPlugin,
     CommandMapperDispatch,
@@ -125,6 +135,7 @@ struct DeerInternalState {
     lines_sent: u64,
     last_request: Option<Timespec>,
     cache: HashMap<String, DeerApiResponse>,
+    throttle_map: HashMap<(BotUserId, BotChannelId), Timespec>,
 }
 
 
@@ -134,35 +145,34 @@ impl DeerInternalState {
             lines_sent: 0,
             last_request: None,
             cache: HashMap::new(),
+            throttle_map: HashMap::new(),
         }
     }
 
-    fn throttle_ok(&mut self) -> bool {
+    fn throttle_ok(&mut self, uid: &BotUserId, cid: &BotChannelId) -> bool {
         let now = get_time();
 
-        let (new_last_request, throttle_ok) = match self.last_request {
-            Some(last_request) => {
-                if (now - last_request).num_seconds() < 60 {
-                    (Some(last_request), false)
-                } else {
-                    (Some(now), true)
-                }                
+        let key = (uid.clone(), cid.clone());
+
+        match self.throttle_map.entry(key.clone()) {
+            Vacant(entry) => {
+                info!("deer-throttle vacant: {}", key);
+                entry.set(now);
+                true
             },
-            None => (Some(now), true)
-        };
-        self.last_request = new_last_request;
-        throttle_ok
+            Occupied(mut entry) => {
+                info!("deer-throttle occupied: {}", key);
+                let duration = now - *entry.get();
+                entry.set(now);
+                info!("deer-throttle delta: {}", duration.num_seconds());
+                60 < duration.num_seconds()
+            }
+        }
     }
 
     fn handle_command<'a>(&mut self, m: &CommandMapperDispatch, cmd: &'a DeerCommandType) {
         match *cmd {
-            Deer => {
-                for deer_line in DEER.split('\n') {
-                    m.reply(String::from_str(deer_line));
-                    self.lines_sent += 1;
-                }
-            },
-            Deerkins(ref deer_name) => {
+            Deer(Some(ref deer_name)) => {
                 match get_deer(self, deer_name[]) {
                     Ok(deer_data) => {
                         for deer_line in deer_data.irccode[].split('\n') {
@@ -175,6 +185,12 @@ impl DeerInternalState {
                     }
                 } 
             },
+            Deer(None) => {
+                for deer_line in DEER.split('\n') {
+                    m.reply(String::from_str(deer_line));
+                    self.lines_sent += 1;
+                }
+            },
             DeerStats => {
                 m.reply(format!("lines sent: {}", self.lines_sent));
             }
@@ -183,24 +199,22 @@ impl DeerInternalState {
 
     fn start(&mut self, rx: Receiver<(CommandMapperDispatch, IrcMessage)>) {
         for (m, _) in rx.iter() {
-            match parse_command(&m) {
-                Some(ref command) => {
-                    if self.throttle_ok() {
+            match (m.source.clone(), m.target.clone(), parse_command(&m)) {
+                (Some(KnownUser(source)), Some(KnownChannel(target)), Some(ref command)) => {
+                    if self.throttle_ok(&source, &target) {
                         self.handle_command(&m, command);
                     } else {
                         m.reply(String::from_str("2deer4plus"))
                     }
                 },
-                None => ()
+                _ => ()
             }
         }
     }
 }
 
-
 enum DeerCommandType {
-    Deer,
-    Deerkins(String),
+    Deer(Option<String>),
     DeerStats
 }
 
@@ -210,14 +224,17 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<DeerCommandType> {
         None => return None
     };
     match command_phrase.command[] {
-        "deer" => Some(Deer),
-        "deerkins" => {
-            Some(Deerkins(match command_phrase.args.find(&"deername".to_string()) {
-                Some(&StringValue(ref rest)) => rest.clone(),
-                Some(_) => return None,
-                None => return None
-            }))
-        },
+        "deer" => Some(Deer(match command_phrase.args.find(&"deername".to_string()) {
+            Some(&StringValue(ref rest)) => {
+                if rest.as_slice() == "" {
+                    None
+                } else {
+                    Some(rest.clone())
+                }
+            }
+            Some(_) => None,
+            None => return None
+        })),
         "deerstats" => Some(DeerStats),
         _ => None
     }
@@ -226,12 +243,9 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<DeerCommandType> {
 
 impl RustBotPlugin for DeerPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
+        conf.map_format(Format::from_str("deer {*deername}").unwrap());
         conf.map_format(Format::from_str("deer").unwrap());
         conf.map_format(Format::from_str("deerstats").unwrap());
-        conf.map_format(match Format::from_str("deerkins {*deername}") {
-            Ok(format) => format,
-            Err(err) => fail!("error building deerkins format: {}" , err)
-        });
     }
 
     fn start(&mut self) {

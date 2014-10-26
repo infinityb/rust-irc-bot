@@ -15,6 +15,7 @@ use plugins::{
     RadioPlugin,
     PingPlugin,
     WserverPlugin,
+    WhoAmIPlugin,
 };
 
 pub struct BotConfig {
@@ -89,6 +90,7 @@ impl BotConnection {
         container.register(box DeerPlugin::new());
         container.register(box RadioPlugin::new());
         container.register(box WserverPlugin::new());
+        container.register(box WhoAmIPlugin::new());
 
         let (tx, rx) = sync_channel(0);
         let cmd_queue = conn.get_command_queue();
@@ -103,7 +105,7 @@ impl BotConnection {
 
             if let IrcEventMessage(ref message) = event {
                 // println!("{}", message);
-                container.dispatch("", &tx, message);
+                container.dispatch(&state, &tx, message);
             }           
         }
 

@@ -23,6 +23,13 @@ pub enum XXBotUserId {
 	Anonymous
 }
 
+#[deriving(Clone, Show)]
+pub enum MessageEndpoint {
+	KnownUser(BotUserId),
+	KnownChannel(BotChannelId),
+	Server(String),
+	AnonymousUser,
+}
 
 #[deriving(Clone, Show, Hash, PartialEq, Eq)]
 pub struct BotUserId(u64);
@@ -87,6 +94,10 @@ impl State {
 		}
 	}
 
+	pub fn get_bot_nick<'a>(&'a self) -> &'a str {
+		self.botnick.as_slice()
+	}
+
 	fn on_self_part(&mut self, msg: &IrcMessage) {
 		let channel_name = msg.get_args()[0].to_string();
 		info!("on-self-part ({}); popping channel {}", self.botnick, channel_name);
@@ -115,12 +126,13 @@ impl State {
 	}
 
 	fn on_other_part(&mut self, msg: &IrcMessage) {
+		info!("on-other-part for {}", msg);
 		let channel_name = msg.get_args()[0].to_string();
 		let user_nick = match msg.source_nick() {
 			Some(user_nick) => user_nick.to_string(),
 			None => return
 		};
-		println!("on-self-part ({}); popping channel {} {}", self.botnick, user_nick, channel_name);
+		info!("on-other-part ({}); popping channel {} {}", self.botnick, user_nick, channel_name);
 		
 		let user_id = match self.user_map.find(&user_nick) {
 			Some(user_id) => user_id.clone(),
@@ -139,6 +151,7 @@ impl State {
 		let remove_user = match self.users.find_mut(&user_id) {
 			Some(user_state) => {
 				user_state.channels.remove(&channel_id);
+				info!("users[{}].channels.len() = {}", user_id, user_state.channels.len());
 				user_state.channels.len() == 0
 			},
 			None => {
@@ -147,7 +160,9 @@ impl State {
 			}
 		};
 		if remove_user {
+			info!("removing user {}", user_id);
 			self.users.remove(&user_id);
+			self.user_map.remove(&user_nick);
 		}
 		match self.channels.find_mut(&channel_id) {
 			Some(channel_state) => {
@@ -158,6 +173,10 @@ impl State {
 				return;
 			}
 		}
+	}
+
+	fn on_nick(&mut self, nick: &str, msg: &IrcMessage) {
+
 	}
 
 	fn on_message(&mut self, msg: &IrcMessage) {
@@ -176,6 +195,9 @@ impl State {
 		if msg.command() == "JOIN" && msg.source_nick().is_some() {
 			self.on_other_join(msg)
 		}
+		if let ("NICK", Some(source_nick)) = (msg.command(), msg.source_nick()) {
+			self.on_nick(source_nick, msg);
+		}
 	}
 
 	fn __find_channel_id(&mut self, name: &str) -> BotChannelId {
@@ -190,16 +212,30 @@ impl State {
 		chan_id
 	}
 
+	pub fn identify_channel(&self, chan: &str) -> Option<BotChannelId> {
+		match self.channel_map.find(&chan.to_string()) {
+			Some(chan_id) => Some(chan_id.clone()),
+			None => None
+		}
+	}
+
 	fn __find_user_id(&mut self, nick: &str) -> BotUserId {
 		let cur_seq = BotUserId(self.user_seq);
 		let (should_incr, user_id) = match self.user_map.entry(nick.to_string()) {
-			Occupied(entry) => (false, entry.get().clone()),
-			Vacant(entry) => (true, entry.set(cur_seq).clone()),
+			Occupied(entry) => (false, *entry.get()),
+			Vacant(entry) => (true, *entry.set(cur_seq)),
 		};
 		if should_incr {
 			self.user_seq += 1;
 		}
 		user_id
+	}
+
+	pub fn identify_nick(&self, nick: &str) -> Option<BotUserId> {
+		match self.user_map.find(&nick.to_string()) {
+			Some(user_id) => Some(*user_id),
+			None => None
+		}
 	}
 
 	fn on_self_join(&mut self, join_res: &JoinResult) {
@@ -229,15 +265,15 @@ impl State {
 			let user_id = self.__find_user_id(nick.as_slice());
 			let chan_id = self.__find_channel_id(channel);
 
-			match self.users.entry(user_id.clone()) {
+			match self.users.entry(user_id) {
 				Occupied(mut entry) => {
-					entry.get_mut().channels.insert(chan_id.clone());
+					entry.get_mut().channels.insert(chan_id);
 				},
 				Vacant(entry) => {
 					let mut channels = HashSet::new();
-					channels.insert(chan_id.clone());
+					channels.insert(chan_id);
 					entry.set(InternalUser {
-						id: user_id.clone(),
+						id: user_id,
 						prefix: prefix,
 						channels: channels
 					});
@@ -248,15 +284,15 @@ impl State {
 
 	fn on_who_record(&mut self, chan_id: BotChannelId, rec: &WhoRecord) -> BotUserId {
 		let user_id = self.__find_user_id(rec.nick.as_slice());
-		match self.users.entry(user_id.clone()) {
+		match self.users.entry(user_id) {
 			Occupied(mut entry) => {
-				entry.get_mut().channels.insert(chan_id.clone());
+				entry.get_mut().channels.insert(chan_id);
 			},
 			Vacant(entry) => {
 				let mut channels = HashSet::new();
-				channels.insert(chan_id.clone());
+				channels.insert(chan_id);
 				entry.set(InternalUser {
-					id: user_id.clone(),
+					id: user_id,
 					prefix: format!("XX{}", rec.get_prefix()),
 					channels: channels
 				});
@@ -360,15 +396,13 @@ mod tests {
 	fn test_state_tracking() {
 		let mut reader = BufReader::new(TEST_SESSION_STATETRACKER);
 		let mut iterator = reader.lines().filter_map(decode_line);
-
 		let mut bundler = BundlerManager::new();
 		bundler.add_bundler_trigger(box JoinBundlerTrigger::new());
         bundler.add_bundler_trigger(box WhoBundlerTrigger::new());
 
 		let mut state = State::new();
-
+		
 		for rec in iterator {
-			// println!("000:: {}", rec);
 			if marker_match(&rec, "should have a channel `#test` with 7 users") {
 				break;
 			}
@@ -378,13 +412,16 @@ mod tests {
 				}
 			}
 		}
+
+		let mut random_user_id_hist = Vec::new();
 		let mut chan_test_id_hist = Vec::new();
+
 		/* borrowck appeasement */ {
 			let channel_id = match state.channel_map.find(&"#test".to_string()) {
-				Some(channel_id) => channel_id.clone(),
+				Some(channel_id) => *channel_id,
 				None => fail!("channel `#test` not found.")
 			};
-			chan_test_id_hist.push(channel_id.clone());
+			chan_test_id_hist.push(channel_id);
 
 			let channel_state = match state.channels.find(&channel_id) {
 				Some(channel) => channel.clone(),
@@ -394,7 +431,6 @@ mod tests {
 		}
 
 		for rec in iterator {
-			// println!("010:: {}", rec);
 			if marker_match(&rec, "should have a user `randomuser` after JOIN") {
 				break;
 			}
@@ -405,20 +441,32 @@ mod tests {
 			}
 		}
 		{
-			let user_id = match state.user_map.find(&"randomuser".to_string()) {
-				Some(user_id) => user_id.clone(),
-				None => fail!("user `randomuser` not found.")
-			};
-			match state.users.find(&user_id) {
+			let randomuser_id = state.identify_nick("randomuser").unwrap();
+			if random_user_id_hist.contains(&randomuser_id) {
+				assert!(false, "nick `randomuser` BotUserId must change between losses in view");
+			}
+			random_user_id_hist.push(randomuser_id);
+			match state.users.find(&randomuser_id) {
 				Some(randomuser) => {
-					assert_eq!(randomuser.prefix.as_slice(), "randomuser!rustbot@coolhost");
+					assert_eq!(
+						randomuser.prefix.as_slice(),
+						"randomuser!rustbot@coolhost");
 				},
 				None => fail!("inconsistent state. state = {}", state)
 			}
 		}
+		for rec in iterator {
+			if marker_match(&rec, "should not have a user `randomuser` after PART") {
+				break;
+			}
+			if let ContentLine(ref content) = rec {
+				for event in bundler.on_message(content).iter() {
+					state.on_event(event);
+				}
+			}
+		}
 
 		for rec in iterator {
-			// println!("020:: {}", rec);
 			if marker_match(&rec, "should have the channel `#test` once again") {
 				break;
 			}
@@ -429,15 +477,66 @@ mod tests {
 			}
 		}
 		{
-			let channel_id = match state.channel_map.find(&"#test".to_string()) {
-				Some(channel_id) => channel_id.clone(),
-				None => fail!("channel `#test` not found.")
-			};
-			assert!(!chan_test_id_hist.contains(&channel_id),
-				"channel `#test` BotChannelId must change between losses in view");
-			chan_test_id_hist.push(channel_id.clone());
-			println!("post-020 state: {}", state);
+			let test_id = state.identify_channel("#test").unwrap();
+			if chan_test_id_hist.contains(&test_id) {
+				assert!(false, "channel `#test` BotChannelId must change between losses in view");
+			}
+			chan_test_id_hist.push(test_id);
 		}
+
+		let randomuser_id;
+		for rec in iterator {
+			if marker_match(&rec, "should have a channel `#test2` with 2 users") {
+				break;
+			}
+			if let ContentLine(ref content) = rec {
+				for event in bundler.on_message(content).iter() {
+					state.on_event(event);
+				}
+			}
+		}
+		{
+			assert!(state.identify_channel("#test2").is_some());
+			randomuser_id = match state.identify_nick("randomuser") {
+				Some(id) => id,
+				None => fail!("randomuser wasn't found!")
+			};
+		}
+
+		for rec in iterator {
+			if marker_match(&rec, "randomuser should have the same ID as before") {
+				break;
+			}
+			if let ContentLine(ref content) = rec {
+				for event in bundler.on_message(content).iter() {
+					state.on_event(event);
+				}
+			}
+		}
+		{
+			assert!(state.identify_channel("#test2").is_some());
+			assert_eq!(
+				state.identify_nick("randomuser").unwrap(),
+				randomuser_id);
+		}
+
+		for rec in iterator {
+			if marker_match(&rec, "randomuser should not have the same ID as before") {
+				break;
+			}
+			if let ContentLine(ref content) = rec {
+				for event in bundler.on_message(content).iter() {
+					state.on_event(event);
+				}
+			}
+		}
+		{
+			assert!(state.identify_channel("#test2").is_some());
+			if state.identify_nick("randomuser").unwrap() == randomuser_id {
+				assert!(false, "randomuser should be different now");
+			}
+		}
+
 		// fail!();
 	}
 }
