@@ -3,10 +3,11 @@ use std::task::TaskBuilder;
 
 use irc::IrcConnection;
 use irc::connection::RawWrite;
-use irc::watchers::event::IrcEventMessage;
+use irc::event::IrcEventMessage;
 
 use command_mapper::PluginContainer;
 
+use state::State;
 use plugins::{
     DeerPlugin,
     GreedPlugin,
@@ -79,6 +80,8 @@ impl BotConnection {
             println!("END joining {}...", channel);
         }
 
+        let mut state = State::new();
+
         let mut container = PluginContainer::new(conf.command_prefix.clone());
         container.register(box PingPlugin::new());
         container.register(box GreedPlugin::new());
@@ -96,9 +99,11 @@ impl BotConnection {
         });
 
         for event in event_queue.iter() {
-            if let IrcEventMessage(message) = event {
-                println!("{}", message);
-                container.dispatch("", &tx, &message);
+            state.on_event(&event);
+
+            if let IrcEventMessage(ref message) = event {
+                // println!("{}", message);
+                container.dispatch("", &tx, message);
             }           
         }
 

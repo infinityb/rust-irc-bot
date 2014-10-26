@@ -1,5 +1,7 @@
 #![allow(dead_code)]
-#![feature(if_let, slicing_syntax)]
+#![feature(if_let, slicing_syntax, phase)]
+
+#[phase(plugin, link)] extern crate log;
 
 extern crate time;
 extern crate serialize;
@@ -16,6 +18,7 @@ use std::os::args_as_bytes;
 
 use botcore::{BotConfig, BotConnection};
 
+mod state;
 mod botcore;
 mod plugins;
 mod command_mapper;

@@ -155,14 +155,14 @@ impl RustBotPlugin for SeenPlugin {
             Some(source_nick) => source_nick,
             None => return
         };
-        match self.map.pop(&source_nick) {
+        match self.map.pop(&source_nick.to_string()) {
             Some(mut records) => {
                 records.push(SeenRecord::with_now(message.clone()));
-                self.map.insert(source_nick, trim_vec(records));
+                self.map.insert(source_nick.to_string(), trim_vec(records));
             },
             None => {
                 let records = vec![SeenRecord::with_now(message.clone())];
-                self.map.insert(source_nick, records);
+                self.map.insert(source_nick.to_string(), records);
             }
         }
     }
@@ -196,7 +196,7 @@ impl RustBotPlugin for SeenPlugin {
 
         match parsed_command {
             Some(Seen(target_nick)) => {
-                if source_nick == target_nick {
+                if source_nick == target_nick.as_slice() {
                     m.reply(format!("Looking for yourself, {}?", source_nick));
                     return;
                 }

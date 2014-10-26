@@ -222,8 +222,8 @@ impl GreedPlugin {
         match state.last_played {
             Some(ref last_played) => {
                 let (ref prev_nick, _, _) = *last_played;
-                if prev_nick.as_slice() == source_nick.as_slice() {
-                    m.reply(format!("You can't go twice in a row, {}", source_nick.as_slice()));
+                if prev_nick.as_slice() == source_nick {
+                    m.reply(format!("You can't go twice in a row, {}", source_nick));
                     return;
                 }
             }, 
@@ -248,7 +248,7 @@ impl GreedPlugin {
                 None
             },
             None => {
-                Some((source_nick, cur_user_roll, score))
+                Some((source_nick.to_string(), cur_user_roll, score))
             }
         }
     }
