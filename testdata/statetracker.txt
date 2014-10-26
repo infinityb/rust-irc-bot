@@ -1,0 +1,43 @@
+>> :server 001 botnick :blah
+>> :botnick!rustbot@coolhost JOIN :#test
+>> :server 332 botnick #test :irc is bad.
+>> :server 333 botnick #test sell!sell@173.255.238.68 1414284306
+>> :server 353 botnick = #test :@sell aibi ngy|casper Faux usagi betabot botnick 
+>> :server 366 botnick #test :End of /NAMES list.
+>> :server 352 botnick #test sell 173.255.238.68 server sell H*@ :0 Stacey Ell
+>> :server 352 botnick #test q 172.17.42.1 miyuki.yasashiisyndicate.org aibi H* :0 q
+>> :server 352 botnick #test ngy bb219-74-235-37.singnet.com.sg server ngy|casper H :0 ngy
+>> :server 352 botnick #test faux bb219-74-235-37.singnet.com.sg server Faux H :0 realname
+>> :server 352 botnick #test aers usagi.yasashiisyndicate.org server usagi H :0 aers
+>> :server 352 botnick #test betabot bb219-74-235-37.singnet.com.sg server betabot H :0 Romani ite domum
+>> :server 352 botnick #test rustbot coolhost server botnick H :0 Rust Bot
+>> :server 315 botnick #test :End of /WHO list.
+## should have a channel `#test` with 7 users
+## topic of `#test` should be `irc is bad.`
+>> :randomuser!rustbot@coolhost JOIN :#test
+## should have a user `randomuser` after JOIN
+>> :randomuser!rustbot@coolhost PART #test
+## should not have a user `randomuser` after PART
+>> :sell!sell@173.255.238.68 TOPIC #test :setting a cool topic
+## topic of `#test` should be `setting a cool topic`
+## store randomuser's UserID here
+>> :randomuser!rustbot@coolhost NICK resumodnar
+## ensure randomuser's UserID has not changed after a nick change
+>> :botnick!rustbot@coolhost PART #test
+## should not have a channel `#test` anymore
+>> :botnick!rustbot@coolhost JOIN :#test
+>> :server 332 botnick #test :setting a cool topic
+>> :server 333 botnick #test sell!sell@173.255.238.68 1414339371
+>> :server 353 botnick = #test :@sell resumodnar aibi ngy|casper Faux usagi betabot botnick 
+>> :server 366 botnick #test :End of /NAMES list.
+>> :server 352 botnick #test sell 173.255.238.68 server sell H*@ :0 Stacey Ell
+>> :server 352 botnick #test rustbot coolhost server resumodnar H :0 Rust Bot
+>> :server 352 botnick #test q 172.17.42.1 miyuki.yasashiisyndicate.org aibi H* :0 q
+>> :server 352 botnick #test ngy bb219-74-235-37.singnet.com.sg server ngy|casper H :0 ngy
+>> :server 352 botnick #test faux bb219-74-235-37.singnet.com.sg server Faux H :0 realname
+>> :server 352 botnick #test aers usagi.yasashiisyndicate.org server usagi H :0 aers
+>> :server 352 botnick #test betabot bb219-74-235-37.singnet.com.sg server betabot H :0 Romani ite domum
+>> :server 352 botnick #test rustbot coolhost server botnick H :0 Rust Bot
+>> :server 315 botnick #test :End of /WHO list.
+## should have the channel `#test` once again
+## users should not maintain their BotUserId, since they disappeared from view
