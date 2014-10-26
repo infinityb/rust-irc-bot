@@ -3,7 +3,7 @@ name = "ircbot"
 version = "0.1.0"
 dependencies = [
  "http 0.1.0-pre (git+https://github.com/chris-morgan/rust-http#85689a9f69132655cf5ed8dc11af1a7c58709046)",
- "irc 0.1.0 (git+https://github.com/infinityb/rust-irc#9cc0778bc1e0da8eb668eefbf1c54349a78ed334)",
+ "irc 0.1.0 (git+https://github.com/infinityb/rust-irc#043923a20e6ae5e07fd98b5c447356e34d4e8707)",
  "toml 0.1.0 (git+https://github.com/alexcrichton/toml-rs#8a3ba4c65cfa22a3d924293a1fb3a70bfac5e66c)",
 ]
 
@@ -24,7 +24,7 @@ dependencies = [
 [[package]]
 name = "irc"
 version = "0.1.0"
-source = "git+https://github.com/infinityb/rust-irc#9cc0778bc1e0da8eb668eefbf1c54349a78ed334"
+source = "git+https://github.com/infinityb/rust-irc#043923a20e6ae5e07fd98b5c447356e34d4e8707"
 
 [[package]]
 name = "openssl"
