@@ -18,6 +18,7 @@
 ## should have a user `randomuser` after JOIN
 >> :randomuser!rustbot@coolhost PART #test
 ## should not have a user `randomuser` after PART
+>> :randomuser!rustbot@coolhost JOIN :#test
 >> :sell!sell@173.255.238.68 TOPIC #test :setting a cool topic
 ## topic of `#test` should be `setting a cool topic`
 ## store randomuser's UserID here
@@ -39,7 +40,6 @@
 >> :server 352 botnick #test betabot bb219-74-235-37.singnet.com.sg server betabot H :0 Romani ite domum
 >> :server 352 botnick #test rustbot coolhost server botnick H :0 Rust Bot
 >> :server 315 botnick #test :End of /WHO list.
-
 ## should have the channel `#test` once again
 ## users should not maintain their BotUserId, since they disappeared from view
 >> :randomuser!rustbot@coolhost JOIN :#test

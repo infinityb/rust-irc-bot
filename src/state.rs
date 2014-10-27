@@ -175,8 +175,47 @@ impl State {
         }
     }
 
-    fn on_nick(&mut self, nick: &str, msg: &IrcMessage) {
+    fn on_topic(&mut self, msg: &IrcMessage) {
+        if msg.command() != "TOPIC" {
+            return;
+        }
+        let chan_id = match self.identify_channel(msg.get_args()[0]) {
+            Some(chan_id) => chan_id,
+            None => return
+        };
+        let channel = match self.channels.find_mut(&chan_id) {
+            Some(channel) => channel,
+            None => return
+        };
+        channel.topic.clear();
+        channel.topic.push_str(msg.get_args()[1]);
+    }
 
+    fn on_nick(&mut self, from_nick: &str, msg: &IrcMessage) {
+        let to_nick = msg.get_args()[0];
+        let from_prefix = match msg.get_prefix_raw() {
+            Some(prefix) => prefix,
+            None => {
+                warn!("bad message: no prefix");
+                return;
+            }
+        };
+        let user_id = match self.user_map.pop(&from_nick.to_string()) {
+            Some(user_id) => user_id,
+            None => return
+        };
+        self.user_map.insert(to_nick.to_string(), user_id);
+        match self.users.find_mut(&user_id) {
+            Some(user_rec) => {
+                user_rec.prefix.clear();
+                user_rec.prefix.push_str(from_prefix);
+            },
+            None => {
+                warn!("inconsistent state");
+                return;
+            }
+        };
+        
     }
 
     fn on_message(&mut self, msg: &IrcMessage) {
@@ -194,6 +233,9 @@ impl State {
         }
         if msg.command() == "JOIN" && msg.source_nick().is_some() {
             self.on_other_join(msg)
+        }
+        if msg.command() == "TOPIC" {
+            self.on_topic(msg);
         }
         if let ("NICK", Some(source_nick)) = (msg.command(), msg.source_nick()) {
             self.on_nick(source_nick, msg);
@@ -219,6 +261,14 @@ impl State {
         }
     }
 
+    fn find_channel_by_name(&self, chan: &str) -> Option<&InternalChannel> {
+        let chan_id = match self.identify_channel(chan) {
+            Some(chan_id) => chan_id,
+            None => return None
+        };
+        self.channels.find(&chan_id)
+    }
+
     fn __find_user_id(&mut self, nick: &str) -> BotUserId {
         let cur_seq = BotUserId(self.user_seq);
         let (should_incr, user_id) = match self.user_map.entry(nick.to_string()) {
@@ -238,6 +288,15 @@ impl State {
         }
     }
 
+    fn find_user_by_nick(&self, nick: &str) -> Option<&InternalUser> {
+        let user_id = match self.identify_nick(nick) {
+            Some(user_id) => user_id,
+            None => return None
+        };
+        self.users.find(&user_id)
+    }
+
+
     fn on_self_join(&mut self, join_res: &JoinResult) {
         let join = match *join_res {
             Ok(ref ok) => ok,
@@ -247,10 +306,15 @@ impl State {
             warn!("We know about {} before joining it?", join.channel);
         }
         let channel_id = self.__find_channel_id(join.channel.as_slice());
+        let topic = match join.topic {
+            Some(ref topic) => topic.text.clone(),
+            None => String::new()
+        };
+
         self.channels.insert(channel_id, InternalChannel {
             id: channel_id,
             name: join.channel.to_string(),
-            topic: String::new(),
+            topic: topic,
             users: HashSet::new(),
         });
     }
@@ -333,8 +397,8 @@ impl State {
 
 #[cfg(test)]
 mod tests {
-    use super::{State, InternalUser, BotUserId, InternalChannel, BotChannelId};
-    use std::io::{IoResult, BufReader, Lines};
+    use super::{State, BotUserId};
+    use std::io::{IoResult, BufReader};
     use irc::{
         BundlerManager,
         IrcMessage,
@@ -403,13 +467,15 @@ mod tests {
         let mut state = State::new();
         
         let it = |target: &str, statefunc: |&mut State|| {
-            for rec in iterator {
-                if marker_match(&rec, target) {
-                    break;
-                }
-                if let ContentLine(ref content) = rec {
-                    for event in bundler.on_message(content).iter() {
-                        state.on_event(event);
+            if target != "" {
+                for rec in iterator {
+                    if marker_match(&rec, target) {
+                        break;
+                    }
+                    if let ContentLine(ref content) = rec {
+                        for event in bundler.on_message(content).iter() {
+                            state.on_event(event);
+                        }
                     }
                 }
             }
@@ -433,6 +499,13 @@ mod tests {
             };
             assert_eq!(channel_state.users.len(), 7);
         });
+
+        it("topic of `#test` should be `irc is bad.`", |state| {
+            let chan_id = state.identify_channel("#test").unwrap();
+            let channel = state.channels.find(&chan_id).unwrap();
+            assert_eq!(channel.topic.as_slice(), "irc is bad.");
+        });
+
         it("should have a user `randomuser` after JOIN", |state| {
             let randomuser_id = state.identify_nick("randomuser").unwrap();
             if random_user_id_hist.contains(&randomuser_id) {
@@ -450,6 +523,29 @@ mod tests {
         });
 
         it("should not have a user `randomuser` after PART", |state| {
+            assert!(state.identify_nick("randomuser").is_none());
+        });
+
+        it("topic of `#test` should be `setting a cool topic`", |state| {
+            let chan_id = state.identify_channel("#test").unwrap();
+            let channel = state.channels.find(&chan_id).unwrap();
+            assert_eq!(channel.topic.as_slice(), "setting a cool topic");
+        });
+
+        let mut randomuser_id: Option<BotUserId> = None;
+        it("store randomuser's UserID here", |state| {
+            randomuser_id = state.identify_nick("randomuser")
+        });
+        let randomuser_id = randomuser_id.expect("bad randomuser");
+
+        it("ensure randomuser's UserID has not changed after a nick change", |state| {
+            assert_eq!(state.identify_nick("resumodnar"), Some(randomuser_id));
+        });
+
+        it("should not have a channel `#test` anymore", |state| {
+            assert!(
+                state.identify_channel("#test").is_none(),
+                "#test was not cleaned up correctly");
         });
 
         it("should have the channel `#test` once again", |state| {
@@ -461,6 +557,7 @@ mod tests {
         });
 
         let mut randomuser_id: Option<BotUserId> = None;
+
         it("should have a channel `#test2` with 2 users", |state| {
             assert!(state.identify_channel("#test2").is_some());
             randomuser_id = state.identify_nick("randomuser");
@@ -479,6 +576,6 @@ mod tests {
             if state.identify_nick("randomuser") == randomuser_id {
                 assert!(false, "randomuser should be different now");
             }
-            });
+        });
     }
 }
