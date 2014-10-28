@@ -125,7 +125,6 @@ impl RollResult {
         RollResult::format_score_component_bare(prefix_data)
     }
 
-
     fn format_score(score_components: &Vec<&ScoreRec>) -> String {
         let mut output = String::new();
         for tuple in score_components.iter() {
@@ -164,11 +163,30 @@ impl Show for RollResult {
 }
 
 pub struct GreedPlugin {
-    games: HashMap<BotChannelId, GreedPlayResult>
+    games: HashMap<BotChannelId, GreedPlayResult>,
+    leaderboard: HashMap<BotChannelId, HashMap<BotUserId, GameHistory>>
+}
+
+pub struct GameHistory {
+    user_nick: String,
+    games_won: uint,
+    games_lost: uint,
+    points_acc: u64,
+    score: i64
+}
+
+impl Show for GameHistory {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
+        write!(f, "{} has won {} games, lost {} games and scored {} points",
+            self.user_nick, self.games_won, self.games_lost,
+            self.points_acc)
+    }
 }
 
 enum GreedCommandType {
-    Greed
+    Greed,
+    GreedStats,
+    GreedTop,
 }
 
 struct GreedPlayResult {
@@ -177,22 +195,12 @@ struct GreedPlayResult {
     roll: RollResult,
 }
 
-fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<GreedCommandType> {
-    let command_phrase = match m.command() {
-        Some(command_phrase) => command_phrase,
-        None => return None
-    };
-    match command_phrase.command[] {
-        "greed" => Some(Greed),
-        _ => None
-    }
-}
-
 
 impl GreedPlugin {
     pub fn new() -> GreedPlugin {
         GreedPlugin {
-            games: HashMap::new()
+            games: HashMap::new(),
+            leaderboard: HashMap::new(),
         }
     }
 
@@ -214,7 +222,7 @@ impl GreedPlugin {
                 entry.set(GreedPlayResult {
                     user_id: user_id,
                     user_nick: source_nick.to_string(),
-                    roll: roll
+                    roll: roll.clone()
                 });
             },
             Occupied(entry) => {
@@ -237,17 +245,71 @@ impl GreedPlugin {
             }
         }
     }
+
+    fn dispatch_cmd_greed_stats(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
+        let (user_id, channel_id) = match (m.source.clone(), m.target.clone()) {
+            (Some(KnownUser(uid)), Some(KnownChannel(cid))) => (uid, cid),
+            _ => return
+        };
+        let source_nick = match message.source_nick() {
+            Some(nickname) => nickname,
+            None => return
+        };
+        let hashmap = match self.leaderboard.entry(channel_id) {
+            Vacant(entry) => {
+                m.reply(format!(
+                    "{}: You haven't played any games in this channel",
+                    source_nick));
+                return
+            },
+            Occupied(entry) => entry.into_mut(),
+        };
+        let history = match hashmap.entry(user_id) {
+            Vacant(entry) => {
+                m.reply(format!(
+                    "{}: You haven't played any games in this channel",
+                    source_nick));
+                return
+            },
+            Occupied(entry) => entry.into_mut(),
+        };
+        m.reply(format!("{}", history));
+    }
+
+    fn dispatch_cmd_greed_top(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
+        let (user_id, channel_id) = match (m.source.clone(), m.target.clone()) {
+            (Some(KnownUser(uid)), Some(KnownChannel(cid))) => (uid, cid),
+            _ => return
+        };
+    }
+
+    fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<GreedCommandType> {
+        let command_phrase = match m.command() {
+            Some(command_phrase) => command_phrase,
+            None => return None
+        };
+        match command_phrase.command[] {
+            "greed" => Some(Greed),
+            "greed-stats" => Some(GreedStats),
+            "greed-top" => Some(GreedTop),
+            _ => None
+        }
+    }
 }
 
 
 impl RustBotPlugin for GreedPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
         conf.map_format(Format::from_str("greed").unwrap());
+        conf.map_format(Format::from_str("greed-stats").unwrap());
+        conf.map_format(Format::from_str("greed-top").unwrap());
     }
     
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
-        match parse_command(m) {
+        match GreedPlugin::parse_command(m) {
             Some(Greed) => self.dispatch_cmd_greed(m, message),
+            Some(GreedStats) => self.dispatch_cmd_greed_stats(m, message),
+            Some(GreedTop) => self.dispatch_cmd_greed_top(m, message),
             None => ()
         }
     }
