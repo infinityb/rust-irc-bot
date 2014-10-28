@@ -1,6 +1,12 @@
+use std::collections::hashmap::{
+    HashMap,
+    Vacant,
+    Occupied,
+};
 use std::rand::distributions::{Sample, Range};
 use std::cmp::{Less, Equal, Greater};
-use std::rand;
+use std::fmt::{Formatter, FormatError, Show};
+use std::rand::{task_rng, Rng, Rand};
 
 use command_mapper::{
     RustBotPlugin,
@@ -8,14 +14,19 @@ use command_mapper::{
     IrcBotConfigurator,
     Format,
 };
+use state::{
+    BotChannelId,
+    BotUserId,
+    KnownChannel,
+    KnownUser,
+};
 use irc::message::{
     IrcMessage
 };
 
 
-type RollResult = [u8, ..6];
-type ScoreRec = (uint, RollResult, int);
-
+type ScorePrefix = [u8, ..6];
+type ScoreRec = (uint, ScorePrefix, int);
 
 pub static SCORING_TABLE: [ScoreRec, ..28] = [
     (6, [1, 2, 3, 4, 5, 6], 1200),
@@ -48,22 +59,123 @@ pub static SCORING_TABLE: [ScoreRec, ..28] = [
     (3, [6, 6, 6, 0, 0, 0],  600),
 ];
 
+struct RollResult([u8, ..6]);
 
-struct GreedState {
-    channel: String,
-    last_played: Option<(String, RollResult, int)>
+
+#[inline]
+fn is_prefix(rec: &ScoreRec, roll_res: &RollResult, start_idx: uint) -> bool {
+    let RollResult(ref roll_data) = *roll_res;
+    let (prefix_len, ref roll_target, _) = *rec;
+
+    if roll_data.len() < start_idx + prefix_len {
+        return false;
+    }
+    for idx in range(0, prefix_len) {
+        if roll_data[idx + start_idx] != roll_target[idx] {
+            return false;
+        }
+    }
+    true
 }
 
+impl RollResult {
+    fn get_scores(&self) -> Vec<&'static ScoreRec> {
+        let RollResult(ref roll) = *self;
+        let mut idx = 0;
+        let mut score_comps = Vec::new();
+        while idx < roll.len() {
+            let mut idx_incr = 1;
+            for score_rec in SCORING_TABLE.iter() {
+                if is_prefix(score_rec, self, idx) {
+                    let (prefix_len, _, _) = *score_rec;
+                    idx_incr = prefix_len;
+                    score_comps.push(score_rec);
+                    break;
+                }
+            }
+            idx += idx_incr;
+        }
+        score_comps
+    }
+
+    fn total_score(&self) -> int {
+        let mut sum = 0;
+        for score in self.get_scores().iter() {
+            let (_, _, score_val) = **score;
+            sum += score_val;
+        }
+        sum
+    }
+
+    fn format_score_component_bare(score_pref: &ScorePrefix) -> String {
+        let mut rolls = String::new();
+        for value in score_pref.iter() {
+            if *value == 0 {
+                break
+            }
+            rolls.push_str(format!("{}, ", value).as_slice());
+        }
+        rolls.pop(); rolls.pop();
+        format!("{}", rolls.as_slice())
+    }
+
+
+    fn format_score_component(score_components: &ScoreRec) -> String {
+        let (_, ref prefix_data, _) = *score_components;
+        RollResult::format_score_component_bare(prefix_data)
+    }
+
+
+    fn format_score(score_components: &Vec<&ScoreRec>) -> String {
+        let mut output = String::new();
+        for tuple in score_components.iter() {
+            let (_, _, score) = **tuple;
+            output.push_str(format!(
+                "[{} => {}], ",
+                RollResult::format_score_component(*tuple).as_slice(),
+                score
+            ).as_slice());
+        }
+        output.pop(); output.pop();
+        output
+    }
+}
+
+impl Rand for RollResult {
+    fn rand<R: Rng>(rng: &mut R) -> RollResult {
+        let mut out: ScorePrefix = [0u8, ..6];
+        let mut between = Range::new(1u8, 7u8);
+        for val in out.iter_mut() {
+            *val = between.sample(rng);
+        }
+        out.sort();
+        RollResult(out)
+    }
+}
+
+impl Show for RollResult {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
+        let RollResult(ref roll) = *self;
+        write!(f, "[{}] => [{}] for {} points",
+            RollResult::format_score_component_bare(roll),
+            RollResult::format_score(&self.get_scores()),
+            self.total_score())
+    }
+}
 
 pub struct GreedPlugin {
-    states: Vec<GreedState>,
+    games: HashMap<BotChannelId, GreedPlayResult>
 }
-
 
 enum GreedCommandType {
     Greed
 }
 
+struct GreedPlayResult {
+    user_id: BotUserId,
+    user_nick: String,
+    roll: RollResult,
+}
 
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<GreedCommandType> {
     let command_phrase = match m.command() {
@@ -76,136 +188,18 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<GreedCommandType> {
     }
 }
 
-#[inline]
-fn is_prefix(rec: &ScoreRec, roll: &RollResult, start_idx: uint) -> bool {
-    let (prefix_len, ref roll_target, _) = *rec;
-
-    if roll.len() < start_idx + prefix_len {
-        return false;
-    }
-    for idx in range(0, prefix_len) {
-        if roll[idx + start_idx] != roll_target[idx] {
-            return false;
-        }
-    }
-    true
-}
-
-
-fn dice_roll() -> RollResult {
-    let mut rng = rand::task_rng();
-    let mut out: RollResult = [0u8, ..6];
-    let mut between = Range::new(1u8, 7u8);
-    for val in out.iter_mut() {
-        *val = between.sample(&mut rng);
-    }
-    out.sort();
-    out
-}
-
-
-fn get_prefix_len(rec: &ScoreRec) -> uint {
-    let (prefix_len, _, _) = *rec;
-    prefix_len
-}
-
-
-fn get_scores(roll: &RollResult) -> Vec<&'static ScoreRec> {
-    let mut idx = 0;
-    let mut score_comps = Vec::new();
-    while idx < roll.len() {
-        let mut idx_incr = 1;
-        for score_rec in SCORING_TABLE.iter() {
-            // println!("is_prefix({:?}, {:?}, {:?})", score_rec, roll, idx);
-            if is_prefix(score_rec, roll, idx) {
-                idx_incr = get_prefix_len(score_rec);
-                // println!("pushing {:?}", score_rec);
-                score_comps.push(score_rec);
-                break;
-            }
-        }
-        idx += idx_incr;
-    }
-    score_comps
-}
-
-fn total_score(scores: &Vec<&ScoreRec>) -> int {
-    let mut sum = 0;
-    for score in scores.iter() {
-        let (_, _, score_val) = **score;
-        sum += score_val;
-    }
-    sum
-}
-
-
-fn find_or_create_state<'a>(states: &'a mut Vec<GreedState>, channel: &str) -> &'a mut GreedState {   
-    let mut want_idx = None;
-    for (i, state) in states.iter().enumerate() {
-        if state.channel.as_slice() == channel {
-            want_idx = Some(i);
-        }
-    }
-    match want_idx {
-        Some(idx) => {
-            states.get_mut(idx)
-        },
-        None => {
-            states.push(GreedState {
-                channel: String::from_str(channel),
-                last_played: None
-            });
-            states.last_mut().unwrap()
-        }
-    }
-}
-
-
-fn format_score_component_bare(roll_result: &RollResult) -> String {
-    let mut rolls = String::new();
-    for value in roll_result.iter() {
-        if *value == 0 {
-            break
-        }
-        rolls.push_str(format!("{}, ", value).as_slice());
-    }
-    rolls.pop(); rolls.pop();
-    format!("{}", rolls.as_slice())
-}
-
-
-fn format_score_component(score_components: &ScoreRec) -> String {
-    let (_, ref prefix_data, _) = *score_components;
-    format_score_component_bare(prefix_data)
-}
-
-
-fn format_score(score_components: &Vec<&ScoreRec>) -> String {
-    let mut output = String::new();
-    for tuple in score_components.iter() {
-        let (_, _, score) = **tuple;
-        output.push_str(format!(
-            "[{} => {}], ",
-            format_score_component(*tuple).as_slice(),
-            score
-        ).as_slice());
-    }
-    output.pop(); output.pop();
-    output
-}
-
 
 impl GreedPlugin {
     pub fn new() -> GreedPlugin {
         GreedPlugin {
-            states: Vec::new()
+            games: HashMap::new()
         }
     }
 
     fn dispatch_cmd_greed(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
-        let channel = match message.channel() {
-            Some(channel) => channel,
-            None => return
+        let (user_id, channel_id) = match (m.source.clone(), m.target.clone()) {
+            (Some(KnownUser(uid)), Some(KnownChannel(cid))) => (uid, cid),
+            _ => return
         };
 
         let source_nick = match message.source_nick() {
@@ -213,42 +207,33 @@ impl GreedPlugin {
             None => return
         };
 
-        let state = find_or_create_state(&mut self.states, channel);
-
-        let cur_user_roll: RollResult = dice_roll();
-        let score_components: Vec<&'static ScoreRec> = get_scores(&cur_user_roll);
-        let score = total_score(&score_components);
-
-        match state.last_played {
-            Some(ref last_played) => {
-                let (ref prev_nick, _, _) = *last_played;
-                if prev_nick.as_slice() == source_nick {
-                    m.reply(format!("You can't go twice in a row, {}", source_nick));
-                    return;
-                }
-            }, 
-            None => ()
-        }
-
-        m.reply(format!("[{}] => [{}] for {} points",
-            format_score_component_bare(&cur_user_roll),
-            format_score(&score_components).as_slice(),
-            score));
-
-        state.last_played = match state.last_played.take() {
-            Some(last_played) => {
-                let (prev_nick, _, prev_score) = last_played;
-                // let prev_score_components: Vec<&'static ScoreRec> = get_scores(&prev_roll);
-
-                m.reply(match prev_score.cmp(&score) {
-                    Less => format!("{} wins!", source_nick),
-                    Equal => format!("{} and {} tie.", source_nick, prev_nick),
-                    Greater => format!("{} wins!", prev_nick)
+        match self.games.entry(channel_id) {
+            Vacant(entry) => {
+                let roll = task_rng().gen::<RollResult>();
+                m.reply(format!("{}: {}", source_nick, roll));
+                entry.set(GreedPlayResult {
+                    user_id: user_id,
+                    user_nick: source_nick.to_string(),
+                    roll: roll
                 });
-                None
             },
-            None => {
-                Some((source_nick.to_string(), cur_user_roll, score))
+            Occupied(entry) => {
+                {
+                    let prev_play = entry.get();
+                    if prev_play.user_id == user_id {
+                        m.reply(format!("You can't go twice in a row, {}", source_nick));
+                        return;
+                    }
+                }
+                let prev_play = entry.take();
+                let roll = task_rng().gen::<RollResult>();
+                m.reply(format!("{}: {}", source_nick, roll));
+
+                m.reply(match prev_play.roll.total_score().cmp(&roll.total_score()) {
+                     Less => format!("{} wins!", source_nick),
+                     Equal => format!("{} and {} tie.", source_nick, prev_play.user_nick),
+                     Greater => format!("{} wins!", prev_play.user_nick)
+                });
             }
         }
     }
@@ -266,6 +251,4 @@ impl RustBotPlugin for GreedPlugin {
             None => ()
         }
     }
-
-    // fn save_instance_state(&mut self, 
 }
