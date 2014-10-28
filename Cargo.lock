@@ -3,7 +3,7 @@ name = "ircbot"
 version = "0.1.0"
 dependencies = [
  "http 0.1.0-pre (git+https://github.com/chris-morgan/rust-http#85689a9f69132655cf5ed8dc11af1a7c58709046)",
- "irc 0.1.0 (git+https://github.com/infinityb/rust-irc#043923a20e6ae5e07fd98b5c447356e34d4e8707)",
+ "irc 0.1.0 (git+https://github.com/infinityb/rust-irc#71ebaac61ded8acc085a9cfe39360aa90b193694)",
  "toml 0.1.0 (git+https://github.com/alexcrichton/toml-rs#8a3ba4c65cfa22a3d924293a1fb3a70bfac5e66c)",
 ]
 
@@ -17,19 +17,19 @@ name = "http"
 version = "0.1.0-pre"
 source = "git+https://github.com/chris-morgan/rust-http#85689a9f69132655cf5ed8dc11af1a7c58709046"
 dependencies = [
- "openssl 0.0.0 (git+https://github.com/sfackler/rust-openssl.git#6277635e5c579c5842fc5f921a3b27a544a7b346)",
+ "openssl 0.0.0 (git+https://github.com/sfackler/rust-openssl.git#b41201c3c9fddf42d02f71d11b5d4718eb9e88c4)",
  "url 0.1.0 (git+https://github.com/servo/rust-url#7f1991d847fb8cf8648def2ff121bae90b89131f)",
 ]
 
 [[package]]
 name = "irc"
 version = "0.1.0"
-source = "git+https://github.com/infinityb/rust-irc#043923a20e6ae5e07fd98b5c447356e34d4e8707"
+source = "git+https://github.com/infinityb/rust-irc#71ebaac61ded8acc085a9cfe39360aa90b193694"
 
 [[package]]
 name = "openssl"
 version = "0.0.0"
-source = "git+https://github.com/sfackler/rust-openssl.git#6277635e5c579c5842fc5f921a3b27a544a7b346"
+source = "git+https://github.com/sfackler/rust-openssl.git#b41201c3c9fddf42d02f71d11b5d4718eb9e88c4"
 
 [[package]]
 name = "toml"
