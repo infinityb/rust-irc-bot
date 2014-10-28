@@ -222,7 +222,7 @@ impl GreedPlugin {
                 entry.set(GreedPlayResult {
                     user_id: user_id,
                     user_nick: source_nick.to_string(),
-                    roll: roll.clone()
+                    roll: roll
                 });
             },
             Occupied(entry) => {
