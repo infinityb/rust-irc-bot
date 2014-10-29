@@ -1,10 +1,6 @@
 use std::task::TaskBuilder;
 use std::io::IoError;
-use std::collections::hashmap::{
-    HashMap,
-    Vacant,
-    Occupied,
-};
+use std::collections::HashMap;
 
 use serialize::json;
 use serialize::json::DecoderError;
@@ -149,28 +145,29 @@ impl DeerInternalState {
         }
     }
 
-    fn throttle_ok(&mut self, uid: &BotUserId, cid: &BotChannelId) -> bool {
-        let now = get_time();
-
-        let key = (uid.clone(), cid.clone());
-
-        match self.throttle_map.entry(key.clone()) {
-            Vacant(entry) => {
-                info!("deer-throttle vacant: {}", key);
-                entry.set(now);
-                true
-            },
-            Occupied(mut entry) => {
-                info!("deer-throttle occupied: {}", key);
-                let duration = now - *entry.get();
-                entry.set(now);
-                info!("deer-throttle delta: {}", duration.num_seconds());
-                60 < duration.num_seconds()
-            }
+    fn throttle_ok(&mut self, uid: BotUserId, cid: BotChannelId) -> bool {
+        match self.throttle_map.find(&(uid, cid)) {
+            Some(entry) => 60 < (get_time() - *entry).num_seconds(),
+            None => true
         }
     }
 
+    fn throttle_bump(&mut self, uid: BotUserId, cid: BotChannelId) {
+        self.throttle_map.insert((uid, cid), get_time());
+    }
+
     fn handle_command<'a>(&mut self, m: &CommandMapperDispatch, cmd: &'a DeerCommandType) {
+        let (source, target) = match (m.source.clone(), m.target.clone()) {
+            (Some(KnownUser(source)), Some(KnownChannel(target))) => (source, target),
+            _ => return
+        };
+
+        if let Deer(_) = *cmd {
+            if !self.throttle_ok(source, target) {
+                m.reply(String::from_str("2deer4plus"));
+                return;
+            }
+        }
         match *cmd {
             Deer(Some(ref deer_name)) => {
                 match get_deer(self, deer_name[]) {
@@ -179,6 +176,7 @@ impl DeerInternalState {
                             m.reply(String::from_str(deer_line));
                             self.lines_sent += 1;
                         }
+                        self.throttle_bump(source, target);
                     },
                     Err(err) => {
                         m.reply(format!("error: {}", err));
@@ -190,6 +188,7 @@ impl DeerInternalState {
                     m.reply(String::from_str(deer_line));
                     self.lines_sent += 1;
                 }
+                self.throttle_bump(source, target);
             },
             DeerStats => {
                 m.reply(format!("lines sent: {}", self.lines_sent));
@@ -199,15 +198,9 @@ impl DeerInternalState {
 
     fn start(&mut self, rx: Receiver<(CommandMapperDispatch, IrcMessage)>) {
         for (m, _) in rx.iter() {
-            match (m.source.clone(), m.target.clone(), parse_command(&m)) {
-                (Some(KnownUser(source)), Some(KnownChannel(target)), Some(ref command)) => {
-                    if self.throttle_ok(&source, &target) {
-                        self.handle_command(&m, command);
-                    } else {
-                        m.reply(String::from_str("2deer4plus"))
-                    }
-                },
-                _ => ()
+            match parse_command(&m) {
+                Some(ref command) => self.handle_command(&m, command),
+                None => ()
             }
         }
     }
