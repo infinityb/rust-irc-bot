@@ -93,7 +93,7 @@ impl Format {
     pub fn get_command<'a>(&'a self) -> &'a str {
         match self.atoms[0] {
             LiteralAtom(ref literal) => literal[],
-            _ => fail!("Malformed Format")
+            _ => panic!("Malformed Format")
         }
     }
 }
@@ -157,7 +157,7 @@ impl Format {
             LiteralAtom(ref literal) => {
                 literal.to_string()
             },
-            _ => fail!("Malformed Format")
+            _ => panic!("Malformed Format")
         };
 
         for atom in self.atoms.iter() {
@@ -181,7 +181,7 @@ impl Format {
                             args_map.insert(name.to_string(), value);
                         },
                         (Some(name), Ok(None)) => {
-                            fail!("named ({}) atom with Ok(None) value", name);
+                            panic!("named ({}) atom with Ok(None) value", name);
                         },
                         (None, Ok(_)) => (),
                         (_, Err(err)) => return Err(err)
@@ -239,7 +239,7 @@ fn cons_the_basics() {
         let fmt_str = "articles {foo} {category:s} {id:d}";
         let fmt = match Format::from_str(fmt_str) {
             Ok(fmt) => fmt,
-            Err(err) => fail!("parse failure: {}", err)
+            Err(err) => panic!("parse failure: {}", err)
         };
 
         assert_eq!(fmt.atoms.len(), 4);
@@ -258,13 +258,13 @@ fn cons_the_basics() {
     }
     
     match Format::from_str("") {
-        Ok(_) => fail!("empty string must not succeed"),
+        Ok(_) => panic!("empty string must not succeed"),
         Err(EmptyFormat) => (),
-        Err(err) => fail!("wrong error for empty: {}", err),
+        Err(err) => panic!("wrong error for empty: {}", err),
     };
     
     match Format::from_str("{category:s} articles") {
-        Ok(_) => fail!("first atom must be literal"),
+        Ok(_) => panic!("first atom must be literal"),
         Err(_) => ()
     };
     
@@ -272,12 +272,12 @@ fn cons_the_basics() {
         let fmt_str = "articles {foo} {*rest}";
         let fmt = match Format::from_str(fmt_str) {
             Ok(fmt) => fmt,
-            Err(err) => fail!("parse failure: {}", err)
+            Err(err) => panic!("parse failure: {}", err)
         };
         let cmdlet = match fmt.parse("articles bar test article argument") {
             Ok(Some(cmdlet)) => cmdlet,
-            Ok(None) => fail!("doesn't match when it should"),
-            Err(err) => fail!("parse failure: {}", err)
+            Ok(None) => panic!("doesn't match when it should"),
+            Err(err) => panic!("parse failure: {}", err)
         };
         assert_eq!(cmdlet.command[], "articles");
         assert_eq!(
@@ -298,15 +298,15 @@ fn parse_the_basics() {
 
         let fmt = match Format::from_str(fmt_str) {
             Ok(fmt) => fmt,
-            Err(err) => fail!("parse failure: {}", err)
+            Err(err) => panic!("parse failure: {}", err)
         };
 
         assert!(fmt.matches_maybe(cmd_str));
 
         let cmdlet = match fmt.parse(cmd_str) {
             Ok(Some(cmdlet)) => cmdlet,
-            Ok(None) => fail!("doesn't match when it should"),
-            Err(err) => fail!("parse failure: {}", err)
+            Ok(None) => panic!("doesn't match when it should"),
+            Err(err) => panic!("parse failure: {}", err)
         };
         assert_eq!(cmdlet.command[], "articles");
         assert!(cmdlet.args.contains_key(&"foo".to_string()));
@@ -322,9 +322,9 @@ fn parse_the_basics() {
     }
     {
         match Format::from_str("") {
-            Ok(_) => fail!("empty string must not succeed"),
+            Ok(_) => panic!("empty string must not succeed"),
             Err(EmptyFormat) => (),
-            Err(err) => fail!("wrong error for empty: {}", err),
+            Err(err) => panic!("wrong error for empty: {}", err),
         };
     }
 }

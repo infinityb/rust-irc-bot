@@ -431,7 +431,7 @@ mod tests {
     fn decode_line(line_res: IoResult<String>) -> Option<SessionRecord> {
         let line = match line_res {
             Ok(ok) => ok,
-            Err(err) => fail!("error reading: {}", err)
+            Err(err) => panic!("error reading: {}", err)
         };
 
         let trim_these: &[_] = &['\r', '\n'];
@@ -489,13 +489,13 @@ mod tests {
         it("should have a channel `#test` with 7 users", |state| {
             let channel_id = match state.channel_map.find(&"#test".to_string()) {
                 Some(channel_id) => *channel_id,
-                None => fail!("channel `#test` not found.")
+                None => panic!("channel `#test` not found.")
             };
             chan_test_id_hist.push(channel_id);
 
             let channel_state = match state.channels.find(&channel_id) {
                 Some(channel) => channel.clone(),
-                None => fail!("channel `#test` had Id but no state")
+                None => panic!("channel `#test` had Id but no state")
             };
             assert_eq!(channel_state.users.len(), 7);
         });
@@ -518,7 +518,7 @@ mod tests {
                         randomuser.prefix.as_slice(),
                         "randomuser!rustbot@coolhost");
                 },
-                None => fail!("inconsistent state. state = {}", state)
+                None => panic!("inconsistent state. state = {}", state)
             }
         });
 

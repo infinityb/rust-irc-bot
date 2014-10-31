@@ -34,18 +34,18 @@ struct AppConfig {
 
 fn parse_appconfig() -> Option<AppConfig> {
     let filename = Path::new(match args_as_bytes().as_slice() {
-        [] => fail!("impossible"),
+        [] => panic!("impossible"),
         [_] => return None,
         [_, ref filename] => filename.clone(),
         [_, ref filename, ..] => filename.clone()
     });
     let mut file = match File::open(&filename) {
         Ok(file) => file,
-        Err(err) => fail!("{}", err)
+        Err(err) => panic!("{}", err)
     };
     let contents = match file.read_to_string() {
         Ok(contents) => contents,
-        Err(err) => fail!("{}", err)
+        Err(err) => panic!("{}", err)
     };
     let mut parser = toml::Parser::new(contents.as_slice());
     let table = match parser.parse() {
@@ -53,10 +53,10 @@ fn parse_appconfig() -> Option<AppConfig> {
             let core_key = String::from_str("core");
             match table.find(&core_key) {
                 Some(value) => value.clone(),
-                None => fail!("failed to parse in some way.")
+                None => panic!("failed to parse in some way.")
             }
         }
-        None => fail!("failed to parse in some way.")
+        None => panic!("failed to parse in some way.")
     };
     toml::decode::<AppConfig>(table)
 }
@@ -65,7 +65,7 @@ fn parse_appconfig() -> Option<AppConfig> {
 fn main() {
     let appconfig = match parse_appconfig() {
         Some(config) => config,
-        None => fail!("bad config")
+        None => panic!("bad config")
     };
     let botconfig = BotConfig {
         server: (
@@ -80,7 +80,7 @@ fn main() {
     let conn = BotConnection::new(&botconfig);
     let conn = match conn {
         Ok(stream) => stream,
-        Err(err) => fail!("{}", err)
+        Err(err) => panic!("{}", err)
     };
     drop(conn);
 }

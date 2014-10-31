@@ -47,7 +47,7 @@ impl BotConnection {
                     if err.should_pick_new_nickname() {
                         nick.push_str("`");
                     } else {
-                        fail!("{}", err)
+                        panic!("{}", err)
                     }
                 }
             };
@@ -75,7 +75,7 @@ impl BotConnection {
                 },
                 Err(err) => {
                     println!("join error: {}", err);
-                    fail!("failed to join channel.. dying");
+                    panic!("failed to join channel.. dying");
                 }
             }
             println!("END joining {}...", channel);
