@@ -316,14 +316,6 @@ impl State {
             self.botnick.clear();
             self.botnick.push_str(msg.get_args()[0]);
         }
-        // :rustbot!rustbot@out-ab-133.wireless.telus.com PART #sample
-        if msg.command() == "PART" {
-            if msg.source_nick() == Some(self.botnick.as_slice()) {
-                panic!();
-            } else {
-                panic!();
-            }
-        }
         if msg.command() == "JOIN" && msg.source_nick().is_some() {
             self.on_other_join(msg)
         }
@@ -417,7 +409,11 @@ impl State {
             Some(prefix) => prefix.to_string(),
             None => return
         };
-        if let Some(ref nick) = join.source_nick() {
+        if let Some(nick) = join.source_nick() {
+            if nick == self.botnick.as_slice() {
+                return;
+            }
+
             let user_id = self.__find_user_id(nick.as_slice());
             let chan_id = self.__find_channel_id(channel);
 
