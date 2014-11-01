@@ -24,7 +24,7 @@ dependencies = [
 [[package]]
 name = "irc"
 version = "0.1.0"
-source = "git+https://github.com/infinityb/rust-irc#7f44929ecb1fcdcfecc85c1029a111edd45855e9"
+source = "git+https://github.com/infinityb/rust-irc#2e0bae387fe7bfe6711ae6eb3a2a99f3556facb3"
 
 [[package]]
 name = "openssl"
