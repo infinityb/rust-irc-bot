@@ -169,7 +169,7 @@ impl PluginContainer {
 
         let mut dispatch = CommandMapperDispatch {
             command: None,
-            bot_nick: bot_state.get_bot_nick().to_string(),
+            bot_nick: bot_state.get_self_nick().to_string(),
             sender: raw_tx.clone(),
             channel: match channel {
                 Some(ref channel) => Some(channel.clone()),

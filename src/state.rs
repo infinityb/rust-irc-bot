@@ -8,10 +8,10 @@ use std::collections::{
 
 use irc::{
     IrcMessage,
-    JoinResult,
-    WhoResult,
+    IrcPrefix,
+    JoinSuccess,
     WhoRecord,
-
+    WhoSuccess,
     IrcEvent,
     IrcEventMessage,
     IrcEventJoinBundle,
@@ -42,12 +42,25 @@ struct InternalUser {
 }
 
 impl InternalUser {
+    fn from_info(user_info: &UserInfo) -> InternalUser {
+        InternalUser {
+            id: user_info.id,
+            prefix: user_info.prefix.clone(),
+            channels: HashSet::new(),
+        }
+    }
+
     fn get_nick(&self) -> &str {
         let prefix = self.prefix.as_slice();
         match prefix.find('!') {
             Some(idx) => prefix[0..idx],
             None => prefix
         }
+    }
+
+    fn set_nick(&mut self, nick: &str) {
+        let old_prefix = IrcPrefix::new(self.prefix.as_slice());
+        self.prefix = old_prefix.with_nick(nick).to_string();
     }
 }
 
@@ -69,67 +82,91 @@ struct InternalChannel {
     users: HashSet<BotUserId>
 }
 
+impl InternalChannel {
+    fn from_info(chan_info: &ChannelInfo) -> InternalChannel {
+        InternalChannel {
+            id: chan_info.id,
+            name: chan_info.name.clone(),
+            topic: chan_info.topic.clone(),
+            users: HashSet::new(),
+        }
+    }
+}
+
 impl fmt::Show for InternalChannel {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "InternalChannel(name: {})", self.name)
     }
 }
 
+#[deriving(Show)]
 struct UserInfo {
+    id: BotUserId,
     prefix: String
 }
 
-struct ChannelInfo {
-    name: String
-}
-
-pub enum StateCommand {
-    // AddUser(BotUserId, UserInfo),
-    RemoveUser(BotUserId),
-    RemoveUserFromChannel(BotUserId, BotChannelId),
-    // AddChannel(BotChannelId, ChannelInfo),
-    RemoveChannel(BotChannelId),
-    // RemoveChannelFromUser(BotChannelId, BotUserId),
-}
-
-impl StateCommand {
-    fn on_self_part(state: &State, msg: &IrcMessage) -> Vec<StateCommand> {
-        let msg_args = msg.get_args();
-        if msg_args.len() < 1 {
-            warn!("Invalid message. PART with no arguments: {}", msg);
-            return Vec::new();
+impl UserInfo {
+    fn from_who(id: BotUserId, who: &WhoRecord) -> UserInfo {
+        UserInfo {
+            id: id,
+            prefix: who.get_prefix()
         }
-
-        let mut commands = Vec::new();
-        let channel_name = msg_args[0].to_string();
-        let chan_state = match state.channel_map.find(&channel_name) {
-            Some(chan_id) => match state.channels.find(chan_id) {
-                Some(chan_state) => chan_state,
-                None => panic!("Inconsistent state")
-            },
-            None => panic!("We left {} without knowing about it.", channel_name)
-        };
-
-        commands.push(RemoveChannel(chan_state.id));
-
-        // Should this be here or should we just do it on the receiver?
-        // If we move this out, we should still validate that our state is
-        // consistent, to prevent crashing the receiver.
-        for &user_id in chan_state.users.iter() {
-            let user_state = match state.users.find(&user_id) {
-                Some(user_state) => user_state,
-                None => panic!("Inconsistent state"),
-            };
-            commands.push(RemoveUserFromChannel(user_id, chan_state.id));
-            if user_state.channels.len() == 0 {
-                commands.pop();
-                commands.push(RemoveUser(user_id));
-            }
-        }
-        return commands;
     }
 
-    fn on_other_part(state: &State, msg: &IrcMessage) -> Vec<StateCommand> {
+    fn from_join(id: BotUserId, join: &IrcMessage) -> UserInfo {
+        UserInfo {
+            id: id,
+            prefix: join.get_prefix_raw().unwrap().to_string()
+        }
+    }
+
+    fn get_nick(&self) -> &str {
+        let prefix = self.prefix.as_slice();
+        match prefix.find('!') {
+            Some(idx) => prefix[0..idx],
+            None => prefix
+        }
+    }
+}
+
+#[deriving(Show)]
+struct ChannelInfo {
+    id: BotChannelId,
+    name: String,
+    topic: String
+}
+
+impl ChannelInfo {
+    fn from_join(id: BotChannelId, join: &JoinSuccess) -> ChannelInfo {
+        let topic = match join.topic {
+            Some(ref topic) => topic.text.clone(),
+            None => String::new()
+        };
+
+        ChannelInfo {
+            id: id,
+            name: join.channel.to_string(),
+            topic: topic
+        }
+    }
+}
+
+struct StateCommandStreamBuilder<'a> {
+    state: &'a State,
+    user_seq: u64,
+    channel_seq: u64,
+}
+
+impl<'a> StateCommandStreamBuilder<'a> {
+    fn new(state: &'a State) -> StateCommandStreamBuilder<'a> {
+        StateCommandStreamBuilder {
+            state: state,
+            user_seq: state.user_seq,
+            channel_seq: state.channel_seq
+        }
+    }
+
+    fn on_other_part(&self, msg: &IrcMessage) -> Vec<StateCommand> {
         let msg_args = msg.get_args();
         if msg_args.len() < 1 {
             warn!("Invalid message. PART with no arguments: {}", msg);
@@ -143,18 +180,18 @@ impl StateCommand {
                 return Vec::new();
             }
         };
-        let chan_id = match state.channel_map.find(&channel_name) {
+        let chan_id = match self.state.channel_map.find(&channel_name) {
             Some(chan_id) => *chan_id,
             None => panic!("Got message for channel {} without knowing about it.", channel_name)
         };
-        let user_id = match state.user_map.find(&user_nick) {
+        let user_id = match self.state.user_map.find(&user_nick) {
             Some(user_id) => *user_id,
             None => panic!("Got message for user {} without knowing about it.", channel_name)
         };
         let mut commands = Vec::new();
         commands.push(RemoveUserFromChannel(user_id, chan_id));
 
-        if let Some(user_state) = state.users.find(&user_id) {
+        if let Some(user_state) = self.state.users.find(&user_id) {
             if user_state.channels.len() == 1 {
                 if user_state.channels.contains(&chan_id) {
                     commands.push(RemoveUser(user_id));
@@ -168,18 +205,210 @@ impl StateCommand {
         commands
     }
 
-    // Remove when we have converted all methods to command streams
-    fn from_message_shim(state: &State, msg: &IrcMessage) -> Option<Vec<StateCommand>> {
-        if msg.command() == "PART" {
-            if msg.source_nick() == Some(state.botnick.as_slice()) {
-                return Some(StateCommand::on_self_part(state, msg));
-            } else {
-                return Some(StateCommand::on_other_part(state, msg));
+    fn on_self_part(&self, msg: &IrcMessage) -> Vec<StateCommand> {
+        info!("on-self-part called.  We should clean the channel up");
+        let msg_args = msg.get_args();
+        if msg_args.len() < 1 {
+            warn!("Invalid message. PART with no arguments: {}", msg);
+            return Vec::new();
+        }
+
+        let mut commands = Vec::new();
+        let channel_name = msg_args[0].to_string();
+        let chan_state = match self.state.channel_map.find(&channel_name) {
+            Some(chan_id) => match self.state.channels.find(chan_id) {
+                Some(chan_state) => chan_state,
+                None => panic!("Inconsistent state")
+            },
+            None => panic!("We left {} without knowing about it.", channel_name)
+        };
+        // Should this be here or should we just do it on the receiver?
+        // If we move this out, we should still validate that our state is
+        // consistent, to prevent crashing the receiver.
+        for &user_id in chan_state.users.iter() {
+            let user_state = match self.state.users.find(&user_id) {
+                Some(user_state) => user_state,
+                None => panic!("Inconsistent state: {}", user_id),
+            };
+            commands.push(RemoveUserFromChannel(user_id, chan_state.id));
+            if user_state.channels.len() == 1 && user_state.channels.contains(&chan_state.id) {
+                commands.pop();
+                commands.push(RemoveUser(user_id));
             }
         }
-        None
+
+        commands.push(RemoveChannel(chan_state.id));
+        return commands;
+    }
+
+    fn on_other_join(&mut self, join: &IrcMessage) -> Vec<StateCommand> {
+        let channel = join.get_args()[0].to_string();
+
+        let chan_id = match self.state.channel_map.find(&channel) {
+            Some(channel_id) => *channel_id,
+            None => return Vec::new()
+        };
+        let source_nick = match join.source_nick() {
+            Some(nick) => nick.to_string(),
+            None => return Vec::new(),
+        };
+        let mut commands = Vec::new();
+        let user_id = match self.state.user_map.find(&source_nick) {
+            Some(user_id) => *user_id,
+            None => {
+                let new_user_id = BotUserId(self.user_seq);
+                self.user_seq += 1;
+                commands.push(AddUser(UserInfo::from_join(new_user_id, join)));
+                commands.push(IncrementUserId);
+                new_user_id
+            }
+        };
+        commands.push(AddUserToChannel(user_id, chan_id));
+        commands
+    }
+
+    fn on_self_join(&mut self, join: &JoinSuccess) -> Vec<StateCommand> {
+        if let Some(_) = self.state.channel_map.find(&join.channel) {
+            warn!("Joining already joined channel {}; skipped", join.channel);
+            return Vec::new();
+        }
+
+        let new_chan_id = BotChannelId(self.channel_seq);
+        self.channel_seq += 1;
+
+        let mut commands = Vec::with_capacity(4);
+        commands.push(AddChannel(ChannelInfo::from_join(new_chan_id, join)));
+        commands.push(IncrementChannelId);
+        commands
+    }
+
+    fn on_who_record(&mut self, chan_id: BotChannelId, rec: &WhoRecord) -> Vec<StateCommand> {
+        let mut commands = Vec::with_capacity(4);
+        let user_id = match self.state.user_map.find(&rec.nick) {
+            Some(user_id) => *user_id,
+            None => {
+                let new_user_id = BotUserId(self.user_seq);
+                self.user_seq += 1;
+                commands.push(AddUser(UserInfo::from_who(new_user_id, rec)));
+                commands.push(IncrementUserId);
+                new_user_id
+            }
+        };
+        commands.push(AddUserToChannel(user_id, chan_id));
+        commands
+    }
+
+    fn on_who(&mut self, who: &WhoSuccess) -> Vec<StateCommand> {
+        // If we WHO a channel that we aren't in, we aren't changing any
+        // state.
+        let channel_id = match self.state.channel_map.find(&who.channel) {
+            Some(channel_id) => *channel_id,
+            None => return Vec::new()
+        };
+
+        let mut commands = Vec::new();
+        for rec in who.who_records.iter() {
+            commands.extend(self.on_who_record(channel_id, rec).into_iter());
+        }
+        commands
+    }
+
+    fn on_topic(&self, msg: &IrcMessage) -> Vec<StateCommand> {
+        assert_eq!(msg.command(), "TOPIC");
+        assert_eq!(msg.get_args().len(), 2);
+        let channel = msg.get_args()[0].to_string();
+        let new_topic = msg.get_args()[1].to_string();
+
+        let chan_id = match self.state.channel_map.find(&channel) {
+            Some(channel_id) => *channel_id,
+            None => return Vec::new()
+        };
+        let mut commands = Vec::new();
+        commands.push(UpdateChannel(ChannelInfo {
+            id: chan_id,
+            name: channel,
+            topic: new_topic,
+        }));
+        commands
+    }
+
+    fn on_nick(&self, msg: &IrcMessage) -> Vec<StateCommand> {
+        assert_eq!(msg.command(), "NICK");
+        assert_eq!(msg.get_args().len(), 1);
+
+        let new_nick = msg.get_args()[0].to_string();
+        let source_nick = match msg.source_nick() {
+            Some(source_nick) => source_nick.to_string(),
+            None => return Vec::new(),
+        };
+        let prefix = match msg.get_prefix() {
+            Some(prefix) => prefix,
+            None => return Vec::new(),
+        };
+
+        let user_id = match self.state.user_map.find(&source_nick) {
+            Some(user_id) => *user_id,
+            None => return Vec::new()
+        };
+        let mut commands = Vec::new();
+        commands.push(UpdateUser(UserInfo {
+            id: user_id,
+            prefix: prefix.with_nick(new_nick[]).to_string()
+        }));
+        commands
+    }
+
+    fn from_message(&mut self, msg: &IrcMessage) -> Vec<StateCommand> {
+        if msg.command() == "001" {
+            return vec![UpdateSelfNick(msg.get_args()[0].to_string())];
+        }
+        if msg.command() == "PART" {
+            info!("handling PART, {} == {}", msg.source_nick(), Some(self.state.self_nick.as_slice()));
+            if msg.source_nick() == Some(self.state.self_nick.as_slice()) {
+                return self.on_self_part(msg);
+            } else {
+                return self.on_other_part(msg);
+            }
+        }
+        if msg.command() == "JOIN" && msg.get_prefix().is_some() {
+            return self.on_other_join(msg);
+        }
+        if msg.command() == "TOPIC" && msg.get_prefix().is_some() {
+            return self.on_topic(msg);
+        }
+        if msg.command() == "NICK" && msg.get_prefix().is_some() {
+            return self.on_nick(msg);
+        }
+        Vec::new()
+    }
+
+    fn from_event(&mut self, event: &IrcEvent) -> Vec<StateCommand> {
+        match *event {
+            IrcEventMessage(ref message) => self.from_message(message),
+            IrcEventJoinBundle(Ok(ref join_bun)) => self.on_self_join(join_bun),
+            IrcEventJoinBundle(Err(_)) => Vec::new(),
+            IrcEventWhoBundle(Ok(ref who_bun)) => self.on_who(who_bun),
+            IrcEventWhoBundle(Err(_)) => Vec::new(),
+        }
     }
 }
+
+#[deriving(Show)]
+pub enum StateCommand {
+    UpdateSelfNick(String),
+    AddUser(UserInfo),
+    UpdateUser(UserInfo),
+    RemoveUser(BotUserId),
+    RemoveUserFromChannel(BotUserId, BotChannelId),
+    AddChannel(ChannelInfo),
+    UpdateChannel(ChannelInfo),
+    RemoveChannel(BotChannelId),
+    // RemoveChannelFromUser(BotChannelId, BotUserId),
+    IncrementUserId,
+    IncrementChannelId,
+    AddUserToChannel(BotUserId, BotChannelId),
+}
+
 
 pub struct StateBuilder;
 
@@ -188,7 +417,7 @@ pub struct State {
     user_seq: u64,
     channel_seq: u64,
 
-    botnick: String,
+    self_nick: String,
     user_map: HashMap<String, BotUserId>,
     users: HashMap<BotUserId, InternalUser>,
     channel_map: HashMap<String, BotChannelId>,
@@ -200,7 +429,7 @@ impl State {
         State {
             user_seq: 0,
             channel_seq: 0,
-            botnick: String::new(),
+            self_nick: String::new(),
             user_map: HashMap::new(),
             users: HashMap::new(),
             channel_map: HashMap::new(),
@@ -208,54 +437,24 @@ impl State {
         }
     }
 
-    pub fn get_bot_nick<'a>(&'a self) -> &'a str {
-        self.botnick.as_slice()
+    pub fn get_self_nick<'a>(&'a self) -> &'a str {
+        self.self_nick.as_slice()
     }
 
-    fn on_topic(&mut self, msg: &IrcMessage) {
-        if msg.command() != "TOPIC" {
-            return;
+    fn apply_update_self_nick(&mut self, new_nick: &String) {
+        if self.self_nick.as_slice() != "" {
+            let user_id = match self.user_map.pop(&self.self_nick) {
+                Some(user_id) => user_id,
+                None => panic!("inconsistent user_map: {}[{}]",
+                    self.user_map, self.self_nick)
+            };
+            self.user_map.insert(new_nick.clone(), user_id);
         }
-        let chan_id = match self.identify_channel(msg.get_args()[0]) {
-            Some(chan_id) => chan_id,
-            None => return
-        };
-        let channel = match self.channels.find_mut(&chan_id) {
-            Some(channel) => channel,
-            None => return
-        };
-        channel.topic.clear();
-        channel.topic.push_str(msg.get_args()[1]);
-    }
-
-    fn on_nick(&mut self, from_nick: &str, msg: &IrcMessage) {
-        let to_nick = msg.get_args()[0];
-        let from_prefix = match msg.get_prefix_raw() {
-            Some(prefix) => prefix,
-            None => {
-                warn!("bad message: no prefix");
-                return;
-            }
-        };
-        let user_id = match self.user_map.pop(&from_nick.to_string()) {
-            Some(user_id) => user_id,
-            None => return
-        };
-        self.user_map.insert(to_nick.to_string(), user_id);
-        match self.users.find_mut(&user_id) {
-            Some(user_rec) => {
-                user_rec.prefix.clear();
-                user_rec.prefix.push_str(from_prefix);
-            },
-            None => {
-                warn!("inconsistent state");
-                return;
-            }
-        };
+        self.self_nick = new_nick.clone();
     }
 
     fn apply_remove_user(&mut self, id: BotUserId) {
-        info!("remove_user({})", id);
+        info!("apply_remove_user({})", id);
         let user_info = match self.users.pop(&id) {
             Some(user_info) => user_info,
             None => panic!("cannot apply command: {} not found.", id)
@@ -263,15 +462,23 @@ impl State {
         let user_nick = user_info.get_nick().to_string();
         match self.user_map.pop(&user_nick) {
             Some(user_id) => assert_eq!(user_id, id),
-            None => panic!("inconsistent user_map: {}[{}]", self.user_map, user_nick)
+            None => panic!("inconsistent user_map: {}[{}]",
+                self.user_map, user_nick)
         };
     }
 
-    fn apply_remove_user_from_chan(&mut self, uid: BotUserId, chid: BotChannelId) {
+    fn apply_remove_user_from_chan(&mut self,
+                                   uid: BotUserId,
+                                   chid: BotChannelId
+    ) {
         info!("remove_user_from_chan({}, {})", uid, chid);
         match self.users.find_mut(&uid) {
             Some(user_info) => user_info.channels.remove(&chid),
             None => panic!("cannot apply command: {} not found.", uid)
+        };
+        match self.channels.find_mut(&chid) {
+            Some(channel_info) => channel_info.users.remove(&uid),
+            None => panic!("cannot apply command: {} not found.", chid)
         };
     }
 
@@ -287,56 +494,78 @@ impl State {
         };
     }
 
+    fn apply_add_channel(&mut self, chan_info: &ChannelInfo) {
+        assert_eq!(chan_info.id, BotChannelId(self.channel_seq));
+        self.channels.insert(chan_info.id, InternalChannel::from_info(chan_info));
+        self.channel_map.insert(chan_info.name.clone(), chan_info.id);
+    }
+
+    fn apply_update_channel(&mut self, chan_info: &ChannelInfo) {
+        match self.channels.find_mut(&chan_info.id) {
+            Some(channel) => channel.topic = chan_info.topic.clone(),
+            None => {}
+        };
+    }
+
+    fn apply_add_user(&mut self, user_info: &UserInfo) {
+        assert_eq!(user_info.id, BotUserId(self.user_seq));
+        self.users.insert(user_info.id, InternalUser::from_info(user_info));
+        self.user_map.insert(user_info.get_nick().to_string(), user_info.id);
+    }
+
+    fn apply_update_user(&mut self, user_info: &UserInfo) {
+        let old_nick = match self.users.find_mut(&user_info.id) {
+            Some(user_state) => {
+                let old_nick = user_state.get_nick().to_string();
+                user_state.set_nick(user_info.get_nick());
+                old_nick
+            },
+            None => {
+                warn!("updating non-existent user");
+                return;
+            }
+        };
+        if let Some(user_id) = self.user_map.pop(&old_nick) {
+            assert_eq!(user_id, user_info.id);
+            self.user_map.insert(user_info.get_nick().to_string(), user_id);
+            info!("user_map = {}", self.user_map);
+        }
+    }
+
+    fn apply_add_user_to_channel(&mut self,
+                                 uid: BotUserId,
+                                 chid: BotChannelId
+    ) {
+        match self.users.find_mut(&uid) {
+            Some(user_state) => user_state.channels.insert(chid),
+            None => panic!("inconsistent state")
+        };
+        match self.channels.find_mut(&chid) {
+            Some(channel_state) => channel_state.users.insert(uid),
+            None => panic!("inconsistent state")
+        };
+    }
+
     pub fn apply_command(&mut self, cmd: &StateCommand) {
         match *cmd {
-            // AddUser(user_id, ref user_info) => {},
-            RemoveUser(user_id) => 
-                self.apply_remove_user(user_id),
+            UpdateSelfNick(ref new_nick) =>
+                self.apply_update_self_nick(new_nick),
+            AddUser(ref user_info) => self.apply_add_user(user_info),
+            UpdateUser(ref user_info) => self.apply_update_user(user_info),
+            AddUserToChannel(user_id, chan_id) =>
+                self.apply_add_user_to_channel(user_id, chan_id),
+            RemoveUser(user_id) => self.apply_remove_user(user_id),
             RemoveUserFromChannel(user_id, chan_id) =>
                 self.apply_remove_user_from_chan(user_id, chan_id),
-            // AddChannel(chan_id, ref chan_info) => {},
+            AddChannel(ref chan_info) =>
+                self.apply_add_channel(chan_info),
+            UpdateChannel(ref chan_info) =>
+                self.apply_update_channel(chan_info),
             RemoveChannel(chan_id) =>
                 self.apply_remove_channel(chan_id),
-            // RemoveChannelFromUser(chan_id, user_id) => {},
+            IncrementUserId => self.user_seq += 1,
+            IncrementChannelId => self.channel_seq += 1,
         }
-    }
-
-    fn on_message(&mut self, msg: &IrcMessage) {
-        match StateCommand::from_message_shim(self, msg) {
-            Some(commands) => {
-                for command in commands.iter() {
-                    self.apply_command(command);
-                }
-                return;
-            },
-            None => ()
-        }
-
-        if msg.command() == "001" {
-            self.botnick.clear();
-            self.botnick.push_str(msg.get_args()[0]);
-        }
-        if msg.command() == "JOIN" && msg.source_nick().is_some() {
-            self.on_other_join(msg)
-        }
-        if msg.command() == "TOPIC" {
-            self.on_topic(msg);
-        }
-        if let ("NICK", Some(source_nick)) = (msg.command(), msg.source_nick()) {
-            self.on_nick(source_nick, msg);
-        }
-    }
-
-    fn __find_channel_id(&mut self, name: &str) -> BotChannelId {
-        let cur_seq = BotChannelId(self.channel_seq);
-        let (should_incr, chan_id) = match self.channel_map.entry(name.to_string()) {
-            Occupied(entry) => (false, entry.get().clone()),
-            Vacant(entry) => (true, entry.set(cur_seq).clone()),
-        };
-        if should_incr {
-            self.channel_seq += 1;
-        }
-        chan_id
     }
 
     pub fn identify_channel(&self, chan: &str) -> Option<BotChannelId> {
@@ -346,138 +575,18 @@ impl State {
         }
     }
 
-    fn find_channel_by_name(&self, chan: &str) -> Option<&InternalChannel> {
-        let chan_id = match self.identify_channel(chan) {
-            Some(chan_id) => chan_id,
-            None => return None
-        };
-        self.channels.find(&chan_id)
-    }
-
-    fn __find_user_id(&mut self, nick: &str) -> BotUserId {
-        let cur_seq = BotUserId(self.user_seq);
-        let (should_incr, user_id) = match self.user_map.entry(nick.to_string()) {
-            Occupied(entry) => (false, *entry.get()),
-            Vacant(entry) => (true, *entry.set(cur_seq)),
-        };
-        if should_incr {
-            self.user_seq += 1;
-        }
-        user_id
-    }
-
     pub fn identify_nick(&self, nick: &str) -> Option<BotUserId> {
         match self.user_map.find(&nick.to_string()) {
             Some(user_id) => Some(*user_id),
             None => None
         }
     }
-
-    fn find_user_by_nick(&self, nick: &str) -> Option<&InternalUser> {
-        let user_id = match self.identify_nick(nick) {
-            Some(user_id) => user_id,
-            None => return None
-        };
-        self.users.find(&user_id)
-    }
-
-    fn on_self_join(&mut self, join_res: &JoinResult) {
-        let join = match *join_res {
-            Ok(ref ok) => ok,
-            Err(_) => return
-        };
-        if let Some(_) = self.channel_map.find(&join.channel) {
-            warn!("We know about {} before joining it?", join.channel);
-        }
-        let channel_id = self.__find_channel_id(join.channel.as_slice());
-        let topic = match join.topic {
-            Some(ref topic) => topic.text.clone(),
-            None => String::new()
-        };
-
-        self.channels.insert(channel_id, InternalChannel {
-            id: channel_id,
-            name: join.channel.to_string(),
-            topic: topic,
-            users: HashSet::new(),
-        });
-    }
-
-    fn on_other_join(&mut self, join: &IrcMessage) {
-        let channel = join.get_args()[0];
-        let prefix = match join.get_prefix_raw() {
-            Some(prefix) => prefix.to_string(),
-            None => return
-        };
-        if let Some(nick) = join.source_nick() {
-            if nick == self.botnick.as_slice() {
-                return;
-            }
-
-            let user_id = self.__find_user_id(nick.as_slice());
-            let chan_id = self.__find_channel_id(channel);
-
-            match self.users.entry(user_id) {
-                Occupied(mut entry) => {
-                    entry.get_mut().channels.insert(chan_id);
-                },
-                Vacant(entry) => {
-                    let mut channels = HashSet::new();
-                    channels.insert(chan_id);
-                    entry.set(InternalUser {
-                        id: user_id,
-                        prefix: prefix,
-                        channels: channels
-                    });
-                }
-            };
-        }       
-    }
-
-    fn on_who_record(&mut self, chan_id: BotChannelId, rec: &WhoRecord) -> BotUserId {
-        let user_id = self.__find_user_id(rec.nick.as_slice());
-        match self.users.entry(user_id) {
-            Occupied(mut entry) => {
-                entry.get_mut().channels.insert(chan_id);
-            },
-            Vacant(entry) => {
-                let mut channels = HashSet::new();
-                channels.insert(chan_id);
-                entry.set(InternalUser {
-                    id: user_id,
-                    prefix: format!("{}", rec.get_prefix()),
-                    channels: channels
-                });
-            }
-        };
-        user_id
-    }
-
-    fn on_who(&mut self, who_res: &WhoResult) {
-        let who = match *who_res {
-            Ok(ref ok) => ok,
-            Err(_) => return
-        };
-        let channel_id = self.__find_channel_id(who.channel.as_slice());
-        let mut user_ids = Vec::new();
-        for rec in who.who_records.iter() {
-            user_ids.push(self.on_who_record(channel_id, rec));
-        }
-        match self.channels.find_mut(&channel_id) {
-            Some(ref mut channel) => {
-                channel.users.extend(user_ids.into_iter());
-            },
-            None => {
-                warn!("Inconsistent state: {} lookup failure", channel_id);
-            }
-        }
-    }
-
+    
     pub fn on_event(&mut self, event: &IrcEvent) {
-        match *event {
-            IrcEventMessage(ref message) => self.on_message(message),
-            IrcEventJoinBundle(ref join_bun) => self.on_self_join(join_bun),
-            IrcEventWhoBundle(ref who_bun) => self.on_who(who_bun),
+        let commands = StateCommandStreamBuilder::new(self).from_event(event);
+        for command in commands.iter() {
+            info!("command application: {}", command);
+            self.apply_command(command);
         }
     }
 }
@@ -589,13 +698,16 @@ mod tests {
         });
 
         it("topic of `#test` should be `irc is bad.`", |state| {
-            let chan_id = state.identify_channel("#test").unwrap();
-            let channel = state.channels.find(&chan_id).unwrap();
+            let msg = format!("state.identify_channel failed on line {}", 1 + line!());
+            let chan_id = state.identify_channel("#test").expect(msg.as_slice());
+            let msg = format!("state.channels.find failed on line {}", 1 + line!());
+            let channel = state.channels.find(&chan_id).expect(msg.as_slice());
             assert_eq!(channel.topic.as_slice(), "irc is bad.");
         });
 
         it("should have a user `randomuser` after JOIN", |state| {
-            let randomuser_id = state.identify_nick("randomuser").unwrap();
+            let msg = format!("state.identify_nick failed on line {}", 1 + line!());
+            let randomuser_id = state.identify_nick("randomuser").expect(msg.as_slice());
             if random_user_id_hist.contains(&randomuser_id) {
                 assert!(false, "nick `randomuser` BotUserId must change between losses in view");
             }
@@ -615,8 +727,10 @@ mod tests {
         });
 
         it("topic of `#test` should be `setting a cool topic`", |state| {
-            let chan_id = state.identify_channel("#test").unwrap();
-            let channel = state.channels.find(&chan_id).unwrap();
+            let msg = format!("state.identify_channel failed on line {}", 1 + line!());
+            let chan_id = state.identify_channel("#test").expect(msg.as_slice());
+            let msg = format!("state.channels.find failed on line {}", 1 + line!());
+            let channel = state.channels.find(&chan_id).expect(msg.as_slice());
             assert_eq!(channel.topic.as_slice(), "setting a cool topic");
         });
 
