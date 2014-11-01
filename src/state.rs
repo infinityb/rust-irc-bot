@@ -41,6 +41,16 @@ struct InternalUser {
     channels: HashSet<BotChannelId>
 }
 
+impl InternalUser {
+    fn get_nick(&self) -> &str {
+        let prefix = self.prefix.as_slice();
+        match prefix.find('!') {
+            Some(idx) => prefix[0..idx],
+            None => prefix
+        }
+    }
+}
+
 impl fmt::Show for InternalUser {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "InternalUser(prefix: {})", self.prefix)
@@ -65,16 +75,80 @@ impl fmt::Show for InternalChannel {
     }
 }
 
+struct UserInfo {
+    prefix: String
+}
+
+struct ChannelInfo {
+    name: String
+}
+
+pub enum StateCommand {
+    // AddUser(BotUserId, UserInfo),
+    RemoveUser(BotUserId),
+    RemoveUserFromChannel(BotUserId, BotChannelId),
+    // AddChannel(BotChannelId, ChannelInfo),
+    RemoveChannel(BotChannelId),
+    // RemoveChannelFromUser(BotChannelId, BotUserId),
+}
+
+impl StateCommand {
+    fn on_self_part(state: &State, msg: &IrcMessage) -> Vec<StateCommand> {
+        let msg_args = msg.get_args();
+        if msg_args.len() < 1 {
+            warn!("Invalid message. PART with no arguments: {}", msg);
+            return Vec::new();
+        }
+
+        let mut commands = Vec::new();
+        let channel_name = msg.get_args()[0].to_string();
+        let chan_state = match state.channel_map.find(&channel_name) {
+            Some(chan_id) => match state.channels.find(chan_id) {
+                Some(chan_state) => chan_state,
+                None => return commands
+            },
+            None => panic!("We left {} without knowing about it.", channel_name)
+        };
+
+        commands.push(RemoveChannel(chan_state.id));
+        // Should this be here or should we just do it on the receiver?
+        // If we move this out, we should still validate that our state is
+        // consistent, to prevent crashing the receiver.
+        for &user_id in chan_state.users.iter() {
+            let user_state = match state.users.find(&user_id) {
+                Some(user_state) => user_state,
+                None => panic!("Inconsistent state."),
+            };
+            commands.push(RemoveUserFromChannel(user_id, chan_state.id));
+            if user_state.channels.len() == 0 {
+                commands.pop();
+                commands.push(RemoveUser(user_id));
+            }
+        }
+        return commands;
+    }
+
+    // Remove when we have converted all methods to command streams
+    fn from_message_shim(cur_state: &State, msg: &IrcMessage) -> Option<Vec<StateCommand>> {
+        if msg.command() == "PART" {
+            if msg.source_nick() == Some(cur_state.botnick.as_slice()) {
+                return Some(StateCommand::on_self_part(cur_state, msg));
+            }
+        }
+        None
+    }
+}
+
+pub struct StateBuilder;
 
 #[deriving(Show)]
 pub struct State {
-    botnick: String,
-
     user_seq: u64,
+    channel_seq: u64,
+
+    botnick: String,
     user_map: HashMap<String, BotUserId>,
     users: HashMap<BotUserId, InternalUser>,
-
-    channel_seq: u64,
     channel_map: HashMap<String, BotChannelId>,
     channels: HashMap<BotChannelId, InternalChannel>,
 }
@@ -82,13 +156,11 @@ pub struct State {
 impl State {
     pub fn new() -> State {
         State {
-            botnick: String::new(),
-
             user_seq: 0,
+            channel_seq: 0,
+            botnick: String::new(),
             user_map: HashMap::new(),
             users: HashMap::new(),
-
-            channel_seq: 0,
             channel_map: HashMap::new(),
             channels: HashMap::new(),
         }
@@ -96,33 +168,6 @@ impl State {
 
     pub fn get_bot_nick<'a>(&'a self) -> &'a str {
         self.botnick.as_slice()
-    }
-
-    fn on_self_part(&mut self, msg: &IrcMessage) {
-        let channel_name = msg.get_args()[0].to_string();
-        info!("on-self-part ({}); popping channel {}", self.botnick, channel_name);
-        // fn pop(&mut self, k: &K) -> Option<V>
-        let maybe_chan_state = match self.channel_map.pop(&channel_name) {
-            Some(chan_id) => self.channels.pop(&chan_id),
-            None => None
-        };
-        let state = match maybe_chan_state {
-            Some(state) => state,
-            None => {
-                warn!("We parted {} without knowing about it?", channel_name);
-                return
-            }
-        };
-        for user_id in state.users.iter() {
-            match self.users.find_mut(user_id) {
-                Some(user) => {
-                    user.channels.remove(&state.id);
-                },
-                None => {
-                    warn!("Inconsistent state {} on {}", user_id, channel_name);
-                }
-            }
-        }
     }
 
     fn on_other_part(&mut self, msg: &IrcMessage) {
@@ -215,10 +260,93 @@ impl State {
                 return;
             }
         };
-        
+    }
+
+    fn on_self_part(&mut self, msg: &IrcMessage) {
+        let channel_name = msg.get_args()[0].to_string();
+        info!("on-self-part ({}); popping channel {}", self.botnick, channel_name);
+        // fn pop(&mut self, k: &K) -> Option<V>
+        let maybe_chan_state = match self.channel_map.pop(&channel_name) {
+            Some(chan_id) => self.channels.pop(&chan_id),
+            None => None
+        };
+        let state = match maybe_chan_state {
+            Some(state) => state,
+            None => {
+                warn!("We parted {} without knowing about it?", channel_name);
+                return
+            }
+        };
+        for user_id in state.users.iter() {
+            match self.users.find_mut(user_id) {
+                Some(user) => {
+                    user.channels.remove(&state.id);
+                },
+                None => {
+                    warn!("Inconsistent state {} on {}", user_id, channel_name);
+                }
+            }
+        }
+    }
+
+    fn apply_remove_user(&mut self, id: BotUserId) {
+        info!("remove_user({})", id);
+        let user_info = match self.users.pop(&id) {
+            Some(user_info) => user_info,
+            None => panic!("cannot apply command: {} not found.", id)
+        };
+        let user_nick = user_info.get_nick().to_string();
+        match self.user_map.pop(&user_nick) {
+            Some(user_id) => assert_eq!(user_id, id),
+            None => panic!("inconsistent user_map")
+        };
+    }
+
+    fn apply_remove_user_from_chan(&mut self, uid: BotUserId, chid: BotChannelId) {
+        info!("remove_user_from_chan({}, {})", uid, chid);
+        match self.users.find_mut(&uid) {
+            Some(user_info) => user_info.channels.remove(&chid),
+            None => panic!("cannot apply command: {} not found.", uid)
+        };
+    }
+
+    fn apply_remove_channel(&mut self, id: BotChannelId) {
+        info!("remove_channel({})", id);
+        let chan_info = match self.channels.pop(&id) {
+            Some(chan_info) => chan_info,
+            None => panic!("cannot apply command: {} not found.", id)
+        };
+        match self.channel_map.pop(&chan_info.name) {
+            Some(chan_id) => assert_eq!(chan_id, id),
+            None => panic!("inconsistent channel_map")
+        };
+    }
+
+    pub fn apply_command(&mut self, cmd: &StateCommand) {
+        match *cmd {
+            // AddUser(user_id, ref user_info) => {},
+            RemoveUser(user_id) => 
+                self.apply_remove_user(user_id),
+            RemoveUserFromChannel(user_id, chan_id) =>
+                self.apply_remove_user_from_chan(user_id, chan_id),
+            // AddChannel(chan_id, ref chan_info) => {},
+            RemoveChannel(chan_id) =>
+                self.apply_remove_channel(chan_id),
+            // RemoveChannelFromUser(chan_id, user_id) => {},
+        }
     }
 
     fn on_message(&mut self, msg: &IrcMessage) {
+        match StateCommand::from_message_shim(self, msg) {
+            Some(commands) => {
+                for command in commands.iter() {
+                    self.apply_command(command);
+                }
+                return;
+            },
+            None => ()
+        }
+
         if msg.command() == "001" {
             self.botnick.clear();
             self.botnick.push_str(msg.get_args()[0]);
@@ -226,7 +354,7 @@ impl State {
         // :rustbot!rustbot@out-ab-133.wireless.telus.com PART #sample
         if msg.command() == "PART" {
             if msg.source_nick() == Some(self.botnick.as_slice()) {
-                return self.on_self_part(msg);
+                panic!();
             } else {
                 return self.on_other_part(msg);
             }
@@ -295,7 +423,6 @@ impl State {
         };
         self.users.find(&user_id)
     }
-
 
     fn on_self_join(&mut self, join_res: &JoinResult) {
         let join = match *join_res {
