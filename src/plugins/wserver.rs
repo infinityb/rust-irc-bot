@@ -95,7 +95,6 @@ impl WserverInternalState {
     fn start(&mut self, rx: Receiver<WserverCommand>) {
         for comm in rx.iter() {
             match comm {
-                Ping => (),
                 Dispatch(m) => {
                     let command_phrase = match m.command() {
                         Some(command_phrase) => command_phrase,
@@ -122,23 +121,9 @@ impl WserverPlugin {
             sender: None
         }
     }
-
-    fn is_remote_up(&mut self) -> bool {
-        let is_remote_up = match self.sender {
-            Some(ref sender) => {
-                sender.send_opt(Ping).is_ok()
-            }
-            None => false
-        };
-        if !is_remote_up && self.sender.is_some() {
-            self.sender = None;
-        }
-        is_remote_up
-    }
 }
 
 enum WserverCommand {
-    Ping,
     Dispatch(CommandMapperDispatch)
 }
 

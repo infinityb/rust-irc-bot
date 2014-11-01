@@ -129,7 +129,6 @@ impl DeerPlugin {
 
 struct DeerInternalState {
     lines_sent: u64,
-    last_request: Option<Timespec>,
     cache: HashMap<String, DeerApiResponse>,
     throttle_map: HashMap<(BotUserId, BotChannelId), Timespec>,
 }
@@ -139,7 +138,6 @@ impl DeerInternalState {
     fn new() -> DeerInternalState {
         DeerInternalState {
             lines_sent: 0,
-            last_request: None,
             cache: HashMap::new(),
             throttle_map: HashMap::new(),
         }

@@ -1,6 +1,5 @@
 use std::fmt;
 
-use std::collections::hashmap::{Occupied, Vacant};
 use std::collections::{
     HashMap,
     HashSet
@@ -17,11 +16,6 @@ use irc::{
     IrcEventJoinBundle,
     IrcEventWhoBundle,
 };
-
-pub enum XXBotUserId {
-    Known(BotUserId),
-    Anonymous
-}
 
 #[deriving(Clone, Show)]
 pub enum MessageEndpoint {
@@ -410,8 +404,6 @@ pub enum StateCommand {
 }
 
 
-pub struct StateBuilder;
-
 #[deriving(Show)]
 pub struct State {
     user_seq: u64,
@@ -581,7 +573,7 @@ impl State {
             None => None
         }
     }
-    
+
     pub fn on_event(&mut self, event: &IrcEvent) {
         let commands = StateCommandStreamBuilder::new(self).from_event(event);
         for command in commands.iter() {

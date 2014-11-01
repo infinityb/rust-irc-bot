@@ -30,19 +30,6 @@ pub use self::format::{
 
 mod format;
 
-pub struct RustBotPluginApi {
-    raw_tx: SyncSender<string::String>
-}
-
-
-/// Defines the public API the bot exposes to plugins, valid for 
-/// the lifetime of the plugin instance.
-impl RustBotPluginApi {
-    pub fn send_raw(&mut self, string: string::String) {
-        self.raw_tx.send(string);
-    }
-}
-
 
 /// Defines the API a plugin implements
 // TODO: move to `plugin' module
