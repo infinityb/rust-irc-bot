@@ -10,7 +10,7 @@ dependencies = [
 [[package]]
 name = "encoding"
 version = "0.1.0"
-source = "git+https://github.com/lifthrasiir/rust-encoding#6daaad9f4c0fcde4525821032686090d6426c462"
+source = "git+https://github.com/lifthrasiir/rust-encoding#a739425a3f3174a31fe38c158dcaf22ea1d856f4"
 
 [[package]]
 name = "http"
@@ -24,12 +24,12 @@ dependencies = [
 [[package]]
 name = "irc"
 version = "0.1.0"
-source = "git+https://github.com/infinityb/rust-irc#43981c4e7c010ede140f1b6df65dadc177e5320f"
+source = "git+https://github.com/infinityb/rust-irc#7f44929ecb1fcdcfecc85c1029a111edd45855e9"
 
 [[package]]
 name = "openssl"
 version = "0.0.0"
-source = "git+https://github.com/sfackler/rust-openssl.git#66df9154a6fcc468f91b326a3c2b8e8850d75b19"
+source = "git+https://github.com/sfackler/rust-openssl.git#1e706b8ef4d4344b5297b90bcd430cc96f40fb39"
 
 [[package]]
 name = "toml"
