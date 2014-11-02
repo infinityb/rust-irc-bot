@@ -19,6 +19,12 @@
 >> :randomuser!rustbot@coolhost PART #test
 ## should not have a user `randomuser` after PART
 >> :randomuser!rustbot@coolhost JOIN :#test
+>> :aibi!q@172.17.42.1 KICK #test randomuser :reason
+## should not have a user `randomuser` after KICK
+>> :randomuser!rustbot@coolhost JOIN :#test
+>> :randomuser!rustbot@coolhost QUIT :reason
+## should not have a user `randomuser` after KICK
+>> :randomuser!rustbot@coolhost JOIN :#test
 >> :sell!sell@173.255.238.68 TOPIC #test :setting a cool topic
 ## topic of `#test` should be `setting a cool topic`
 ## store randomuser's UserID here

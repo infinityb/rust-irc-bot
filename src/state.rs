@@ -235,6 +235,32 @@ impl<'a> StateCommandStreamBuilder<'a> {
         return commands;
     }
 
+    fn on_other_quit(&self, msg: &IrcMessage) -> Vec<StateCommand> {
+        info!("on-other-quit called.  We should clean the user up");
+        let user_nick = match msg.source_nick() {
+            Some(user_nick) => user_nick.to_string(),
+            None => {
+                warn!("Invalid message. QUIT with no prefix: {}", msg);
+                return Vec::new();
+            }
+        };
+        let user_id = match self.state.user_map.find(&user_nick) {
+            Some(user_id) => *user_id,
+            None => panic!("Got message for user {} without knowing about it.", user_nick)
+        };
+        let mut commands = Vec::new();
+        match self.state.users.find(&user_id) {
+            Some(user_state) => {
+                for &chan_id in user_state.channels.iter() {
+                    commands.push(RemoveUserFromChannel(user_id, chan_id));
+                }
+                commands.push(RemoveUser(user_id));
+            },
+            None => panic!("Inconsistent state: {}", user_id),
+        };
+        commands
+    }
+
     fn on_other_join(&mut self, join: &IrcMessage) -> Vec<StateCommand> {
         let channel = join.get_args()[0].to_string();
 
@@ -295,15 +321,19 @@ impl<'a> StateCommandStreamBuilder<'a> {
     fn on_who(&mut self, who: &WhoSuccess) -> Vec<StateCommand> {
         // If we WHO a channel that we aren't in, we aren't changing any
         // state.
+
         let channel_id = match self.state.channel_map.find(&who.channel) {
             Some(channel_id) => *channel_id,
             None => return Vec::new()
         };
 
         let mut commands = Vec::new();
+        let mut users_total = 0u;
         for rec in who.who_records.iter() {
+            users_total += 1;
             commands.extend(self.on_who_record(channel_id, rec).into_iter());
         }
+        info!("Added {} users for channel {}", users_total, who.channel);
         commands
     }
 
@@ -352,29 +382,56 @@ impl<'a> StateCommandStreamBuilder<'a> {
         commands
     }
 
+    fn on_kick(&self, msg: &IrcMessage) -> Vec<StateCommand> {
+        assert_eq!(msg.command(), "KICK");
+        assert_eq!(msg.get_args().len(), 3);
+
+        let channel_name = msg.get_args()[0].to_string();
+        let kicked_user_nick = msg.get_args()[1].to_string();
+
+        let chan_id = match self.state.channel_map.find(&channel_name) {
+            Some(chan_id) => *chan_id,
+            None => panic!("Got message for channel {} without knowing about it.", channel_name)
+        };
+        let user_id = match self.state.user_map.find(&kicked_user_nick) {
+            Some(user_id) => *user_id,
+            None => panic!("Got message for user {} without knowing about it.", channel_name)
+        };
+        let mut commands = Vec::new();
+        commands.push(RemoveUserFromChannel(user_id, chan_id));
+
+        if let Some(user_state) = self.state.users.find(&user_id) {
+            if user_state.channels.len() == 1 {
+                if user_state.channels.contains(&chan_id) {
+                    commands.push(RemoveUser(user_id));
+                } else {
+                    panic!("Inconsistent state");
+                }
+            }
+        } else {
+            panic!("Inconsistent state")
+        }
+        commands
+    }
+
     fn from_message(&mut self, msg: &IrcMessage) -> Vec<StateCommand> {
+        let is_self = msg.source_nick() == Some(self.state.self_nick.as_slice());
         if msg.command() == "001" {
             return vec![UpdateSelfNick(msg.get_args()[0].to_string())];
         }
-        if msg.command() == "PART" {
-            info!("handling PART, {} == {}", msg.source_nick(), Some(self.state.self_nick.as_slice()));
-            if msg.source_nick() == Some(self.state.self_nick.as_slice()) {
-                return self.on_self_part(msg);
-            } else {
-                return self.on_other_part(msg);
-            }
+        match (msg.command(), is_self, msg.get_prefix().is_some()) {
+            ("PART", true, _) => return self.on_self_part(msg),
+            ("PART", false, _) => return self.on_other_part(msg),
+            ("QUIT", false, _) => return self.on_other_quit(msg),
+            // is this JOIN right?
+            ("JOIN", _, true) => return self.on_other_join(msg),
+            ("TOPIC", _, true) => self.on_topic(msg),
+            ("NICK", _, true) => return self.on_nick(msg),
+            ("KICK", _, true) => return self.on_kick(msg),
+            _ => Vec::new()
         }
-        if msg.command() == "JOIN" && msg.get_prefix().is_some() {
-            return self.on_other_join(msg);
-        }
-        if msg.command() == "TOPIC" && msg.get_prefix().is_some() {
-            return self.on_topic(msg);
-        }
-        if msg.command() == "NICK" && msg.get_prefix().is_some() {
-            return self.on_nick(msg);
-        }
-        Vec::new()
     }
+
 
     fn from_event(&mut self, event: &IrcEvent) -> Vec<StateCommand> {
         match *event {
@@ -517,10 +574,10 @@ impl State {
                 return;
             }
         };
+        info!("apply_update_user :: {} ==> {}", old_nick, user_info.get_nick().to_string());
         if let Some(user_id) = self.user_map.pop(&old_nick) {
             assert_eq!(user_id, user_info.id);
             self.user_map.insert(user_info.get_nick().to_string(), user_id);
-            info!("user_map = {}", self.user_map);
         }
     }
 
@@ -579,6 +636,9 @@ impl State {
         for command in commands.iter() {
             info!("command application: {}", command);
             self.apply_command(command);
+        }
+        for (chan_id, channel_state) in self.channels.iter() {
+            info!("channel {}@{} has {} users", channel_state.name, chan_id, channel_state.users.len());
         }
     }
 }
@@ -715,6 +775,14 @@ mod tests {
         });
 
         it("should not have a user `randomuser` after PART", |state| {
+            assert!(state.identify_nick("randomuser").is_none());
+        });
+
+        it("should not have a user `randomuser` after KICK", |state| {
+            assert!(state.identify_nick("randomuser").is_none());
+        });
+
+        it("should not have a user `randomuser` after QUIT", |state| {
             assert!(state.identify_nick("randomuser").is_none());
         });
 
