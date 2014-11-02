@@ -34,6 +34,12 @@ impl BotConnection {
     pub fn new(conf: &BotConfig) -> IoResult<BotConnection> {
         let (ref host, port) = conf.server;
         let (mut conn, event_queue) = try!(IrcConnection::new(host.as_slice(), port));
+        let (event_queue_txu, event_queue_rxu) = channel();
+        spawn(proc() {
+            for event in event_queue.iter() {
+                event_queue_txu.send(event);
+            }
+        });
 
         let mut nick = conf.nickname.clone();
         loop {
@@ -100,13 +106,11 @@ impl BotConnection {
             }
         });
 
-        for event in event_queue.iter() {
+        for event in event_queue_rxu.iter() {
             state.on_event(&event);
-
             if let IrcEventMessage(ref message) = event {
-                // println!("{}", message);
                 container.dispatch(&state, &tx, message);
-            }           
+            }
         }
 
         Ok(BotConnection { foo: 0})
