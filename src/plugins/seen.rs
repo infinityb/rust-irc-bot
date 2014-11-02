@@ -48,6 +48,10 @@ impl SeenPlugin {
             map: TreeMap::new()
         }
     }
+
+    pub fn get_plugin_name() -> &'static str {
+        "seen"
+    }
 }
 
 

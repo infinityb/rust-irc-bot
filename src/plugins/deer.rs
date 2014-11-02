@@ -125,6 +125,10 @@ impl DeerPlugin {
     pub fn new() -> DeerPlugin {
         DeerPlugin { sender: None }
     }
+
+    pub fn get_plugin_name() -> &'static str {
+        "deer"
+    }
 }
 
 struct DeerInternalState {

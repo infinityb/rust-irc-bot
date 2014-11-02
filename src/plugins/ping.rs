@@ -16,6 +16,10 @@ impl PingPlugin {
     pub fn new() -> PingPlugin {
         PingPlugin
     }
+
+    pub fn get_plugin_name() -> &'static str {
+        "ping"
+    }
 }
 
 enum PingCommandType {

@@ -196,6 +196,10 @@ impl GreedPlugin {
         }
     }
 
+    pub fn get_plugin_name() -> &'static str {
+        "greed"
+    }
+    
     fn dispatch_cmd_greed(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
         let (user_id, channel_id) = match (m.source.clone(), m.target.clone()) {
             (Some(KnownUser(uid)), Some(KnownChannel(cid))) => (uid, cid),

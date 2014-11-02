@@ -15,6 +15,10 @@ impl WhoAmIPlugin {
     pub fn new() -> WhoAmIPlugin {
         WhoAmIPlugin
     }
+
+    pub fn get_plugin_name() -> &'static str {
+        "whoami"
+    }
 }
 
 enum WhoAmICommandType {

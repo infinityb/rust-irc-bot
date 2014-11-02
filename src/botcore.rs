@@ -1,5 +1,8 @@
 use std::io::IoResult;
 use std::task::TaskBuilder;
+use std::collections::HashSet;
+
+use url::{Url, RelativeScheme, SchemeType, Domain, Ipv6, NonRelativeScheme, ParseResult, UrlParser};
 
 use irc::IrcConnection;
 use irc::connection::RawWrite;
@@ -18,11 +21,45 @@ use plugins::{
     WhoAmIPlugin,
 };
 
+
+#[deriving(Decodable, Encodable, Show)]
 pub struct BotConfig {
-    pub server: (String, u16),
+    pub server: String,
     pub command_prefix: String,
     pub nickname: String,
-    pub channels: Vec<String>
+    pub channels: Vec<String>,
+    pub enabled_plugins: HashSet<String>,
+}
+
+pub fn irc_scheme_type_mapper(scheme: &str) -> SchemeType {
+    match scheme {
+        "irc" => RelativeScheme(6667),
+        "ircs" => RelativeScheme(6697),
+        _ => NonRelativeScheme,
+    }    
+}
+
+
+impl BotConfig {
+    fn get_url(&self) -> ParseResult<Url> {
+        let mut parser = UrlParser::new();
+        parser.scheme_type_mapper(irc_scheme_type_mapper);
+        parser.parse(self.server.as_slice())
+    }
+
+    fn get_host(&self) -> String {
+        let server = self.get_url().unwrap();
+        match server.host() {
+            Some(&Domain(ref string)) => string.clone(),
+            Some(&Ipv6(ref addr)) => addr.serialize(),
+            None => panic!()
+        }
+    }
+
+    fn get_port(&self) -> u16 {
+        let server = self.get_url().unwrap();
+        server.port().unwrap_or(6667)
+    }
 }
 
 pub struct BotConnection {
@@ -32,8 +69,9 @@ pub struct BotConnection {
 
 impl BotConnection {
     pub fn new(conf: &BotConfig) -> IoResult<BotConnection> {
-        let (ref host, port) = conf.server;
-        let (mut conn, event_queue) = try!(IrcConnection::new(host.as_slice(), port));
+        let (mut conn, event_queue) = try!(IrcConnection::new(
+            conf.get_host().as_slice(), conf.get_port()));
+        
         let (event_queue_txu, event_queue_rxu) = channel();
         spawn(proc() {
             for event in event_queue.iter() {
@@ -90,13 +128,27 @@ impl BotConnection {
         let mut state = State::new();
 
         let mut container = PluginContainer::new(conf.command_prefix.clone());
-        container.register(box PingPlugin::new());
-        container.register(box GreedPlugin::new());
-        container.register(box SeenPlugin::new());
-        container.register(box DeerPlugin::new());
-        container.register(box RadioPlugin::new());
-        container.register(box WserverPlugin::new());
-        container.register(box WhoAmIPlugin::new());
+        if conf.enabled_plugins.contains_equiv(PingPlugin::get_plugin_name()) {
+            container.register(box PingPlugin::new());
+        }
+        if conf.enabled_plugins.contains_equiv(GreedPlugin::get_plugin_name()) {
+            container.register(box GreedPlugin::new());
+        }
+        if conf.enabled_plugins.contains_equiv(SeenPlugin::get_plugin_name()) {
+            container.register(box SeenPlugin::new());
+        }
+        if conf.enabled_plugins.contains_equiv(DeerPlugin::get_plugin_name()) {
+            container.register(box DeerPlugin::new());
+        }
+        if conf.enabled_plugins.contains_equiv(RadioPlugin::get_plugin_name()) {
+            container.register(box RadioPlugin::new());
+        }
+        if conf.enabled_plugins.contains_equiv(WserverPlugin::get_plugin_name()) {
+            container.register(box WserverPlugin::new());
+        }
+        if conf.enabled_plugins.contains_equiv(WhoAmIPlugin::get_plugin_name()) {
+            container.register(box WhoAmIPlugin::new());
+        }
 
         let (tx, rx) = sync_channel(0);
         let cmd_queue = conn.get_command_queue();

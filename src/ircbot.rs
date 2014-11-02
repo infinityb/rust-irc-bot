@@ -24,15 +24,7 @@ mod plugins;
 mod command_mapper;
 
 
-#[deriving(Decodable, Encodable, Show)]
-struct AppConfig {
-    server_host: String,
-    server_port: u16,
-    nickname: String,
-    channels: Vec<String>
-}
-
-fn parse_appconfig() -> Option<AppConfig> {
+fn parse_appconfig() -> Option<BotConfig> {
     let filename = Path::new(match args_as_bytes().as_slice() {
         [] => panic!("impossible"),
         [_] => return None,
@@ -58,7 +50,7 @@ fn parse_appconfig() -> Option<AppConfig> {
         }
         None => panic!("failed to parse in some way.")
     };
-    toml::decode::<AppConfig>(table)
+    toml::decode::<BotConfig>(table)
 }
 
 
@@ -67,17 +59,8 @@ fn main() {
         Some(config) => config,
         None => panic!("bad config")
     };
-    let botconfig = BotConfig {
-        server: (
-            appconfig.server_host.clone(),
-            appconfig.server_port
-        ),
-        command_prefix: "!".to_string(),
-        nickname: appconfig.nickname.clone(),
-        channels: appconfig.channels.clone()
-    };
 
-    let conn = BotConnection::new(&botconfig);
+    let conn = BotConnection::new(&appconfig);
     let conn = match conn {
         Ok(stream) => stream,
         Err(err) => panic!("{}", err)

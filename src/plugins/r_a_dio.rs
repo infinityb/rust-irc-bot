@@ -50,6 +50,7 @@ enum RadioApiFailure {
 
 
 fn get_radio_api_result() -> Result<RadioApiResponse, RadioApiFailure> {
+    info!("Making r/a/dio API request");
     let url = Url::parse(API_URL).ok().expect("Invalid URL :-(");
     let request: RequestWriter = RequestWriter::new(Get, url).unwrap();
 
@@ -65,7 +66,7 @@ fn get_radio_api_result() -> Result<RadioApiResponse, RadioApiFailure> {
         Ok(body) => body,
         Err(_err) => return Err(ResponseDecodeError)
     };
-
+    info!("r/a/dio result: ``{}''", body.as_slice());
     match json::decode::<RadioApiResponse>(body.as_slice()) {
         Ok(result) => Ok(result),
         Err(error) => Err(ResponseDeserializeError(error))
@@ -232,6 +233,10 @@ impl RadioPlugin {
         RadioPlugin {
             sender: None
         }
+    }
+
+    pub fn get_plugin_name() -> &'static str {
+        "r/a/dio"
     }
 }
 

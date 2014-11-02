@@ -121,6 +121,10 @@ impl WserverPlugin {
             sender: None
         }
     }
+
+    pub fn get_plugin_name() -> &'static str {
+        "wserver"
+    }
 }
 
 enum WserverCommand {
