@@ -1,5 +1,5 @@
 use std::fmt;
-
+use std::ascii::AsciiExt;
 use std::collections::{
     HashMap,
     HashSet
@@ -166,7 +166,7 @@ impl<'a> StateCommandStreamBuilder<'a> {
             warn!("Invalid message. PART with no arguments: {}", msg);
             return Vec::new();
         }
-        let channel_name = msg_args[0].to_string();
+        let channel_name = msg_args[0].to_ascii_lower();
         let user_nick = match msg.source_nick() {
             Some(user_nick) => user_nick.to_string(),
             None => {
@@ -208,7 +208,7 @@ impl<'a> StateCommandStreamBuilder<'a> {
         }
 
         let mut commands = Vec::new();
-        let channel_name = msg_args[0].to_string();
+        let channel_name = msg_args[0].to_ascii_lower();
         let chan_state = match self.state.channel_map.find(&channel_name) {
             Some(chan_id) => match self.state.channels.find(chan_id) {
                 Some(chan_state) => chan_state,
@@ -262,7 +262,7 @@ impl<'a> StateCommandStreamBuilder<'a> {
     }
 
     fn on_other_join(&mut self, join: &IrcMessage) -> Vec<StateCommand> {
-        let channel = join.get_args()[0].to_string();
+        let channel = join.get_args()[0].to_ascii_lower();
 
         let chan_id = match self.state.channel_map.find(&channel) {
             Some(channel_id) => *channel_id,
@@ -288,7 +288,8 @@ impl<'a> StateCommandStreamBuilder<'a> {
     }
 
     fn on_self_join(&mut self, join: &JoinSuccess) -> Vec<StateCommand> {
-        if let Some(_) = self.state.channel_map.find(&join.channel) {
+        let channel_name = join.channel.as_slice().to_ascii_lower();
+        if let Some(_) = self.state.channel_map.find(&channel_name) {
             warn!("Joining already joined channel {}; skipped", join.channel);
             return Vec::new();
         }
@@ -321,8 +322,8 @@ impl<'a> StateCommandStreamBuilder<'a> {
     fn on_who(&mut self, who: &WhoSuccess) -> Vec<StateCommand> {
         // If we WHO a channel that we aren't in, we aren't changing any
         // state.
-
-        let channel_id = match self.state.channel_map.find(&who.channel) {
+        let channel_name = who.channel.as_slice().to_ascii_lower();
+        let channel_id = match self.state.channel_map.find(&channel_name) {
             Some(channel_id) => *channel_id,
             None => return Vec::new()
         };
@@ -340,7 +341,7 @@ impl<'a> StateCommandStreamBuilder<'a> {
     fn on_topic(&self, msg: &IrcMessage) -> Vec<StateCommand> {
         assert_eq!(msg.command(), "TOPIC");
         assert_eq!(msg.get_args().len(), 2);
-        let channel = msg.get_args()[0].to_string();
+        let channel = msg.get_args()[0].to_ascii_lower();
         let new_topic = msg.get_args()[1].to_string();
 
         let chan_id = match self.state.channel_map.find(&channel) {
@@ -386,7 +387,7 @@ impl<'a> StateCommandStreamBuilder<'a> {
         assert_eq!(msg.command(), "KICK");
         assert_eq!(msg.get_args().len(), 3);
 
-        let channel_name = msg.get_args()[0].to_string();
+        let channel_name = msg.get_args()[0].to_ascii_lower();
         let kicked_user_nick = msg.get_args()[1].to_string();
 
         let chan_id = match self.state.channel_map.find(&channel_name) {
@@ -463,6 +464,8 @@ pub enum StateCommand {
 
 #[deriving(Show)]
 pub struct State {
+    // Can this be made diffable by using sorted `users`, `channels`,
+    // `users[].channels` and `channels[].users`?  TreeSet.
     user_seq: u64,
     channel_seq: u64,
 
@@ -537,7 +540,8 @@ impl State {
             Some(chan_info) => chan_info,
             None => panic!("cannot apply command: {} not found.", id)
         };
-        match self.channel_map.pop(&chan_info.name) {
+        let channel_name = chan_info.name.as_slice().to_ascii_lower();
+        match self.channel_map.pop(&channel_name) {
             Some(chan_id) => assert_eq!(chan_id, id),
             None => panic!("inconsistent channel_map")
         };
@@ -546,7 +550,8 @@ impl State {
     fn apply_add_channel(&mut self, chan_info: &ChannelInfo) {
         assert_eq!(chan_info.id, BotChannelId(self.channel_seq));
         self.channels.insert(chan_info.id, InternalChannel::from_info(chan_info));
-        self.channel_map.insert(chan_info.name.clone(), chan_info.id);
+        let channel_name = chan_info.name.as_slice().to_ascii_lower();
+        self.channel_map.insert(channel_name, chan_info.id);
     }
 
     fn apply_update_channel(&mut self, chan_info: &ChannelInfo) {
@@ -618,7 +623,8 @@ impl State {
     }
 
     pub fn identify_channel(&self, chan: &str) -> Option<BotChannelId> {
-        match self.channel_map.find(&chan.to_string()) {
+        let channel_name = chan.to_ascii_lower();
+        match self.channel_map.find(&channel_name) {
             Some(chan_id) => Some(chan_id.clone()),
             None => None
         }
