@@ -24,7 +24,7 @@ dependencies = [
 [[package]]
 name = "irc"
 version = "0.1.0"
-source = "git+https://github.com/infinityb/rust-irc#2e0bae387fe7bfe6711ae6eb3a2a99f3556facb3"
+source = "git+https://github.com/infinityb/rust-irc#c717a65039eb09120ee7a62b27ff7f3046a6f165"
 
 [[package]]
 name = "openssl"
@@ -34,7 +34,7 @@ source = "git+https://github.com/sfackler/rust-openssl.git#1e706b8ef4d4344b5297b
 [[package]]
 name = "toml"
 version = "0.1.0"
-source = "git+https://github.com/alexcrichton/toml-rs#71d1689d63ef1af41addef330e314a56e88f48a9"
+source = "git+https://github.com/alexcrichton/toml-rs#902b3c6f8f6a5b23f7f6824a12d951527cb11d86"
 
 [[package]]
 name = "url"
