@@ -1,6 +1,6 @@
 use std::task::TaskBuilder;
 use std::io::IoError;
-use std::collections::hashmap::HashSet;
+use std::collections::HashSet;
 use std::default::Default;
 use std::time::Duration;
 

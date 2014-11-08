@@ -43,7 +43,7 @@ fn parse_appconfig() -> Option<BotConfig> {
     let table = match parser.parse() {
         Some(table) => {
             let core_key = String::from_str("core");
-            match table.find(&core_key) {
+            match table.get(&core_key) {
                 Some(value) => value.clone(),
                 None => panic!("failed to parse in some way.")
             }

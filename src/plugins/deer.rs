@@ -99,7 +99,7 @@ fn get_deer_nocache(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> 
 fn get_deer(state: &mut DeerInternalState, deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> {
     let deer_name_alloc = String::from_str(deer_name);
 
-    match state.cache.find(&deer_name_alloc) {
+    match state.cache.get(&deer_name_alloc) {
         Some(result) => return Ok(result.clone()),
         None => ()
     }
@@ -148,7 +148,7 @@ impl DeerInternalState {
     }
 
     fn throttle_ok(&mut self, uid: BotUserId, cid: BotChannelId) -> bool {
-        match self.throttle_map.find(&(uid, cid)) {
+        match self.throttle_map.get(&(uid, cid)) {
             Some(entry) => 60 < (get_time() - *entry).num_seconds(),
             None => true
         }
@@ -219,7 +219,7 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<DeerCommandType> {
         None => return None
     };
     match command_phrase.command[] {
-        "deer" => Some(Deer(match command_phrase.args.find(&"deername".to_string()) {
+        "deer" => Some(Deer(match command_phrase.args.get(&"deername".to_string()) {
             Some(&StringValue(ref rest)) => {
                 if rest.as_slice() == "" {
                     None

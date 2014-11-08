@@ -77,7 +77,7 @@ impl WserverInternalState {
             Some(ref command) => command,
             None => return
         };
-        let host = match command.args.find(&"host".to_string()) {
+        let host = match command.args.get(&"host".to_string()) {
             Some(&StringValue(ref host)) => host,
             Some(_) => return,
             None => return

@@ -70,8 +70,8 @@ pub struct BotConnection {
 impl BotConnection {
     pub fn new(conf: &BotConfig) -> IoResult<BotConnection> {
         let (mut conn, event_queue) = try!(IrcConnection::new(
-            conf.get_host().as_slice(), conf.get_port()));
-        
+            (conf.get_host().as_slice(), conf.get_port())));
+
         let (event_queue_txu, event_queue_rxu) = channel();
         spawn(proc() {
             for event in event_queue.iter() {

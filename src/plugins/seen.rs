@@ -159,7 +159,7 @@ impl RustBotPlugin for SeenPlugin {
             Some(source_nick) => source_nick,
             None => return
         };
-        match self.map.pop(&source_nick.to_string()) {
+        match self.map.remove(&source_nick.to_string()) {
             Some(mut records) => {
                 records.push(SeenRecord::with_now(message.clone()));
                 self.map.insert(source_nick.to_string(), trim_vec(records));
@@ -190,7 +190,7 @@ impl RustBotPlugin for SeenPlugin {
             None => return
         };
         let parsed_command = match command_phrase.command[] {
-            "seen" => Some(Seen(match command_phrase.args.find(&"nick".to_string()) {
+            "seen" => Some(Seen(match command_phrase.args.get(&"nick".to_string()) {
                 Some(&StringValue(ref rest)) => rest.clone(),
                 Some(_) => return,
                 None => return
@@ -209,7 +209,7 @@ impl RustBotPlugin for SeenPlugin {
                     m.reply(format!("You found me, {}!", source_nick));
                     return;
                 }
-                let activity = match self.map.find(&target_nick) {
+                let activity = match self.map.get(&target_nick) {
                     Some(val) => val,
                     None => {
                         m.reply(format!("{} is unknown", target_nick));

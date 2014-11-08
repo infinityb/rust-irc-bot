@@ -1,5 +1,5 @@
-use std::collections::hashmap::{
-    HashMap,
+use std::collections::HashMap;
+use std::collections::hash_map::{
     Vacant,
     Occupied,
 };
