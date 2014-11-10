@@ -167,16 +167,19 @@ impl<'a> StateCommandStreamBuilder<'a> {
             return Vec::new();
         }
         let channel_name = msg_args[0].to_ascii_lower();
+        let chan_info = self.state.find_channel_by_name(channel_name.as_slice());
+
+        let (chan_id, chan_state) = match chan_info {
+            Some(pair) => pair,
+            None => panic!("Got message for channel {} without knowing about it.", channel_name)
+        };
+
         let user_nick = match msg.source_nick() {
             Some(user_nick) => user_nick.to_string(),
             None => {
                 warn!("Invalid message. PART with no prefix: {}", msg);
                 return Vec::new();
             }
-        };
-        let chan_id = match self.state.channel_map.get(&channel_name) {
-            Some(chan_id) => *chan_id,
-            None => panic!("Got message for channel {} without knowing about it.", channel_name)
         };
         let user_id = match self.state.user_map.get(&user_nick) {
             Some(user_id) => *user_id,
@@ -320,10 +323,11 @@ impl<'a> StateCommandStreamBuilder<'a> {
     }
 
     fn validate_state_with_who(self, who: &WhoSuccess) {
-        let channel_name = who.channel.as_slice().to_ascii_lower();
+        let chan_name = who.channel.as_slice().to_ascii_lower();
 
-        let channel = match self.state.find_channel_by_name(channel_name.as_slice()) {
-            Some(channel) => channel,
+        let chan_pair = self.state.find_channel_by_name(chan_name.as_slice());
+        let (chan_id, channel) = match chan_pair {
+            Some(chan_pair) => chan_pair,
             None => return
         };
 
@@ -364,15 +368,11 @@ impl<'a> StateCommandStreamBuilder<'a> {
     fn on_who(&mut self, who: &WhoSuccess) -> Vec<StateCommand> {
         // If we WHO a channel that we aren't in, we aren't changing any
         // state.
-        let channel_name = who.channel.as_slice().to_ascii_lower();
-        let channel_id = match self.state.channel_map.get(&channel_name) {
-            Some(channel_id) => *channel_id,
+        let chan_name = who.channel.to_ascii_lower();
+        let chan_pair = self.state.find_channel_by_name(chan_name.as_slice());
+        let (chan_id, known_state) = match chan_pair {
+            Some((chan_id, channel)) => (chan_id, channel.users.len() > 0),
             None => return Vec::new()
-        };
-
-        let known_state = match self.state.channels.get(&channel_id) {
-            Some(ref channel) => channel.users.len() > 0,
-            None => panic!("Inconsistent state"),
         };
 
         if known_state {
@@ -383,7 +383,7 @@ impl<'a> StateCommandStreamBuilder<'a> {
             let mut users_total = 0u;
             for rec in who.who_records.iter() {
                 users_total += 1;
-                commands.extend(self.on_who_record(channel_id, rec).into_iter());
+                commands.extend(self.on_who_record(chan_id, rec).into_iter());
             }
             info!("Added {} users for channel {}", users_total, who.channel);
             commands
@@ -676,13 +676,13 @@ impl State {
         }
     }
 
-    fn find_channel_by_name(&self, name: &str) -> Option<&InternalChannel> {
+    fn find_channel_by_name(&self, name: &str) -> Option<(BotChannelId, &InternalChannel)> {
         let chan_id = match self.channel_map.get(&name.to_string()) {
             Some(chan_id) => *chan_id,
             None => return None
         };
         match self.channels.get(&chan_id) {
-            Some(channel) => Some(channel),
+            Some(channel) => Some((chan_id, channel)),
             None => panic!("Inconsistent state")
         }
     }
@@ -709,7 +709,9 @@ impl State {
             self.apply_command(command);
         }
         for (chan_id, channel_state) in self.channels.iter() {
-            info!("channel {}@{} has {} users", channel_state.name, chan_id, channel_state.users.len());
+            info!("channel {}@{} has {} users",
+                channel_state.name, chan_id,
+                channel_state.users.len());
         }
     }
 }
