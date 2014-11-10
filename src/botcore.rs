@@ -1,6 +1,8 @@
 use std::io::IoResult;
 use std::task::TaskBuilder;
 use std::collections::HashSet;
+use std::io::timer::sleep;
+use std::time::duration::Duration;
 
 use url::{
     Url, RelativeScheme, SchemeType,
@@ -8,6 +10,7 @@ use url::{
     ParseResult, UrlParser
 };
 
+use irc::IrcMessage;
 use irc::{IrcConnection, IrcEventMessage};
 use irc::connection::RawWrite;
 
@@ -69,6 +72,19 @@ pub struct BotConnection {
     foo: uint
     //
 }
+
+fn cool_trigger(message: &IrcMessage) -> Option<&str> {
+    let prefix = "REWHO ";
+    if !(message.is_privmsg() && message.get_args().len() == 2) {
+        return None;
+    }   
+    let message_text = message.get_args()[1];
+    if !(message_text.starts_with(prefix)) {
+        return None;
+    }   
+    Some(message_text[prefix.len()..])
+}
+
 
 impl BotConnection {
     pub fn new(conf: &BotConfig) -> IoResult<BotConnection> {
@@ -166,6 +182,13 @@ impl BotConnection {
             state.on_event(&event);
             if let IrcEventMessage(ref message) = event {
                 container.dispatch(&state, &tx, message);
+                match cool_trigger(message) {
+                    Some(channel_name) => {
+                        info!("running who");
+                        info!("who returned: {}", conn.who(channel_name));
+                    },  
+                    None => ()
+                }
             }
         }
 
