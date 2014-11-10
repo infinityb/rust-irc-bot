@@ -1,7 +1,9 @@
 use std::collections::TreeMap;
 use std::time::Duration;
+
 use time::{get_time, Timespec};
 
+use irc::IrcMessage;
 
 use command_mapper::{
     RustBotPlugin,
@@ -9,9 +11,6 @@ use command_mapper::{
     IrcBotConfigurator,
     Format,
     StringValue
-};
-use irc::message::{
-    IrcMessage
 };
 
 

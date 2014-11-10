@@ -5,6 +5,7 @@ use url::{Url, ParseError};
 use http::client::RequestWriter;
 use http::method::Head;
 
+use irc::IrcMessage;
 
 use command_mapper::{
     RustBotPlugin,
@@ -12,9 +13,6 @@ use command_mapper::{
     IrcBotConfigurator,
     Format,
     StringValue,
-};
-use irc::message::{
-    IrcMessage
 };
 
 

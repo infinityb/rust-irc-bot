@@ -120,8 +120,8 @@ fn get_token<'a>(input: &'a str) -> (&'a str, &'a str) {
 }
 
 impl Format {
-    // If true, this Format may (or may not) match the given input.
-    // If false, this Format definitely does not match the given input.
+    /// If true, this Format may (or may not) match the given input.
+    /// If false, this Format definitely does not match the given input.
     pub fn matches_maybe(&self, input: &str) -> bool {
         let (command, _) = get_token(input);
         command == self.get_command()

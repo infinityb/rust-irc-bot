@@ -11,15 +11,13 @@ use http::client::RequestWriter;
 use http::method::Get;
 use time::{get_time, Timespec};
 
+use irc::IrcMessage;
 
 use command_mapper::{
     RustBotPlugin,
     CommandMapperDispatch,
     IrcBotConfigurator,
     Format,
-};
-use irc::message::{
-    IrcMessage
 };
 
 

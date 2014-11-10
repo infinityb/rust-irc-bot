@@ -1,8 +1,7 @@
 use std::string;
 
-use irc::message::{
-    IrcMessage
-};
+use irc::IrcMessage;
+
 use state::{
     State,
     MessageEndpoint,

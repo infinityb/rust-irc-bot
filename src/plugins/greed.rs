@@ -8,6 +8,8 @@ use std::cmp::{Less, Equal, Greater};
 use std::fmt::{Formatter, FormatError, Show};
 use std::rand::{task_rng, Rng, Rand};
 
+use irc::IrcMessage;
+
 use command_mapper::{
     RustBotPlugin,
     CommandMapperDispatch,
@@ -19,9 +21,6 @@ use state::{
     BotUserId,
     KnownChannel,
     KnownUser,
-};
-use irc::message::{
-    IrcMessage
 };
 
 

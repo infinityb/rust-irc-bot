@@ -1,4 +1,5 @@
-#![allow(dead_code)]
+#![deny(unused_must_use)]
+
 #![feature(if_let, slicing_syntax, phase)]
 
 #[phase(plugin, link)] extern crate log;

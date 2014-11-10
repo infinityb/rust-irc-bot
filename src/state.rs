@@ -7,7 +7,7 @@ use std::collections::{
 
 use irc::{
     IrcMessage,
-    IrcPrefix,
+    IrcMsgPrefix,
     JoinSuccess,
     WhoRecord,
     WhoSuccess,
@@ -31,7 +31,7 @@ pub struct BotUserId(u64);
 
 struct InternalUser {
     id: BotUserId,
-    prefix: String,
+    prefix: IrcMsgPrefix<'static>,
     channels: HashSet<BotChannelId>
 }
 
@@ -53,8 +53,7 @@ impl InternalUser {
     }
 
     fn set_nick(&mut self, nick: &str) {
-        let old_prefix = IrcPrefix::new(self.prefix.as_slice());
-        self.prefix = old_prefix.with_nick(nick).to_string();
+        self.prefix = self.prefix.with_nick(nick).expect("Need nicked prefix");
     }
 }
 
@@ -96,21 +95,22 @@ impl fmt::Show for InternalChannel {
 #[deriving(Show)]
 struct UserInfo {
     id: BotUserId,
-    prefix: String
+    prefix: IrcMsgPrefix<'static>
 }
 
 impl UserInfo {
     fn from_who(id: BotUserId, who: &WhoRecord) -> UserInfo {
         UserInfo {
             id: id,
-            prefix: who.get_prefix()
+            prefix: who.get_prefix().into_owned(),
         }
     }
 
     fn from_join(id: BotUserId, join: &IrcMessage) -> UserInfo {
+        let prefix = join.get_prefix().expect("must be prefixed");
         UserInfo {
             id: id,
-            prefix: join.get_prefix_raw().unwrap().to_string()
+            prefix: prefix.into_owned()
         }
     }
 
@@ -319,6 +319,48 @@ impl<'a> StateCommandStreamBuilder<'a> {
         commands
     }
 
+    fn validate_state_with_who(self, who: &WhoSuccess) {
+        let channel_name = who.channel.as_slice().to_ascii_lower();
+
+        let channel = match self.state.find_channel_by_name(channel_name.as_slice()) {
+            Some(channel) => channel,
+            None => return
+        };
+
+        info!("Validating channel state");
+        let mut known_users = HashSet::new();
+        for user in channel.users.iter() {
+            match self.state.users.get(user) {
+                Some(user) => {
+                    known_users.insert(user.get_nick().to_string());
+                },
+                None => panic!("Inconsistent state"),
+            }
+        }
+        
+        let mut valid_users = HashSet::new();
+        for rec in who.who_records.iter() {
+            valid_users.insert(rec.nick.clone());
+        }
+        
+        let mut is_valid = true;
+        for valid_unknowns in valid_users.difference(&known_users) {
+            warn!("Valid but unknown nick: {}", valid_unknowns);
+            is_valid = false;
+        }
+
+        for invalid_knowns in known_users.difference(&valid_users) {
+            warn!("Known but invalid nick: {}", invalid_knowns);
+            is_valid = false;
+        }
+
+        if is_valid {
+            info!("Channel state has been validated: sychronized");
+        } else {
+            warn!("Channel state has been validated: desynchronized!");
+        }
+    }
+
     fn on_who(&mut self, who: &WhoSuccess) -> Vec<StateCommand> {
         // If we WHO a channel that we aren't in, we aren't changing any
         // state.
@@ -328,14 +370,24 @@ impl<'a> StateCommandStreamBuilder<'a> {
             None => return Vec::new()
         };
 
-        let mut commands = Vec::new();
-        let mut users_total = 0u;
-        for rec in who.who_records.iter() {
-            users_total += 1;
-            commands.extend(self.on_who_record(channel_id, rec).into_iter());
+        let known_state = match self.state.channels.get(&channel_id) {
+            Some(ref channel) => channel.users.len() > 0,
+            None => panic!("Inconsistent state"),
+        };
+
+        if known_state {
+            self.validate_state_with_who(who);
+            Vec::new()
+        } else {
+            let mut commands = Vec::new();
+            let mut users_total = 0u;
+            for rec in who.who_records.iter() {
+                users_total += 1;
+                commands.extend(self.on_who_record(channel_id, rec).into_iter());
+            }
+            info!("Added {} users for channel {}", users_total, who.channel);
+            commands
         }
-        info!("Added {} users for channel {}", users_total, who.channel);
-        commands
     }
 
     fn on_topic(&self, msg: &IrcMessage) -> Vec<StateCommand> {
@@ -376,9 +428,11 @@ impl<'a> StateCommandStreamBuilder<'a> {
             None => return Vec::new()
         };
         let mut commands = Vec::new();
+        
+        let prefix = prefix.with_nick(new_nick[]).expect("must be nicked prefix");
         commands.push(UpdateUser(UserInfo {
             id: user_id,
-            prefix: prefix.with_nick(new_nick[]).to_string()
+            prefix: prefix,
         }));
         commands
     }
@@ -619,6 +673,17 @@ impl State {
                 self.apply_remove_channel(chan_id),
             IncrementUserId => self.user_seq += 1,
             IncrementChannelId => self.channel_seq += 1,
+        }
+    }
+
+    fn find_channel_by_name(&self, name: &str) -> Option<&InternalChannel> {
+        let chan_id = match self.channel_map.get(&name.to_string()) {
+            Some(chan_id) => *chan_id,
+            None => return None
+        };
+        match self.channels.get(&chan_id) {
+            Some(channel) => Some(channel),
+            None => panic!("Inconsistent state")
         }
     }
 

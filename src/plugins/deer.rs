@@ -5,12 +5,12 @@ use std::collections::HashMap;
 use serialize::json;
 use serialize::json::DecoderError;
 use time::{get_time, Timespec};
-
 use url::Url;
 use url::form_urlencoded::serialize_owned;
-
 use http::client::RequestWriter;
 use http::method::Get;
+
+use irc::IrcMessage;
 
 use state::{
     KnownUser,
@@ -24,9 +24,6 @@ use command_mapper::{
     IrcBotConfigurator,
     Format,
     StringValue
-};
-use irc::message::{
-    IrcMessage
 };
 
 

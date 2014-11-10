@@ -2,11 +2,14 @@ use std::io::IoResult;
 use std::task::TaskBuilder;
 use std::collections::HashSet;
 
-use url::{Url, RelativeScheme, SchemeType, Domain, Ipv6, NonRelativeScheme, ParseResult, UrlParser};
+use url::{
+    Url, RelativeScheme, SchemeType,
+    Domain, Ipv6, NonRelativeScheme,
+    ParseResult, UrlParser
+};
 
-use irc::IrcConnection;
+use irc::{IrcConnection, IrcEventMessage};
 use irc::connection::RawWrite;
-use irc::event::IrcEventMessage;
 
 use command_mapper::PluginContainer;
 
@@ -152,6 +155,7 @@ impl BotConnection {
 
         let (tx, rx) = sync_channel(0);
         let cmd_queue = conn.get_command_queue();
+
         TaskBuilder::new().named("bot-sender").spawn(proc() {
             for message in rx.iter() {
                 cmd_queue.send(RawWrite(message));

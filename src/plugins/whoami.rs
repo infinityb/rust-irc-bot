@@ -1,12 +1,12 @@
+use irc::IrcMessage;
+
 use command_mapper::{
     RustBotPlugin,
     CommandMapperDispatch,
     IrcBotConfigurator,
     Format,
 };
-use irc::message::{
-    IrcMessage
-};
+
 
 pub struct WhoAmIPlugin;
 
