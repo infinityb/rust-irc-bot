@@ -1,4 +1,5 @@
 use std::string;
+use std::sync::Arc;
 
 use irc::IrcMessage;
 
@@ -63,6 +64,7 @@ impl IrcBotConfigurator {
 /// the plugins dispatch_cmd method is called
 #[deriving(Clone)]
 pub struct CommandMapperDispatch {
+    state: Arc<State>,
     bot_nick: string::String,
     pub command: Option<CommandPhrase>,
     sender:  SyncSender<string::String>,
@@ -73,6 +75,10 @@ pub struct CommandMapperDispatch {
 
 
 impl CommandMapperDispatch {
+    pub fn get_state(&self) -> Arc<State> {
+        self.state.clone()
+    }
+
     /// The current nickname held by the IRC client
     pub fn current_nick(&self) -> &str {
         self.bot_nick.as_slice()
@@ -127,6 +133,8 @@ impl PluginContainer {
     /// Dispatches messages to plugins, if they have expressed interest in the message.
     /// Interest is expressed via calling map during the configuration phase.
     pub fn dispatch(&mut self, bot_state: &State, raw_tx: &SyncSender<string::String>, message: &IrcMessage) {
+        let state = Arc::new(bot_state.clone());
+
         let channel = match message.channel() {
             Some(channel) => Some(string::String::from_str(channel)),
             None => None
@@ -136,7 +144,7 @@ impl PluginContainer {
         let mut target: Option<MessageEndpoint> = None;
 
         if let Some(source_nick) = message.source_nick() {
-            source = match bot_state.identify_nick(source_nick) {
+            source = match state.identify_nick(source_nick) {
                 Some(bot_user) => Some(KnownUser(bot_user)),
                 None => Some(AnonymousUser)
             };
@@ -144,7 +152,7 @@ impl PluginContainer {
 
         // We don't really support incoming PMs atm...
         if let Some(ref target_chan) = channel {
-            target = match bot_state.identify_channel(target_chan.as_slice()) {
+            target = match state.identify_channel(target_chan.as_slice()) {
                 Some(channel_id) => Some(KnownChannel(channel_id)),
                 None => {
                     warn!("message from unknown channel {}", target_chan);
@@ -154,6 +162,7 @@ impl PluginContainer {
         }
 
         let mut dispatch = CommandMapperDispatch {
+            state: state,
             command: None,
             bot_nick: bot_state.get_self_nick().to_string(),
             sender: raw_tx.clone(),

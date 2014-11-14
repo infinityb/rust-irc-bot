@@ -76,29 +76,30 @@ fn check_patch<DT: fmt::Show, T: fmt::Show+Diff<DT>+Patch<DT>+Eq>(left: &T, righ
 }
 
 #[deriving(Clone, PartialEq, Eq, Show)]
-struct InternalUser {
+struct User {
     id: UserId,
     prefix: IrcMsgPrefix<'static>,
     channels: HashSet<ChannelId>
 }
 
-impl InternalUser {
-    fn from_who(id: UserId, who: &WhoRecord) -> InternalUser {
-        InternalUser {
+impl User {
+    fn from_who(id: UserId, who: &WhoRecord) -> User {
+        User {
             id: id,
             prefix: who.get_prefix().into_owned(),
             channels: Default::default(),
         }
     }
-    fn from_info(user_info: &UserInfo) -> InternalUser {
-        InternalUser {
+
+    fn from_info(user_info: &UserInfo) -> User {
+        User {
             id: user_info.id,
             prefix: user_info.prefix.clone(),
             channels: Default::default(),
         }
     }
 
-    fn get_nick(&self) -> &str {
+    pub fn get_nick(&self) -> &str {
         let prefix = self.prefix.as_slice();
         match prefix.find('!') {
             Some(idx) => prefix[0..idx],
@@ -111,8 +112,8 @@ impl InternalUser {
     }
 }
 
-impl Diff<Vec<UserDiffCommand>> for InternalUser {
-    fn diff(&self, other: &InternalUser) -> Vec<UserDiffCommand> {
+impl Diff<Vec<UserDiffCommand>> for User {
+    fn diff(&self, other: &User) -> Vec<UserDiffCommand> {
         let mut cmds = Vec::new();
         if self.prefix != other.prefix {
             cmds.push(user_diff::ChangePrefix(other.prefix.as_slice().to_string()));
@@ -127,8 +128,8 @@ impl Diff<Vec<UserDiffCommand>> for InternalUser {
     }
 }
 
-impl Patch<Vec<UserDiffCommand>> for InternalUser {
-    fn patch(&self, diff: &Vec<UserDiffCommand>) -> InternalUser {
+impl Patch<Vec<UserDiffCommand>> for User {
+    fn patch(&self, diff: &Vec<UserDiffCommand>) -> User {
         let mut other = self.clone();
         for cmd in diff.iter() {
             match *cmd {
@@ -152,16 +153,16 @@ pub struct ChannelId(u64);
 
 
 #[deriving(Clone, PartialEq, Eq, Show)]
-struct InternalChannel {
+struct Channel {
     id: ChannelId,
     name: String,
     topic: String,
     users: HashSet<UserId>
 }
 
-impl InternalChannel {
-    fn from_info(chan_info: &ChannelInfo) -> InternalChannel {
-        InternalChannel {
+impl Channel {
+    fn from_info(chan_info: &ChannelInfo) -> Channel {
+        Channel {
             id: chan_info.id,
             name: chan_info.name.clone(),
             topic: chan_info.topic.clone(),
@@ -175,8 +176,8 @@ impl InternalChannel {
     }
 }
 
-impl Diff<Vec<ChannelDiffCommand>> for InternalChannel {
-    fn diff(&self, other: &InternalChannel) -> Vec<ChannelDiffCommand> {
+impl Diff<Vec<ChannelDiffCommand>> for Channel {
+    fn diff(&self, other: &Channel) -> Vec<ChannelDiffCommand> {
         let mut cmds = Vec::new();
         if self.topic != other.topic {
             cmds.push(channel_diff::ChangeTopic(other.topic.clone()));
@@ -192,8 +193,8 @@ impl Diff<Vec<ChannelDiffCommand>> for InternalChannel {
     }
 }
 
-impl Patch<Vec<ChannelDiffCommand>> for InternalChannel {
-    fn patch(&self, diff: &Vec<ChannelDiffCommand>) -> InternalChannel {
+impl Patch<Vec<ChannelDiffCommand>> for Channel {
+    fn patch(&self, diff: &Vec<ChannelDiffCommand>) -> Channel {
         let mut other = self.clone();
         for cmd in diff.iter() {
             match *cmd {
@@ -219,7 +220,7 @@ struct UserInfo {
 }
 
 impl UserInfo {
-    fn from_internal(user: &InternalUser) -> UserInfo {
+    fn from_internal(user: &User) -> UserInfo {
         UserInfo {
             id: user.id,
             prefix: user.prefix.into_owned(),
@@ -250,7 +251,7 @@ struct ChannelInfo {
 }
 
 impl ChannelInfo {
-    fn from_internal(chan: &InternalChannel) -> ChannelInfo {
+    fn from_internal(chan: &Channel) -> ChannelInfo {
         ChannelInfo {
             id: chan.id,
             name: chan.name.clone(),
@@ -329,10 +330,10 @@ pub struct State {
     self_id: UserId,
 
     user_map: HashMap<String, UserId>,
-    users: HashMap<UserId, InternalUser>,
+    users: HashMap<UserId, User>,
 
     channel_map: HashMap<String, ChannelId>,
-    channels: HashMap<ChannelId, InternalChannel>,
+    channels: HashMap<ChannelId, Channel>,
 
     generation: u64,
 }
@@ -428,7 +429,7 @@ impl State {
             }
         };
         if is_create {
-            let user = InternalUser {
+            let user = User {
                 id: user_id,
                 prefix: join.get_prefix().expect("user lacking prefix").into_owned(),
                 channels: HashSet::new(),
@@ -453,7 +454,7 @@ impl State {
         let new_chan_id = ChannelId(self.channel_seq);
         self.channel_seq += 1;
 
-        self.channels.insert(new_chan_id, InternalChannel::from_info(
+        self.channels.insert(new_chan_id, Channel::from_info(
             &ChannelInfo::from_join(new_chan_id, join)));
         self.channel_map.insert(channel_name.clone(), new_chan_id);
     }
@@ -528,7 +529,7 @@ impl State {
                 None => {
                     let new_user_id = UserId(self.user_seq);
                     self.user_seq += 1;
-                    users.push(InternalUser::from_who(new_user_id, rec));
+                    users.push(User::from_who(new_user_id, rec));
                     new_user_id
                 }
             });
@@ -710,7 +711,7 @@ impl State {
 
     fn initialize_self_nick(&mut self, new_nick: &String) {
         self.user_map.insert(new_nick.clone(), self.self_id);
-        self.users.insert(self.self_id, InternalUser {
+        self.users.insert(self.self_id, User {
             id: self.self_id,
             prefix: IrcMsgPrefix::new(format!("{}!someone@somewhere", new_nick[]).into_maybe_owned()),
             channels: HashSet::new(),
@@ -733,7 +734,7 @@ impl State {
         let ChannelId(chan_id) = chan_info.id;
         self.channel_seq = max(self.channel_seq, chan_id);
 
-        self.channels.insert(chan_info.id, InternalChannel::from_info(chan_info));
+        self.channels.insert(chan_info.id, Channel::from_info(chan_info));
         let channel_name = chan_info.name.as_slice().to_ascii_lower();
         self.channel_map.insert(channel_name, chan_info.id);
     }
@@ -752,7 +753,7 @@ impl State {
         let UserId(user_id) = user_info.id;
         self.user_seq = max(self.user_seq, user_id);
 
-        self.users.insert(user_info.id, InternalUser::from_info(user_info));
+        self.users.insert(user_info.id, User::from_info(user_info));
         self.user_map.insert(user_info.get_nick().to_string(), user_info.id);
     }
 
@@ -836,7 +837,7 @@ impl State {
         }
     }
 
-    fn update_channel(&mut self, id: ChannelId, modfunc: proc(&mut InternalChannel)) -> bool {
+    fn update_channel(&mut self, id: ChannelId, modfunc: proc(&mut Channel)) -> bool {
         match self.channels.entry(id) {
             Occupied(mut entry) => {
                 // Channel currently has no indexed mutable state
@@ -847,7 +848,7 @@ impl State {
         }
     }
 
-    fn update_channel_by_name(&mut self, name: &str, modfunc: proc(&mut InternalChannel)) -> bool {
+    fn update_channel_by_name(&mut self, name: &str, modfunc: proc(&mut Channel)) -> bool {
         let lowered = name.to_ascii_lower();
         let chan_id = deref_opt_or_return!(
             self.channel_map.get(&lowered), "Unknown channel name", false);
@@ -884,7 +885,7 @@ impl State {
         true
     }
 
-    fn get_channel_by_name(&self, name: &str) -> Option<(ChannelId, &InternalChannel)> {
+    fn get_channel_by_name(&self, name: &str) -> Option<(ChannelId, &Channel)> {
         let chan_id = match self.channel_map.get(&name.to_string()) {
             Some(chan_id) => *chan_id,
             None => return None
@@ -895,18 +896,7 @@ impl State {
         }
     }
 
-    // fn get_channel_by_name_mut(&mut self, name: &str) -> Option<(ChannelId, &mut InternalChannel)> {
-    //     let chan_id = match self.channel_map.get_mut(&name.to_string()) {
-    //         Some(chan_id) => *chan_id,
-    //         None => return None
-    //     };
-    //     match self.channels.get_mut(&chan_id) {
-    //         Some(channel) => Some((chan_id, channel)),
-    //         None => panic!("Inconsistent state")
-    //     }
-    // }
-
-    fn insert_user(&mut self, user: InternalUser) {
+    fn insert_user(&mut self, user: User) {
         let user_id = user.id;
         let nick = user.prefix.nick().unwrap().to_string();
         assert!(self.users.insert(user_id, user).is_none());
@@ -914,7 +904,7 @@ impl State {
         assert!(self.validate_state_internal().is_ok());
     }
 
-    fn update_user_by_nick(&mut self, nick: &str, modfunc: proc(&mut InternalUser)) -> bool {
+    fn update_user_by_nick(&mut self, nick: &str, modfunc: proc(&mut User)) -> bool {
         let user_id = deref_opt_or_return!(self.user_map.get(&nick.to_string()),
             "Couldn't find user by nick", false);
         let result = self.update_user(user_id, modfunc);
@@ -922,7 +912,7 @@ impl State {
         result
     }
 
-    fn update_user(&mut self, id: UserId, modfunc: proc(&mut InternalUser)) -> bool {
+    fn update_user(&mut self, id: UserId, modfunc: proc(&mut User)) -> bool {
         match self.users.entry(id) {
             Occupied(mut entry) => {
                 let prev_nick = entry.get().prefix.nick().unwrap().to_string();
@@ -986,11 +976,19 @@ impl State {
         }
     }
 
+    pub fn resolve_channel(&self, chid: ChannelId) -> Option<&Channel> {
+        self.channels.get(&chid)
+    }
+
     pub fn identify_nick(&self, nick: &str) -> Option<UserId> {
         match self.user_map.get(&nick.to_string()) {
             Some(user_id) => Some(*user_id),
             None => None
         }
+    }
+
+    pub fn resolve_user(&self, uid: UserId) -> Option<&User> {
+        self.users.get(&uid)
     }
 }
 

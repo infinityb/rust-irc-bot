@@ -232,10 +232,14 @@ impl GreedPlugin {
                 let roll = task_rng().gen::<RollResult>();
                 m.reply(format!("{}: {}", source_nick, roll));
 
+                let prev_play_nick = match m.get_state().resolve_user(prev_play.user_id) {
+                    Some(user) => user.get_nick().to_string(),
+                    None => format!("{} (deceased)", prev_play.user_nick)
+                };
                 m.reply(match prev_play.roll.total_score().cmp(&roll.total_score()) {
                      Less => format!("{} wins!", source_nick),
-                     Equal => format!("{} and {} tie.", source_nick, prev_play.user_nick),
-                     Greater => format!("{} wins!", prev_play.user_nick)
+                     Equal => format!("{} and {} tie.", source_nick, prev_play_nick),
+                     Greater => format!("{} wins!", prev_play_nick)
                 });
             }
         }
