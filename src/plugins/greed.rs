@@ -6,6 +6,7 @@ use std::collections::hash_map::{
 use std::default::Default;
 use std::rand::distributions::{Sample, Range};
 use std::cmp::{Less, Equal, Greater};
+use std::num::abs;
 use std::fmt::{Formatter, FormatError, Show};
 use std::rand::{task_rng, Rng, Rand};
 
@@ -23,7 +24,6 @@ use state::{
     KnownChannel,
     KnownUser,
 };
-
 
 type ScorePrefix = [u8, ..6];
 type ScoreRec = (uint, ScorePrefix, int);
@@ -211,7 +211,7 @@ impl Default for UserStats {
 
 impl Show for UserStats {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
-        write!(f, "{} wins over {} games; net score {}",
+        write!(f, "{} wins over {} games; points: {}",
             self.wins, self.games, self.score_sum - self.opponent_score_sum)
     }
 }
@@ -244,6 +244,17 @@ impl GreedPlugin {
         })
     }
 
+    fn add_userstats_roll(&mut self, uid: BotUserId, win: bool, self_score: int, opp_score: int) {
+        let cur_user = match self.userstats.entry(uid) {
+            Occupied(entry) => entry.into_mut(),
+            Vacant(entry) => entry.set(Default::default())
+        };
+        cur_user.games += 1;
+        cur_user.wins += if win { 1 } else { 0 };
+        cur_user.score_sum += self_score;
+        cur_user.opponent_score_sum += opp_score;
+    }
+
     fn dispatch_cmd_greed(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
         let (user_id, channel_id) = match (m.source.clone(), m.target.clone()) {
             (Some(KnownUser(uid)), Some(KnownChannel(cid))) => (uid, cid),
@@ -255,7 +266,7 @@ impl GreedPlugin {
             None => return
         };
 
-        match self.games.entry(channel_id) {
+        let prev_play_opt = match self.games.entry(channel_id) {
             Vacant(entry) => {
                 let roll = task_rng().gen::<RollResult>();
                 m.reply(format!("{}: {}", source_nick, roll));
@@ -264,61 +275,46 @@ impl GreedPlugin {
                     user_nick: source_nick.to_string(),
                     roll: roll
                 });
-                return;
+                None
             },
             Occupied(entry) => {
-                {
-                    let prev_play = entry.get();
-                    if prev_play.user_id == user_id {
-                        m.reply(format!("You can't go twice in a row, {}", source_nick));
-                        return;
-                    }
-                }
-
-                let prev_play = entry.take();
-                let roll = task_rng().gen::<RollResult>();
-                m.reply(format!("{}: {}", source_nick, roll));
-
-                let prev_play_nick = match m.get_state().resolve_user(prev_play.user_id) {
-                    Some(user) => user.get_nick().to_string(),
-                    None => format!("{} (deceased)", prev_play.user_nick)
-                };
-
-                let prev_play_score = prev_play.roll.total_score();
-                let cur_play_score = roll.total_score();
-                let cmp_result = prev_play_score.cmp(&cur_play_score);
-
-                let (prev_user_wins, cur_user_wins) = match cmp_result {
-                    Less => (0, 1),
-                    Equal => (0, 0),
-                    Greater => (1, 0)
-                };
-                m.reply(match cmp_result {
-                     Less => format!("{} wins!", source_nick),
-                     Equal => format!("{} and {} tie.", source_nick, prev_play_nick),
-                     Greater => format!("{} wins!", prev_play_nick)
-                });
-                {
-                    let cur_user = match self.userstats.entry(user_id) {
-                        Occupied(entry) => entry.into_mut(),
-                        Vacant(entry) => entry.set(Default::default())
-                    };
-                    cur_user.games += 1;
-                    cur_user.wins += cur_user_wins;
-                    cur_user.score_sum += cur_play_score;
-                    cur_user.opponent_score_sum += prev_play_score;
-                }
-                {
-                    let prev_user = match self.userstats.entry(prev_play.user_id) {
-                        Occupied(entry) => entry.into_mut(),
-                        Vacant(entry) => entry.set(Default::default())
-                    };
-                    prev_user.games += 1;
-                    prev_user.wins += prev_user_wins;
-                    prev_user.score_sum += prev_play_score;
-                    prev_user.opponent_score_sum += cur_play_score;
+                if entry.get().user_id == user_id {
+                    m.reply(format!("You can't go twice in a row, {}", source_nick));
+                    None
+                } else {
+                    Some(entry.take())
                 }
             }
+        };
+        if let Some(prev_play) = prev_play_opt {
+            let roll = task_rng().gen::<RollResult>();
+            m.reply(format!("{}: {}", source_nick, roll));
+
+            let prev_play_nick = m.get_state().resolve_user(prev_play.user_id).and_then(|user| {
+                Some(user.get_nick().to_string())
+            }).unwrap_or_else(|| {
+                format!("{} (deceased)", prev_play.user_nick)
+            });
+            let prev_play_score = prev_play.roll.total_score();
+            let cur_play_score = roll.total_score();
+            let cmp_result = prev_play_score.cmp(&cur_play_score);
+            let (prev_user_wins, cur_user_wins) = match cmp_result {
+                Less => (false, true),
+                Equal => (false, false),
+                Greater => (true, false)
+            };
+            let score_diff = abs(prev_play_score - cur_play_score); 
+            m.reply(match cmp_result {
+                 Less => format!("{} wins {} points from {}!",
+                    source_nick, score_diff, prev_play_nick),
+                 Equal => format!("{} and {} tie.", source_nick, prev_play_nick),
+                 Greater => format!("{} wins {} points from {}!",
+                    prev_play_nick, score_diff, source_nick),
+            });
+            self.add_userstats_roll(user_id, cur_user_wins,
+                cur_play_score, prev_play_score);
+            self.add_userstats_roll(prev_play.user_id, prev_user_wins,
+                prev_play_score, cur_play_score);
         }
     }
 }
