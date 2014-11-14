@@ -309,7 +309,7 @@ impl GreedPlugin {
                     cur_user.opponent_score_sum += prev_play_score;
                 }
                 {
-                    let prev_user = match self.userstats.entry(user_id) {
+                    let prev_user = match self.userstats.entry(prev_play.user_id) {
                         Occupied(entry) => entry.into_mut(),
                         Vacant(entry) => entry.set(Default::default())
                     };
