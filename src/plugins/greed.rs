@@ -194,8 +194,8 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<GreedCommandType> {
 struct UserStats {
     games: uint,
     wins: uint,
-    score_sum: uint,
-    opponent_score_sum: uint
+    score_sum: int,
+    opponent_score_sum: int
 }
 
 impl Default for UserStats {
@@ -284,8 +284,8 @@ impl GreedPlugin {
                     None => format!("{} (deceased)", prev_play.user_nick)
                 };
 
-                let prev_play_score = prev_play.roll.total_score() as uint;
-                let cur_play_score = roll.total_score() as uint;
+                let prev_play_score = prev_play.roll.total_score();
+                let cur_play_score = roll.total_score();
                 let cmp_result = prev_play_score.cmp(&cur_play_score);
 
                 let (prev_user_wins, cur_user_wins) = match cmp_result {
