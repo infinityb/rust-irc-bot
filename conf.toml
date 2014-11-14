@@ -1,6 +1,6 @@
 [core]
 server = "irc://127.0.0.1"
 nickname = "rustbot"
-channels = ["#test"]
-command_prefix = "!"
-enabled_plugins = ["ping"]
+channels = ["#sample"]
+command_prefix = "!!"
+enabled_plugins = ["ping", "nanowrimo"]

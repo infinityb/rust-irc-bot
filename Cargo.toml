@@ -16,3 +16,6 @@ git = "https://github.com/chris-morgan/rust-http"
 
 [dependencies.irc]
 git = "https://github.com/infinityb/rust-irc"
+
+[dependencies.time]
+git = "http://github.com/rust-lang/time"

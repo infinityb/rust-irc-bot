@@ -1,8 +1,19 @@
+#![warn(dead_code)]
+#![deny(unused_variables, unused_mut)]
+
+
 use std::fmt;
+use std::cmp::max;
+
 use std::ascii::AsciiExt;
+use std::default::Default;
 use std::collections::{
     HashMap,
-    HashSet
+    HashSet,
+};
+use std::collections::hash_map::{
+    Occupied,
+    Vacant,
 };
 
 use irc::{
@@ -17,30 +28,73 @@ use irc::{
     IrcEventWhoBundle,
 };
 
+macro_rules! deref_opt_or_return(
+    ($inp:expr, $erp:expr, $fr:expr) => (
+        match $inp {
+            Some(x) => *x,
+            _ => {
+                warn!($erp);
+                return $fr;
+            }
+        }
+    );
+)
+
+
+pub type BotUserId = UserId;
+pub type BotChannelId = ChannelId;
+
 #[deriving(Clone, Show)]
 pub enum MessageEndpoint {
-    KnownUser(BotUserId),
-    KnownChannel(BotChannelId),
+    KnownUser(UserId),
+    KnownChannel(ChannelId),
     Server(String),
     AnonymousUser,
 }
 
-#[deriving(Clone, Show, Hash, PartialEq, Eq)]
-pub struct BotUserId(u64);
+#[deriving(Clone, Show, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct UserId(u64);
 
 
+
+trait Diff<DiffType> {
+    fn diff(&self, other: &Self) -> DiffType;
+}
+
+trait Patch<DiffType> {
+    fn patch(&self, diff: &DiffType) -> Self;
+}
+
+fn check_patch<DT: fmt::Show, T: fmt::Show+Diff<DT>+Patch<DT>+Eq>(left: &T, right: &T) -> bool {
+    let diff = left.diff(right);
+    let result = left.patch(&diff) == *right;
+    info!("applying diff: {}", diff);
+    if !result {
+        panic!("{} -> {}, invalid diff: {}", left, right, diff);
+    }
+    result
+}
+
+#[deriving(Clone, PartialEq, Eq, Show)]
 struct InternalUser {
-    id: BotUserId,
+    id: UserId,
     prefix: IrcMsgPrefix<'static>,
-    channels: HashSet<BotChannelId>
+    channels: HashSet<ChannelId>
 }
 
 impl InternalUser {
+    fn from_who(id: UserId, who: &WhoRecord) -> InternalUser {
+        InternalUser {
+            id: id,
+            prefix: who.get_prefix().into_owned(),
+            channels: Default::default(),
+        }
+    }
     fn from_info(user_info: &UserInfo) -> InternalUser {
         InternalUser {
             id: user_info.id,
             prefix: user_info.prefix.clone(),
-            channels: HashSet::new(),
+            channels: Default::default(),
         }
     }
 
@@ -57,22 +111,52 @@ impl InternalUser {
     }
 }
 
-impl fmt::Show for InternalUser {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "InternalUser(prefix: {})", self.prefix)
+impl Diff<Vec<UserDiffCommand>> for InternalUser {
+    fn diff(&self, other: &InternalUser) -> Vec<UserDiffCommand> {
+        let mut cmds = Vec::new();
+        if self.prefix != other.prefix {
+            cmds.push(user_diff::ChangePrefix(other.prefix.as_slice().to_string()));
+        }
+        for &added_channel in other.channels.difference(&self.channels) {
+            cmds.push(user_diff::AddChannel(added_channel));
+        }
+        for &removed_channel in self.channels.difference(&other.channels) {
+            cmds.push(user_diff::RemoveChannel(removed_channel));
+        }
+        cmds
     }
 }
 
+impl Patch<Vec<UserDiffCommand>> for InternalUser {
+    fn patch(&self, diff: &Vec<UserDiffCommand>) -> InternalUser {
+        let mut other = self.clone();
+        for cmd in diff.iter() {
+            match *cmd {
+                user_diff::ChangePrefix(ref prefix_str) => {
+                    other.prefix = IrcMsgPrefix::new(prefix_str.clone().into_maybe_owned());
+                },
+                user_diff::AddChannel(chan_id) => {
+                    other.channels.insert(chan_id);
+                },
+                user_diff::RemoveChannel(chan_id) => {
+                    other.channels.remove(&chan_id);
+                }
+            }
+        }
+        other
+    }
+}
 
-#[deriving(Clone, Show, Hash, PartialEq, Eq)]
-pub struct BotChannelId(u64);
+#[deriving(Clone, Show, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ChannelId(u64);
 
 
+#[deriving(Clone, PartialEq, Eq, Show)]
 struct InternalChannel {
-    id: BotChannelId,
+    id: ChannelId,
     name: String,
     topic: String,
-    users: HashSet<BotUserId>
+    users: HashSet<UserId>
 }
 
 impl InternalChannel {
@@ -81,36 +165,71 @@ impl InternalChannel {
             id: chan_info.id,
             name: chan_info.name.clone(),
             topic: chan_info.topic.clone(),
-            users: HashSet::new(),
+            users: Default::default(),
         }
+    }
+
+    fn set_topic(&mut self, topic: &str) {
+        self.topic.clear();
+        self.topic.push_str(topic);
     }
 }
 
-impl fmt::Show for InternalChannel {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "InternalChannel(name: {})", self.name)
+impl Diff<Vec<ChannelDiffCommand>> for InternalChannel {
+    fn diff(&self, other: &InternalChannel) -> Vec<ChannelDiffCommand> {
+        let mut cmds = Vec::new();
+        if self.topic != other.topic {
+            cmds.push(channel_diff::ChangeTopic(other.topic.clone()));
+        }
+        for &added_user in other.users.difference(&self.users) {
+            cmds.push(channel_diff::AddUser(added_user));
+        }
+        for &removed_user in self.users.difference(&other.users) {
+            cmds.push(channel_diff::RemoveUser(removed_user));
+        }
+        assert_eq!(self.clone().patch(&cmds), *other);
+        cmds
+    }
+}
+
+impl Patch<Vec<ChannelDiffCommand>> for InternalChannel {
+    fn patch(&self, diff: &Vec<ChannelDiffCommand>) -> InternalChannel {
+        let mut other = self.clone();
+        for cmd in diff.iter() {
+            match *cmd {
+                channel_diff::ChangeTopic(ref topic) => {
+                    other.topic = topic.clone();
+                },
+                channel_diff::AddUser(user_id) => {
+                    other.users.insert(user_id);
+                },
+                channel_diff::RemoveUser(user_id) => {
+                    other.users.remove(&user_id);
+                }
+            }
+        }
+        other
     }
 }
 
 #[deriving(Show)]
 struct UserInfo {
-    id: BotUserId,
-    prefix: IrcMsgPrefix<'static>
+    id: UserId,
+    prefix: IrcMsgPrefix<'static>,
 }
 
 impl UserInfo {
-    fn from_who(id: BotUserId, who: &WhoRecord) -> UserInfo {
+    fn from_internal(user: &InternalUser) -> UserInfo {
         UserInfo {
-            id: id,
-            prefix: who.get_prefix().into_owned(),
+            id: user.id,
+            prefix: user.prefix.into_owned(),
         }
     }
 
-    fn from_join(id: BotUserId, join: &IrcMessage) -> UserInfo {
-        let prefix = join.get_prefix().expect("must be prefixed");
+    fn from_who(id: UserId, who: &WhoRecord) -> UserInfo {
         UserInfo {
             id: id,
-            prefix: prefix.into_owned()
+            prefix: who.get_prefix().into_owned(),
         }
     }
 
@@ -125,13 +244,21 @@ impl UserInfo {
 
 #[deriving(Show)]
 struct ChannelInfo {
-    id: BotChannelId,
+    id: ChannelId,
     name: String,
     topic: String
 }
 
 impl ChannelInfo {
-    fn from_join(id: BotChannelId, join: &JoinSuccess) -> ChannelInfo {
+    fn from_internal(chan: &InternalChannel) -> ChannelInfo {
+        ChannelInfo {
+            id: chan.id,
+            name: chan.name.clone(),
+            topic: chan.topic.clone()
+        }
+    }
+
+    fn from_join(id: ChannelId, join: &JoinSuccess) -> ChannelInfo {
         let topic = match join.topic {
             Some(ref topic) => topic.text.clone(),
             None => String::new()
@@ -145,188 +272,196 @@ impl ChannelInfo {
     }
 }
 
-struct StateCommandStreamBuilder<'a> {
-    state: &'a State,
-    user_seq: u64,
-    channel_seq: u64,
+type ChannelDiffCommand = channel_diff::ChannelDiffCommand;
+mod channel_diff {
+    use super::UserId;
+
+    #[deriving(Show)]
+    pub enum ChannelDiffCommand {
+        ChangeTopic(String),
+        AddUser(UserId),
+        RemoveUser(UserId),
+    }
 }
 
-impl<'a> StateCommandStreamBuilder<'a> {
-    fn new(state: &'a State) -> StateCommandStreamBuilder<'a> {
-        StateCommandStreamBuilder {
-            state: state,
-            user_seq: state.user_seq,
-            channel_seq: state.channel_seq
+type UserDiffCommand = user_diff::UserDiffCommand;
+mod user_diff {
+    use super::ChannelId;
+
+    #[deriving(Show)]
+    pub enum UserDiffCommand {
+        ChangePrefix(String),
+        AddChannel(ChannelId),
+        RemoveChannel(ChannelId),
+    }
+}
+
+
+#[deriving(Show)]
+pub enum StateCommand {
+    CreateUser(UserInfo),
+    UpdateUser(UserId, Vec<UserDiffCommand>),
+    RemoveUser(UserId),
+
+    CreateChannel(ChannelInfo),
+    UpdateChannel(ChannelId, Vec<ChannelDiffCommand>),
+    RemoveChannel(ChannelId),
+
+    UpdateSelfNick(String),
+    SetGeneration(u64),
+}
+
+#[deriving(Show)]
+pub struct StateDiff {
+    from_generation: u64,
+    to_generation: u64,
+    commands: Vec<StateCommand>
+}
+
+#[deriving(Show, Clone)]
+pub struct State {
+    // Can this be made diffable by using sorted `users`, `channels`,
+    // `users[].channels` and `channels[].users`?  TreeSet.
+    user_seq: u64,
+    channel_seq: u64,
+
+    self_nick: String,
+    self_id: UserId,
+
+    user_map: HashMap<String, UserId>,
+    users: HashMap<UserId, InternalUser>,
+
+    channel_map: HashMap<String, ChannelId>,
+    channels: HashMap<ChannelId, InternalChannel>,
+
+    generation: u64,
+}
+
+impl State {
+    pub fn new() -> State {
+        State {
+            user_seq: 1,
+            channel_seq: 0,
+            self_nick: String::new(),
+            user_map: Default::default(),
+            users: Default::default(),
+            self_id: UserId(0),
+            channel_map: Default::default(),
+            channels: Default::default(),
+            generation: 0,
         }
     }
 
-    fn on_other_part(&self, msg: &IrcMessage) -> Vec<StateCommand> {
+    fn on_other_part(&mut self, msg: &IrcMessage) {
         let msg_args = msg.get_args();
         if msg_args.len() < 1 {
             warn!("Invalid message. PART with no arguments: {}", msg);
-            return Vec::new();
+            return;
         }
         let channel_name = msg_args[0].to_ascii_lower();
-        let chan_info = self.state.find_channel_by_name(channel_name.as_slice());
-
-        let (chan_id, chan_state) = match chan_info {
-            Some(pair) => pair,
-            None => panic!("Got message for channel {} without knowing about it.", channel_name)
-        };
-
         let user_nick = match msg.source_nick() {
             Some(user_nick) => user_nick.to_string(),
             None => {
                 warn!("Invalid message. PART with no prefix: {}", msg);
-                return Vec::new();
+                return;
             }
         };
-        let user_id = match self.state.user_map.get(&user_nick) {
-            Some(user_id) => *user_id,
-            None => panic!("Got message for user {} without knowing about it.", channel_name)
-        };
-        let mut commands = Vec::new();
-        commands.push(RemoveUserFromChannel(user_id, chan_id));
 
-        if let Some(user_state) = self.state.users.get(&user_id) {
-            if user_state.channels.len() == 1 {
-                if user_state.channels.contains(&chan_id) {
-                    commands.push(RemoveUser(user_id));
-                } else {
-                    panic!("Inconsistent state");
-                }
-            }
-        } else {
-            panic!("Inconsistent state")
-        }
-        commands
+        let chan_id = deref_opt_or_return!(self.channel_map.get(&channel_name),
+            "Got channel without knowing about it.", ());
+        let user_id = deref_opt_or_return!(self.user_map.get(&user_nick),
+            "Got user without knowing about it.", ());
+
+        match self.validate_state_internal() {
+            Ok(()) => (),
+            Err(err) => panic!("{}", err)
+        };
+        self.unlink_user_channel(user_id, chan_id);
     }
 
-    fn on_self_part(&self, msg: &IrcMessage) -> Vec<StateCommand> {
-        info!("on-self-part called.  We should clean the channel up");
+    fn on_self_part(&mut self, msg: &IrcMessage) {
         let msg_args = msg.get_args();
         if msg_args.len() < 1 {
             warn!("Invalid message. PART with no arguments: {}", msg);
-            return Vec::new();
+            return;
         }
-
-        let mut commands = Vec::new();
-        let channel_name = msg_args[0].to_ascii_lower();
-        let chan_state = match self.state.channel_map.get(&channel_name) {
-            Some(chan_id) => match self.state.channels.get(chan_id) {
-                Some(chan_state) => chan_state,
-                None => panic!("Inconsistent state")
-            },
-            None => panic!("We left {} without knowing about it.", channel_name)
-        };
-        // Should this be here or should we just do it on the receiver?
-        // If we move this out, we should still validate that our state is
-        // consistent, to prevent crashing the receiver.
-        for &user_id in chan_state.users.iter() {
-            let user_state = match self.state.users.get(&user_id) {
-                Some(user_state) => user_state,
-                None => panic!("Inconsistent state: {}", user_id),
-            };
-            commands.push(RemoveUserFromChannel(user_id, chan_state.id));
-            if user_state.channels.len() == 1 && user_state.channels.contains(&chan_state.id) {
-                commands.pop();
-                commands.push(RemoveUser(user_id));
-            }
-        }
-
-        commands.push(RemoveChannel(chan_state.id));
-        return commands;
+        assert!(self.remove_channel_by_name(msg_args[0]).is_some());
     }
 
-    fn on_other_quit(&self, msg: &IrcMessage) -> Vec<StateCommand> {
-        info!("on-other-quit called.  We should clean the user up");
-        let user_nick = match msg.source_nick() {
-            Some(user_nick) => user_nick.to_string(),
+    fn on_other_quit(&mut self, msg: &IrcMessage) {
+        match msg.source_nick() {
+            Some(user_nick) => self.remove_user_by_nick(user_nick),
             None => {
                 warn!("Invalid message. QUIT with no prefix: {}", msg);
-                return Vec::new();
+                return;
             }
         };
-        let user_id = match self.state.user_map.get(&user_nick) {
-            Some(user_id) => *user_id,
-            None => panic!("Got message for user {} without knowing about it.", user_nick)
-        };
-        let mut commands = Vec::new();
-        match self.state.users.get(&user_id) {
-            Some(user_state) => {
-                for &chan_id in user_state.channels.iter() {
-                    commands.push(RemoveUserFromChannel(user_id, chan_id));
-                }
-                commands.push(RemoveUser(user_id));
-            },
-            None => panic!("Inconsistent state: {}", user_id),
-        };
-        commands
     }
 
-    fn on_other_join(&mut self, join: &IrcMessage) -> Vec<StateCommand> {
-        let channel = join.get_args()[0].to_ascii_lower();
-
-        let chan_id = match self.state.channel_map.get(&channel) {
-            Some(channel_id) => *channel_id,
-            None => return Vec::new()
-        };
-        let source_nick = match join.source_nick() {
-            Some(nick) => nick.to_string(),
-            None => return Vec::new(),
-        };
-        let mut commands = Vec::new();
-        let user_id = match self.state.user_map.get(&source_nick) {
-            Some(user_id) => *user_id,
-            None => {
-                let new_user_id = BotUserId(self.user_seq);
-                self.user_seq += 1;
-                commands.push(AddUser(UserInfo::from_join(new_user_id, join)));
-                commands.push(IncrementUserId);
-                new_user_id
-            }
-        };
-        commands.push(AddUserToChannel(user_id, chan_id));
-        commands
-    }
-
-    fn on_self_join(&mut self, join: &JoinSuccess) -> Vec<StateCommand> {
-        let channel_name = join.channel.as_slice().to_ascii_lower();
-        if let Some(_) = self.state.channel_map.get(&channel_name) {
-            warn!("Joining already joined channel {}; skipped", join.channel);
-            return Vec::new();
+    fn on_other_join(&mut self, join: &IrcMessage) {
+        let msg_args = join.get_args();
+        if msg_args.len() < 1 {
+            warn!("Invalid message. JOIN with no arguments: {}", join);
+            return;
         }
+        let channel_name = msg_args[0].to_ascii_lower();
+        let user_nick = match join.source_nick() {
+            Some(user_nick) => user_nick,
+            None => {
+                warn!("Invalid message. JOIN with no prefix: {}", join);
+                return;
+            }
+        };
+        let chan_id = match self.channel_map.get(&channel_name) {
+            Some(chan_id) => *chan_id,
+            None => panic!("Got message for channel {} without knowing about it.", channel_name)
+        };
+        
+        let (is_create, user_id) = match self.user_map.get(&user_nick.to_string()) {
+            Some(user_id) => {
+                (false, *user_id)
+            },
+            None => {
+                let new_user_id = UserId(self.user_seq);
+                self.user_seq += 1;
+                (true, new_user_id)
+            }
+        };
+        if is_create {
+            let user = InternalUser {
+                id: user_id,
+                prefix: join.get_prefix().expect("user lacking prefix").into_owned(),
+                channels: HashSet::new(),
+            };
+            self.users.insert(user_id, user);
+            self.user_map.insert(user_nick.to_string(), user_id);
+        }
+        self.users.get_mut(&user_id).expect("user not found").channels.insert(chan_id);
 
-        let new_chan_id = BotChannelId(self.channel_seq);
+        assert!(self.update_channel_by_name(channel_name.as_slice(), proc(channel) {
+            channel.users.insert(user_id);
+        }), "Got message for channel {} without knowing about it.");
+    }
+
+    fn on_self_join(&mut self, join: &JoinSuccess) {
+        let channel_name = join.channel.as_slice().to_ascii_lower();
+        if let Some(_) = self.channel_map.get(&channel_name) {
+            warn!("Joining already joined channel {}; skipped", join.channel);
+            return;
+        }
+        warn!("users = {}", join.nicks);
+        let new_chan_id = ChannelId(self.channel_seq);
         self.channel_seq += 1;
 
-        let mut commands = Vec::with_capacity(4);
-        commands.push(AddChannel(ChannelInfo::from_join(new_chan_id, join)));
-        commands.push(IncrementChannelId);
-        commands
+        self.channels.insert(new_chan_id, InternalChannel::from_info(
+            &ChannelInfo::from_join(new_chan_id, join)));
+        self.channel_map.insert(channel_name.clone(), new_chan_id);
     }
 
-    fn on_who_record(&mut self, chan_id: BotChannelId, rec: &WhoRecord) -> Vec<StateCommand> {
-        let mut commands = Vec::with_capacity(4);
-        let user_id = match self.state.user_map.get(&rec.nick) {
-            Some(user_id) => *user_id,
-            None => {
-                let new_user_id = BotUserId(self.user_seq);
-                self.user_seq += 1;
-                commands.push(AddUser(UserInfo::from_who(new_user_id, rec)));
-                commands.push(IncrementUserId);
-                new_user_id
-            }
-        };
-        commands.push(AddUserToChannel(user_id, chan_id));
-        commands
-    }
-
-    fn validate_state_with_who(self, who: &WhoSuccess) {
+    fn validate_state_with_who(&self, who: &WhoSuccess) {
         let chan_name = who.channel.as_slice().to_ascii_lower();
 
-        let chan_pair = self.state.find_channel_by_name(chan_name.as_slice());
-        let (chan_id, channel) = match chan_pair {
+        let (_, channel) = match self.get_channel_by_name(chan_name.as_slice()) {
             Some(chan_pair) => chan_pair,
             None => return
         };
@@ -334,7 +469,7 @@ impl<'a> StateCommandStreamBuilder<'a> {
         info!("Validating channel state");
         let mut known_users = HashSet::new();
         for user in channel.users.iter() {
-            match self.state.users.get(user) {
+            match self.users.get(user) {
                 Some(user) => {
                     known_users.insert(user.get_nick().to_string());
                 },
@@ -365,201 +500,280 @@ impl<'a> StateCommandStreamBuilder<'a> {
         }
     }
 
-    fn on_who(&mut self, who: &WhoSuccess) -> Vec<StateCommand> {
+    fn on_who(&mut self, who: &WhoSuccess) {
         // If we WHO a channel that we aren't in, we aren't changing any
         // state.
         let chan_name = who.channel.to_ascii_lower();
-        let chan_pair = self.state.find_channel_by_name(chan_name.as_slice());
-        let (chan_id, known_state) = match chan_pair {
-            Some((chan_id, channel)) => (chan_id, channel.users.len() > 0),
-            None => return Vec::new()
+
+        let chan_id = match self.get_channel_by_name(chan_name.as_slice()) {
+            Some((chan_id, channel)) => {
+                if !channel.users.is_empty() {
+                    self.validate_state_with_who(who);
+                    return;
+                }
+                chan_id
+            }
+            None => return
         };
 
-        if known_state {
-            self.validate_state_with_who(who);
-            Vec::new()
-        } else {
-            let mut commands = Vec::new();
-            let mut users_total = 0u;
-            for rec in who.who_records.iter() {
-                users_total += 1;
-                commands.extend(self.on_who_record(chan_id, rec).into_iter());
-            }
-            info!("Added {} users for channel {}", users_total, who.channel);
-            commands
+        let nicks: Vec<_> = who.who_records.iter().map(|who| who.nick.clone()).collect();
+        warn!("nicks: {}", nicks);
+
+        let mut users = Vec::with_capacity(who.who_records.len());
+        let mut user_ids = Vec::with_capacity(who.who_records.len());
+
+        for rec in who.who_records.iter() {
+            user_ids.push(match self.user_map.get(&rec.nick) {
+                Some(user_id) => *user_id,
+                None => {
+                    let new_user_id = UserId(self.user_seq);
+                    self.user_seq += 1;
+                    users.push(InternalUser::from_who(new_user_id, rec));
+                    new_user_id
+                }
+            });
         }
+        for user in users.into_iter() {
+            self.insert_user(user);
+        }
+        for user_id in user_ids.iter() {
+            match self.users.get_mut(user_id) {
+                Some(user_state) => {
+                    user_state.channels.insert(chan_id);
+                },
+                None => {
+                    if *user_id != self.self_id {
+                        panic!("{}", user_id);
+                    }
+                }
+            };
+        }
+
+        let tmp_chan_name = chan_name.clone();
+        assert!(self.update_channel_by_name(chan_name.as_slice(), proc(channel) {
+            let added = user_ids.len() - channel.users.len();
+            info!("Added {} users for channel {}", added, tmp_chan_name);
+            channel.users.extend(user_ids.into_iter());
+        }), "Got message for channel {} without knowing about it.");
     }
 
-    fn on_topic(&self, msg: &IrcMessage) -> Vec<StateCommand> {
+    fn on_topic(&mut self, msg: &IrcMessage) {
         assert_eq!(msg.command(), "TOPIC");
         assert_eq!(msg.get_args().len(), 2);
-        let channel = msg.get_args()[0].to_ascii_lower();
-        let new_topic = msg.get_args()[1].to_string();
 
-        let chan_id = match self.state.channel_map.get(&channel) {
-            Some(channel_id) => *channel_id,
-            None => return Vec::new()
-        };
-        let mut commands = Vec::new();
-        commands.push(UpdateChannel(ChannelInfo {
-            id: chan_id,
-            name: channel,
-            topic: new_topic,
+        let chan_name = msg.get_args()[0].to_ascii_lower();
+        assert!(self.update_channel_by_name(chan_name[], proc(channel) {
+            channel.set_topic(msg.get_args()[1]);
         }));
-        commands
     }
 
-    fn on_nick(&self, msg: &IrcMessage) -> Vec<StateCommand> {
+    fn on_nick(&mut self, msg: &IrcMessage) {
         assert_eq!(msg.command(), "NICK");
         assert_eq!(msg.get_args().len(), 1);
 
-        let new_nick = msg.get_args()[0].to_string();
-        let source_nick = match msg.source_nick() {
-            Some(source_nick) => source_nick.to_string(),
-            None => return Vec::new(),
-        };
-        let prefix = match msg.get_prefix() {
-            Some(prefix) => prefix,
-            None => return Vec::new(),
-        };
-
-        let user_id = match self.state.user_map.get(&source_nick) {
-            Some(user_id) => *user_id,
-            None => return Vec::new()
-        };
-        let mut commands = Vec::new();
-        
-        let prefix = prefix.with_nick(new_nick[]).expect("must be nicked prefix");
-        commands.push(UpdateUser(UserInfo {
-            id: user_id,
-            prefix: prefix,
-        }));
-        commands
+        assert!(self.update_user_by_nick(msg.source_nick().unwrap(), proc(user) {
+            user.set_nick(msg.get_args()[0]);
+        }))
     }
 
-    fn on_kick(&self, msg: &IrcMessage) -> Vec<StateCommand> {
+    fn on_kick(&mut self, msg: &IrcMessage) {
         assert_eq!(msg.command(), "KICK");
         assert_eq!(msg.get_args().len(), 3);
 
         let channel_name = msg.get_args()[0].to_ascii_lower();
         let kicked_user_nick = msg.get_args()[1].to_string();
 
-        let chan_id = match self.state.channel_map.get(&channel_name) {
-            Some(chan_id) => *chan_id,
-            None => panic!("Got message for channel {} without knowing about it.", channel_name)
-        };
-        let user_id = match self.state.user_map.get(&kicked_user_nick) {
-            Some(user_id) => *user_id,
-            None => panic!("Got message for user {} without knowing about it.", channel_name)
-        };
-        let mut commands = Vec::new();
-        commands.push(RemoveUserFromChannel(user_id, chan_id));
-
-        if let Some(user_state) = self.state.users.get(&user_id) {
-            if user_state.channels.len() == 1 {
-                if user_state.channels.contains(&chan_id) {
-                    commands.push(RemoveUser(user_id));
-                } else {
-                    panic!("Inconsistent state");
-                }
+        let (chan_id, user_id) = match (
+            self.channel_map.get(&channel_name),
+            self.user_map.get(&kicked_user_nick)
+        ) {
+            (Some(chan_id), Some(user_id)) => (*chan_id, *user_id),
+            (None, Some(_)) => {
+                warn!("Strange: unknown channel {}", channel_name);
+                return;
+            },
+            (Some(_), None) => {
+                warn!("Strange: unknown nick {}", kicked_user_nick);
+                return;
+            },
+            (None, None) => {
+                warn!("Strange: unknown chan {} and nick {}", channel_name, kicked_user_nick);
+                return;
             }
-        } else {
-            panic!("Inconsistent state")
-        }
-        commands
+        };
+        self.unlink_user_channel(user_id, chan_id);
     }
 
-    fn from_message(&mut self, msg: &IrcMessage) -> Vec<StateCommand> {
-        let is_self = msg.source_nick() == Some(self.state.self_nick.as_slice());
-        if msg.command() == "001" {
-            return vec![UpdateSelfNick(msg.get_args()[0].to_string())];
-        }
-        match (msg.command(), is_self, msg.get_prefix().is_some()) {
+    fn from_message(&mut self, msg: &IrcMessage) {
+        let is_self = msg.source_nick() == Some(self.self_nick.as_slice());
+        let () = match (msg.command(), is_self, msg.get_prefix().is_some()) {
+            ("001", _, _) => {
+                let self_nick = msg.get_args()[0].to_string();
+                self.initialize_self_nick(&self_nick);
+            },
             ("PART", true, _) => return self.on_self_part(msg),
             ("PART", false, _) => return self.on_other_part(msg),
             ("QUIT", false, _) => return self.on_other_quit(msg),
             // is this JOIN right?
-            ("JOIN", _, true) => return self.on_other_join(msg),
+            ("JOIN", false, true) => return self.on_other_join(msg),
             ("TOPIC", _, true) => self.on_topic(msg),
             ("NICK", _, true) => return self.on_nick(msg),
             ("KICK", _, true) => return self.on_kick(msg),
-            _ => Vec::new()
-        }
+            _ => ()
+        };
     }
 
-
-    fn from_event(&mut self, event: &IrcEvent) -> Vec<StateCommand> {
-        match *event {
+    pub fn on_event(&mut self, event: &IrcEvent) {
+        let () = match *event {
             IrcEventMessage(ref message) => self.from_message(message),
             IrcEventJoinBundle(Ok(ref join_bun)) => self.on_self_join(join_bun),
-            IrcEventJoinBundle(Err(_)) => Vec::new(),
+            IrcEventJoinBundle(Err(_)) => (),
             IrcEventWhoBundle(Ok(ref who_bun)) => self.on_who(who_bun),
-            IrcEventWhoBundle(Err(_)) => Vec::new(),
-        }
+            IrcEventWhoBundle(Err(_)) => (),
+        };
     }
-}
-
-#[deriving(Show)]
-pub enum StateCommand {
-    UpdateSelfNick(String),
-    AddUser(UserInfo),
-    UpdateUser(UserInfo),
-    RemoveUser(BotUserId),
-    RemoveUserFromChannel(BotUserId, BotChannelId),
-    AddChannel(ChannelInfo),
-    UpdateChannel(ChannelInfo),
-    RemoveChannel(BotChannelId),
-    // RemoveChannelFromUser(BotChannelId, BotUserId),
-    IncrementUserId,
-    IncrementChannelId,
-    AddUserToChannel(BotUserId, BotChannelId),
-}
-
-
-#[deriving(Show)]
-pub struct State {
-    // Can this be made diffable by using sorted `users`, `channels`,
-    // `users[].channels` and `channels[].users`?  TreeSet.
-    user_seq: u64,
-    channel_seq: u64,
-
-    self_nick: String,
-    user_map: HashMap<String, BotUserId>,
-    users: HashMap<BotUserId, InternalUser>,
-    channel_map: HashMap<String, BotChannelId>,
-    channels: HashMap<BotChannelId, InternalChannel>,
-}
-
-impl State {
-    pub fn new() -> State {
-        State {
-            user_seq: 0,
-            channel_seq: 0,
-            self_nick: String::new(),
-            user_map: HashMap::new(),
-            users: HashMap::new(),
-            channel_map: HashMap::new(),
-            channels: HashMap::new(),
+    #[cfg(test)]
+    fn validate_state_internal(&self) -> Result<(), String> {
+        for (&id, state) in self.channels.iter() {
+            if id != state.id {
+                return Err(format!("{} at channels[{}]", state.id, id));
+            }
+            for &user_id in state.users.iter() {
+                if let Some(user_state) = self.users.get(&user_id) {
+                    if !user_state.channels.contains(&id) {
+                        return Err(format!("{0} ref {1} => {1} ref {0} not holding", id, user_id));
+                    }
+                } else {
+                    return Err(format!("{} refs non-existent {}", id, user_id));
+                }
+            }
         }
+        for (&id, state) in self.users.iter() {
+            if id != state.id {
+                return Err(format!("{} at users[{}]", state.id, id));
+            }
+            for &chan_id in state.channels.iter() {
+                if let Some(chan_state) = self.channels.get(&chan_id) {
+                    if !chan_state.users.contains(&id) {
+                        return Err(format!("{0} ref {1} => {1} ref {0} not holding", id, chan_id));
+                    }
+                } else {
+                    return Err(format!("{} refs non-existent {}", id, chan_id));
+                }
+            }
+        }
+        for (name, &id) in self.channel_map.iter() {
+            if let Some(state) = self.channels.get(&id) {
+                if name.as_slice() != state.name.as_slice() {
+                    return Err(format!("{} at channel_map[{}]", state.id, name));
+                }
+            } else {
+                return Err(format!("channel map inconsistent"));
+            }
+        }
+        for (name, &id) in self.user_map.iter() {
+            if let Some(state) = self.users.get(&id) {
+                if name.as_slice() != state.get_nick() {
+                    return Err(format!("{} at user_map[{}]", state.id, name));
+                }
+            } else {
+                return Err(format!(
+                    concat!(
+                        "user map inconsistent: self.user_map[{}] is not None ",
+                        "=> self.users[{}] is not None"
+                    ), name, id));
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(not(test))]
+    fn validate_state_internal(&self) -> Result<(), String> {
+        Ok(())
     }
 
     pub fn get_self_nick<'a>(&'a self) -> &'a str {
         self.self_nick.as_slice()
     }
 
-    fn apply_update_self_nick(&mut self, new_nick: &String) {
+    pub fn set_self_nick(&mut self, new_nick: &str) {
         if self.self_nick.as_slice() != "" {
             let user_id = match self.user_map.remove(&self.self_nick) {
                 Some(user_id) => user_id,
                 None => panic!("inconsistent user_map: {}[{}]",
                     self.user_map, self.self_nick)
             };
-            self.user_map.insert(new_nick.clone(), user_id);
+            self.user_map.insert(new_nick.to_string(), user_id);
         }
-        self.self_nick = new_nick.clone();
+        self.self_nick = new_nick.to_string();
     }
 
-    fn apply_remove_user(&mut self, id: BotUserId) {
+    fn initialize_self_nick(&mut self, new_nick: &String) {
+        self.user_map.insert(new_nick.clone(), self.self_id);
+        self.users.insert(self.self_id, InternalUser {
+            id: self.self_id,
+            prefix: IrcMsgPrefix::new(format!("{}!someone@somewhere", new_nick[]).into_maybe_owned()),
+            channels: HashSet::new(),
+        });
+        self.set_self_nick(new_nick.as_slice());
+    }
+
+    fn apply_update_self_nick(&mut self, new_nick: &String) {
+        assert!(self.user_map.remove(&self.self_nick).is_some());
+        self.set_self_nick(new_nick.as_slice());
+        self.user_map.insert(new_nick.clone(), self.self_id);
+    }
+
+    fn apply_remove_channel(&mut self, id: ChannelId) {
+        info!("remove_channel({})", id);
+        self.remove_channel_by_id(id);
+    }
+
+    fn apply_create_chan(&mut self, chan_info: &ChannelInfo) {
+        let ChannelId(chan_id) = chan_info.id;
+        self.channel_seq = max(self.channel_seq, chan_id);
+
+        self.channels.insert(chan_info.id, InternalChannel::from_info(chan_info));
+        let channel_name = chan_info.name.as_slice().to_ascii_lower();
+        self.channel_map.insert(channel_name, chan_info.id);
+    }
+
+    fn apply_update_chan(&mut self, id: ChannelId, diff: &Vec<ChannelDiffCommand>) {
+        match self.channels.entry(id) {
+            Occupied(mut entry) => {
+                let new_thing = entry.get().patch(diff);
+                entry.set(new_thing);
+            }
+            Vacant(_) => warn!("Unknown channel {}", id)
+        };
+    }
+
+    fn apply_create_user(&mut self, user_info: &UserInfo) {
+        let UserId(user_id) = user_info.id;
+        self.user_seq = max(self.user_seq, user_id);
+
+        self.users.insert(user_info.id, InternalUser::from_info(user_info));
+        self.user_map.insert(user_info.get_nick().to_string(), user_info.id);
+    }
+
+    fn apply_update_user(&mut self, id: UserId, diff: &Vec<UserDiffCommand>) {
+        match self.users.entry(id) {
+            Occupied(mut entry) => {
+                let old_nick = entry.get().get_nick().to_string();
+                let new_user = entry.get().patch(diff);
+                let new_nick = new_user.get_nick().to_string();
+
+                if old_nick.as_slice() != new_nick.as_slice() {
+                    assert_eq!(self.user_map.remove(&old_nick), Some(id));
+                    self.user_map.insert(new_nick, id);
+                }
+                entry.set(new_user);
+            }
+            Vacant(_) => warn!("Unknown channel {}", id)
+        };
+    }
+
+    fn apply_remove_user(&mut self, id: UserId) {
         info!("apply_remove_user({})", id);
         let user_info = match self.users.remove(&id) {
             Some(user_info) => user_info,
@@ -568,115 +782,109 @@ impl State {
         let user_nick = user_info.get_nick().to_string();
         match self.user_map.remove(&user_nick) {
             Some(user_id) => assert_eq!(user_id, id),
-            None => panic!("inconsistent user_map: {}[{}]",
+            None => panic!("inconsistent user_mapm: {}[{}]",
                 self.user_map, user_nick)
-        };
-    }
-
-    fn apply_remove_user_from_chan(&mut self,
-                                   uid: BotUserId,
-                                   chid: BotChannelId
-    ) {
-        info!("remove_user_from_chan({}, {})", uid, chid);
-        match self.users.get_mut(&uid) {
-            Some(user_info) => user_info.channels.remove(&chid),
-            None => panic!("cannot apply command: {} not found.", uid)
-        };
-        match self.channels.get_mut(&chid) {
-            Some(channel_info) => channel_info.users.remove(&uid),
-            None => panic!("cannot apply command: {} not found.", chid)
-        };
-    }
-
-    fn apply_remove_channel(&mut self, id: BotChannelId) {
-        info!("remove_channel({})", id);
-        let chan_info = match self.channels.remove(&id) {
-            Some(chan_info) => chan_info,
-            None => panic!("cannot apply command: {} not found.", id)
-        };
-        let channel_name = chan_info.name.as_slice().to_ascii_lower();
-        match self.channel_map.remove(&channel_name) {
-            Some(chan_id) => assert_eq!(chan_id, id),
-            None => panic!("inconsistent channel_map")
-        };
-    }
-
-    fn apply_add_channel(&mut self, chan_info: &ChannelInfo) {
-        assert_eq!(chan_info.id, BotChannelId(self.channel_seq));
-        self.channels.insert(chan_info.id, InternalChannel::from_info(chan_info));
-        let channel_name = chan_info.name.as_slice().to_ascii_lower();
-        self.channel_map.insert(channel_name, chan_info.id);
-    }
-
-    fn apply_update_channel(&mut self, chan_info: &ChannelInfo) {
-        match self.channels.get_mut(&chan_info.id) {
-            Some(channel) => channel.topic = chan_info.topic.clone(),
-            None => {}
-        };
-    }
-
-    fn apply_add_user(&mut self, user_info: &UserInfo) {
-        assert_eq!(user_info.id, BotUserId(self.user_seq));
-        self.users.insert(user_info.id, InternalUser::from_info(user_info));
-        self.user_map.insert(user_info.get_nick().to_string(), user_info.id);
-    }
-
-    fn apply_update_user(&mut self, user_info: &UserInfo) {
-        let old_nick = match self.users.get_mut(&user_info.id) {
-            Some(user_state) => {
-                let old_nick = user_state.get_nick().to_string();
-                user_state.set_nick(user_info.get_nick());
-                old_nick
-            },
-            None => {
-                warn!("updating non-existent user");
-                return;
-            }
-        };
-        info!("apply_update_user :: {} ==> {}", old_nick, user_info.get_nick().to_string());
-        if let Some(user_id) = self.user_map.remove(&old_nick) {
-            assert_eq!(user_id, user_info.id);
-            self.user_map.insert(user_info.get_nick().to_string(), user_id);
-        }
-    }
-
-    fn apply_add_user_to_channel(&mut self,
-                                 uid: BotUserId,
-                                 chid: BotChannelId
-    ) {
-        match self.users.get_mut(&uid) {
-            Some(user_state) => user_state.channels.insert(chid),
-            None => panic!("inconsistent state")
-        };
-        match self.channels.get_mut(&chid) {
-            Some(channel_state) => channel_state.users.insert(uid),
-            None => panic!("inconsistent state")
         };
     }
 
     pub fn apply_command(&mut self, cmd: &StateCommand) {
         match *cmd {
-            UpdateSelfNick(ref new_nick) =>
-                self.apply_update_self_nick(new_nick),
-            AddUser(ref user_info) => self.apply_add_user(user_info),
-            UpdateUser(ref user_info) => self.apply_update_user(user_info),
-            AddUserToChannel(user_id, chan_id) =>
-                self.apply_add_user_to_channel(user_id, chan_id),
-            RemoveUser(user_id) => self.apply_remove_user(user_id),
-            RemoveUserFromChannel(user_id, chan_id) =>
-                self.apply_remove_user_from_chan(user_id, chan_id),
-            AddChannel(ref chan_info) =>
-                self.apply_add_channel(chan_info),
-            UpdateChannel(ref chan_info) =>
-                self.apply_update_channel(chan_info),
-            RemoveChannel(chan_id) =>
-                self.apply_remove_channel(chan_id),
-            IncrementUserId => self.user_seq += 1,
-            IncrementChannelId => self.channel_seq += 1,
+            UpdateSelfNick(ref new_nick) => self.apply_update_self_nick(new_nick),
+            SetGeneration(generation) => self.generation = generation,
+
+            CreateUser(ref info) => self.apply_create_user(info),
+            UpdateUser(id, ref diff) => self.apply_update_user(id, diff),
+            RemoveUser(id) => self.apply_remove_user(id),
+
+            CreateChannel(ref info) => self.apply_create_chan(info),
+            UpdateChannel(id, ref diff) => self.apply_update_chan(id, diff),
+            RemoveChannel(id) => self.apply_remove_channel(id),
         }
     }
 
-    fn find_channel_by_name(&self, name: &str) -> Option<(BotChannelId, &InternalChannel)> {
+    fn unlink_user_channel(&mut self, uid: UserId, chid: ChannelId) {
+        let should_remove = match self.users.entry(uid) {
+            Occupied(mut entry) => {
+                if entry.get().channels.len() == 1 && entry.get().channels.contains(&chid) {
+                    true
+                } else {
+                    entry.get_mut().channels.remove(&chid);
+                    false
+                }
+            }
+            Vacant(_) => panic!("Inconsistent state")
+        };
+        if should_remove {
+            warn!("removing {}", uid);
+            self.remove_user_by_id(uid);
+        }
+
+        let should_remove = match self.channels.entry(chid) {
+            Occupied(mut entry) => {
+                if entry.get().users.len() == 1 && entry.get().users.contains(&uid) {
+                    true
+                } else {
+                    entry.get_mut().users.remove(&uid);
+                    false
+                }
+            },
+            Vacant(_) => panic!("Inconsistent state")
+        };
+        if should_remove {
+            warn!("removing {}", chid);
+            self.remove_channel_by_id(chid);
+        }
+    }
+
+    fn update_channel(&mut self, id: ChannelId, modfunc: proc(&mut InternalChannel)) -> bool {
+        match self.channels.entry(id) {
+            Occupied(mut entry) => {
+                // Channel currently has no indexed mutable state
+                modfunc(entry.get_mut());
+                true
+            }
+            Vacant(_) => false
+        }
+    }
+
+    fn update_channel_by_name(&mut self, name: &str, modfunc: proc(&mut InternalChannel)) -> bool {
+        let lowered = name.to_ascii_lower();
+        let chan_id = deref_opt_or_return!(
+            self.channel_map.get(&lowered), "Unknown channel name", false);
+        let result = self.update_channel(chan_id, modfunc);
+        assert!(self.validate_state_internal().is_ok());
+        result
+    }
+
+    fn remove_channel_by_name(&mut self, name: &str) -> Option<ChannelId> {
+        let lowered = name.to_ascii_lower();
+        let chan_id = deref_opt_or_return!(
+            self.channel_map.get(&lowered), "Unknown channel name", None);
+        assert!(self.remove_channel_by_id(chan_id));
+        assert!(self.validate_state_internal().is_ok());
+        Some(chan_id)
+    }
+
+    fn remove_channel_by_id(&mut self, id: ChannelId) -> bool {
+        let (chan_name, users): (_, Vec<_>) = match self.channels.get(&id) {
+            Some(chan_state) => (
+                chan_state.name.clone(),
+                chan_state.users.iter().map(|x| x.clone()).collect()
+            ),
+            None => return false
+        };
+        for user_id in users.into_iter() {
+            self.channels.get_mut(&id).unwrap().users.remove(&user_id);
+            self.users.get_mut(&user_id).unwrap().channels.remove(&id);
+            // self.unlink_user_channel(user_id, id);
+        }
+        self.channels.remove(&id);
+        self.channel_map.remove(&chan_name);
+        assert!(self.validate_state_internal().is_ok());
+        true
+    }
+
+    fn get_channel_by_name(&self, name: &str) -> Option<(ChannelId, &InternalChannel)> {
         let chan_id = match self.channel_map.get(&name.to_string()) {
             Some(chan_id) => *chan_id,
             None => return None
@@ -687,7 +895,90 @@ impl State {
         }
     }
 
-    pub fn identify_channel(&self, chan: &str) -> Option<BotChannelId> {
+    // fn get_channel_by_name_mut(&mut self, name: &str) -> Option<(ChannelId, &mut InternalChannel)> {
+    //     let chan_id = match self.channel_map.get_mut(&name.to_string()) {
+    //         Some(chan_id) => *chan_id,
+    //         None => return None
+    //     };
+    //     match self.channels.get_mut(&chan_id) {
+    //         Some(channel) => Some((chan_id, channel)),
+    //         None => panic!("Inconsistent state")
+    //     }
+    // }
+
+    fn insert_user(&mut self, user: InternalUser) {
+        let user_id = user.id;
+        let nick = user.prefix.nick().unwrap().to_string();
+        assert!(self.users.insert(user_id, user).is_none());
+        assert!(self.user_map.insert(nick, user_id).is_none());
+        assert!(self.validate_state_internal().is_ok());
+    }
+
+    fn update_user_by_nick(&mut self, nick: &str, modfunc: proc(&mut InternalUser)) -> bool {
+        let user_id = deref_opt_or_return!(self.user_map.get(&nick.to_string()),
+            "Couldn't find user by nick", false);
+        let result = self.update_user(user_id, modfunc);
+        assert!(self.validate_state_internal().is_ok());
+        result
+    }
+
+    fn update_user(&mut self, id: UserId, modfunc: proc(&mut InternalUser)) -> bool {
+        match self.users.entry(id) {
+            Occupied(mut entry) => {
+                let prev_nick = entry.get().prefix.nick().unwrap().to_string();
+                modfunc(entry.get_mut());
+                let new_nick = entry.get().prefix.nick().unwrap().to_string();
+                warn!("prev_nick != new_nick || {} != {}", prev_nick, new_nick);
+                if prev_nick != new_nick {
+                    warn!("self.user_map -- REMOVE {}; INSERT {}", prev_nick, new_nick);
+                    self.user_map.remove(&prev_nick);
+                    self.user_map.insert(new_nick, id);
+                }
+                true
+            }
+            Vacant(_) => false
+        }
+    }
+
+    fn remove_user_by_nick(&mut self, name: &str) -> Option<UserId> {
+        let user_id = match self.user_map.get(&name.to_string()) {
+            Some(user_id) => *user_id,
+            None => return None
+        };
+        match self.remove_user_by_id(user_id) {
+            true => Some(user_id),
+            false => panic!("Inconsistent state")
+        }
+    }
+
+    fn remove_user_by_id(&mut self, id: UserId) -> bool {
+        if self.self_id == id {
+            panic!("Tried to remove self");
+        }
+        let (nick, channels): (_, Vec<_>) = match self.users.get(&id) {
+            Some(user_state) => (
+                user_state.prefix.nick().unwrap().to_string(),
+                user_state.channels.iter().map(|x| *x).collect(),
+            ),
+            None => return false
+        };
+        let xx = channels.clone();
+        for chan_id in channels.into_iter() {
+            self.channels.get_mut(&chan_id).unwrap().users.remove(&id);
+            self.users.get_mut(&id).unwrap().channels.remove(&chan_id);
+        }
+
+        self.users.remove(&id).unwrap();
+        self.user_map.remove(&nick).unwrap();
+
+        match self.validate_state_internal() {
+            Ok(()) => (),
+            Err(msg) => panic!("{} ;  {}", msg, xx)
+        };
+        true
+    }
+
+    pub fn identify_channel(&self, chan: &str) -> Option<ChannelId> {
         let channel_name = chan.to_ascii_lower();
         match self.channel_map.get(&channel_name) {
             Some(chan_id) => Some(chan_id.clone()),
@@ -695,31 +986,148 @@ impl State {
         }
     }
 
-    pub fn identify_nick(&self, nick: &str) -> Option<BotUserId> {
+    pub fn identify_nick(&self, nick: &str) -> Option<UserId> {
         match self.user_map.get(&nick.to_string()) {
             Some(user_id) => Some(*user_id),
             None => None
         }
     }
+}
 
-    pub fn on_event(&mut self, event: &IrcEvent) {
-        let commands = StateCommandStreamBuilder::new(self).from_event(event);
-        for command in commands.iter() {
-            info!("command application: {}", command);
-            self.apply_command(command);
+impl Eq for State {}
+
+impl PartialEq for State {
+    fn eq(&self, other: &State) -> bool {
+        for (nick, id) in self.user_map.iter() {
+            if Some(id) != other.user_map.get(nick) {
+                return false;
+            }
         }
-        for (chan_id, channel_state) in self.channels.iter() {
-            info!("channel {}@{} has {} users",
-                channel_state.name, chan_id,
-                channel_state.users.len());
+        for (nick, id) in other.user_map.iter() {
+            if Some(id) != self.user_map.get(nick) {
+                return false;
+            }
         }
+        for (name, id) in self.channel_map.iter() {
+            if Some(id) != other.channel_map.get(name) {
+                return false;
+            }
+        }
+        for (name, id) in other.channel_map.iter() {
+            if Some(id) != self.channel_map.get(name) {
+                return false;
+            }
+        }
+        for (id, self_state) in self.users.iter() {
+            if let Some(other_state) = other.users.get(id) {
+                if self_state != other_state {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+        for (id, self_state) in self.channels.iter() {
+            if let Some(other_state) = other.channels.get(id) {
+                if self_state != other_state {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+
+        if self.user_seq != other.user_seq {
+            return false;
+        }
+        if self.channel_seq != other.channel_seq {
+            return false;
+        }
+        if self.self_nick != other.self_nick {
+            return false;
+        }
+        if self.generation != other.generation {
+            return false;
+        }
+        return true;
+    }
+}
+
+impl Diff<StateDiff> for State {
+    fn diff(&self, other: &State) -> StateDiff {
+        let mut commands = Vec::new();
+        if self.self_nick != other.self_nick {
+            commands.push(UpdateSelfNick(other.self_nick.clone()));
+        }
+
+        for (&id, cstate) in other.channels.iter() {
+            if let Some(old_channel) = self.channels.get(&id) {
+                if cstate != old_channel {
+                    commands.push(UpdateChannel(id, old_channel.diff(cstate)));
+                }
+            } else {
+                commands.push(CreateChannel(ChannelInfo::from_internal(cstate)));
+                if !cstate.users.is_empty() {
+                    let diff: Vec<_> = cstate.users.iter()
+                        .map(|&x| channel_diff::AddUser(x)).collect();
+                    commands.push(UpdateChannel(id, diff));
+                }
+            }
+        }
+        for (&id, _) in self.channels.iter() {
+            if !other.channels.contains_key(&id) {
+                commands.push(RemoveChannel(id));
+            }
+        }
+
+        for (&id, ustate) in other.users.iter() {
+            if let Some(old_user) = self.users.get(&id) {
+                if ustate != old_user {
+                    commands.push(UpdateUser(id, old_user.diff(ustate)));
+                }
+            } else {
+                commands.push(CreateUser(UserInfo::from_internal(ustate)));
+                if !ustate.channels.is_empty() {
+                    let diff: Vec<_> = ustate.channels.iter()
+                        .map(|&x| user_diff::AddChannel(x)).collect();
+                    commands.push(UpdateUser(id, diff));
+                }
+            }
+        }
+        for (&id, _) in self.users.iter() {
+            if !other.users.contains_key(&id) {
+                commands.push(RemoveUser(id));
+            }
+        }
+
+        if self.generation != other.generation {
+            commands.push(SetGeneration(other.generation));
+        }
+
+        StateDiff {
+            from_generation: self.generation,
+            to_generation: other.generation,
+            commands: commands,
+        }
+    }
+}
+
+impl Patch<StateDiff> for State {
+    fn patch(&self, diff: &StateDiff) -> State {
+        let mut new = self.clone();
+        assert_eq!(self.generation, diff.from_generation);
+        for command in diff.commands.iter() {
+            new.apply_command(command);
+        }
+        assert_eq!(self.generation, diff.from_generation);
+        new
     }
 }
 
 
 #[cfg(test)]
 mod tests {
-    use super::{State, BotUserId};
+    use super::{State, UserId};
     use std::io::{IoResult, BufReader};
     use irc::{
         BundlerManager,
@@ -736,7 +1144,6 @@ mod tests {
         ContentLine(IrcMessage),
         CommentLine(String),
     }
-
 
     struct SessionReplayer<'a> {
         reader: BufReader<'a>
@@ -797,13 +1204,16 @@ mod tests {
                     if let ContentLine(ref content) = rec {
                         for event in bundler.on_message(content).iter() {
                             state.on_event(event);
+                                match state.validate_state_internal() {
+                                    Ok(()) => (),
+                                    Err(msg) => panic!(msg)
+                                };
                         }
                     }
                 }
             }
             statefunc(&mut state);
         };
-
 
         let mut random_user_id_hist = Vec::new();
         let mut chan_test_id_hist = Vec::new();
@@ -834,7 +1244,7 @@ mod tests {
             let msg = format!("state.identify_nick failed on line {}", 1 + line!());
             let randomuser_id = state.identify_nick("randomuser").expect(msg.as_slice());
             if random_user_id_hist.contains(&randomuser_id) {
-                assert!(false, "nick `randomuser` BotUserId must change between losses in view");
+                assert!(false, "nick `randomuser` UserId must change between losses in view");
             }
             random_user_id_hist.push(randomuser_id);
             match state.users.get(&randomuser_id) {
@@ -848,15 +1258,15 @@ mod tests {
         });
 
         it("should not have a user `randomuser` after PART", |state| {
-            assert!(state.identify_nick("randomuser").is_none());
+            assert_eq!(state.identify_nick("randomuser"), None);
         });
 
         it("should not have a user `randomuser` after KICK", |state| {
-            assert!(state.identify_nick("randomuser").is_none());
+            assert_eq!(state.identify_nick("randomuser"), None);
         });
 
         it("should not have a user `randomuser` after QUIT", |state| {
-            assert!(state.identify_nick("randomuser").is_none());
+            assert_eq!(state.identify_nick("randomuser"), None);
         });
 
         it("topic of `#test` should be `setting a cool topic`", |state| {
@@ -867,7 +1277,7 @@ mod tests {
             assert_eq!(channel.topic.as_slice(), "setting a cool topic");
         });
 
-        let mut randomuser_id: Option<BotUserId> = None;
+        let mut randomuser_id: Option<UserId> = None;
         it("store randomuser's UserID here", |state| {
             randomuser_id = state.identify_nick("randomuser")
         });
@@ -886,12 +1296,12 @@ mod tests {
         it("should have the channel `#test` once again", |state| {
             let test_id = state.identify_channel("#test").unwrap();
             if chan_test_id_hist.contains(&test_id) {
-                assert!(false, "channel `#test` BotChannelId must change between losses in view");
+                assert!(false, "channel `#test` ChannelId must change between losses in view");
             }
             chan_test_id_hist.push(test_id);
         });
 
-        let mut randomuser_id: Option<BotUserId> = None;
+        let mut randomuser_id: Option<UserId> = None;
 
         it("should have a channel `#test2` with 2 users", |state| {
             assert!(state.identify_channel("#test2").is_some());
@@ -904,6 +1314,10 @@ mod tests {
             assert_eq!(
                 state.identify_nick("randomuser").unwrap(),
                 randomuser_id.unwrap());
+        });
+
+        it("randomuser should have been forgotten", |state| {
+            assert_eq!(state.identify_nick("randomuser"), None);
         });
 
         it("randomuser should not have the same ID as before", |state| {

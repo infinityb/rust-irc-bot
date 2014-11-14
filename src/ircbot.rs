@@ -1,6 +1,6 @@
 #![deny(unused_must_use)]
 
-#![feature(if_let, slicing_syntax, phase)]
+#![feature(if_let, slicing_syntax, phase, macro_rules)]
 
 #[phase(plugin, link)] extern crate log;
 

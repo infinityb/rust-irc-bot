@@ -63,5 +63,7 @@
 >> :randomuser!rustbot@coolhost PART :#test2
 ## randomuser should have the same ID as before
 >> :randomuser!rustbot@coolhost PART :#test
+>> :server PING swagever
+## randomuser should have been forgotten
 >> :randomuser!rustbot@coolhost JOIN :#test
 ## randomuser should not have the same ID as before
