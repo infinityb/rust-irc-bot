@@ -3,6 +3,7 @@ use std::collections::hash_map::{
     Vacant,
     Occupied,
 };
+use std::default::Default;
 use std::rand::distributions::{Sample, Range};
 use std::cmp::{Less, Equal, Greater};
 use std::fmt::{Formatter, FormatError, Show};
@@ -163,11 +164,13 @@ impl Show for RollResult {
 }
 
 pub struct GreedPlugin {
-    games: HashMap<BotChannelId, GreedPlayResult>
+    games: HashMap<BotChannelId, GreedPlayResult>,
+    userstats: HashMap<BotUserId, UserStats>,
 }
 
 enum GreedCommandType {
-    Greed
+    Greed,
+    GreedStats
 }
 
 struct GreedPlayResult {
@@ -183,7 +186,33 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<GreedCommandType> {
     };
     match command_phrase.command[] {
         "greed" => Some(Greed),
+        "greed-stats" => Some(GreedStats),
         _ => None
+    }
+}
+
+struct UserStats {
+    games: uint,
+    wins: uint,
+    score_sum: uint,
+    opponent_score_sum: uint
+}
+
+impl Default for UserStats {
+    fn default() -> UserStats {
+        UserStats {
+            games: 0,
+            wins: 0,
+            score_sum: 0,
+            opponent_score_sum: 0,
+        }
+    }
+}
+
+impl Show for UserStats {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
+        write!(f, "{} wins over {} games; net score {}",
+            self.wins, self.games, self.score_sum - self.opponent_score_sum)
     }
 }
 
@@ -191,7 +220,8 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<GreedCommandType> {
 impl GreedPlugin {
     pub fn new() -> GreedPlugin {
         GreedPlugin {
-            games: HashMap::new()
+            games: HashMap::new(),
+            userstats: HashMap::new(),
         }
     }
 
@@ -199,6 +229,21 @@ impl GreedPlugin {
         "greed"
     }
     
+    fn dispatch_cmd_greed_stats(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
+        let user_id = match m.source {
+            Some(KnownUser(uid)) => uid,
+            _ => return
+        };
+        let source_nick = match message.source_nick() {
+            Some(nickname) => nickname,
+            None => return
+        };
+        m.reply(match self.userstats.get(&user_id) {
+            Some(stats) => format!("{}: {}", source_nick, stats),
+            None => format!("{}: You haven't played any games yet", source_nick)
+        })
+    }
+
     fn dispatch_cmd_greed(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
         let (user_id, channel_id) = match (m.source.clone(), m.target.clone()) {
             (Some(KnownUser(uid)), Some(KnownChannel(cid))) => (uid, cid),
@@ -219,6 +264,7 @@ impl GreedPlugin {
                     user_nick: source_nick.to_string(),
                     roll: roll
                 });
+                return;
             },
             Occupied(entry) => {
                 {
@@ -228,6 +274,7 @@ impl GreedPlugin {
                         return;
                     }
                 }
+
                 let prev_play = entry.take();
                 let roll = task_rng().gen::<RollResult>();
                 m.reply(format!("{}: {}", source_nick, roll));
@@ -236,11 +283,41 @@ impl GreedPlugin {
                     Some(user) => user.get_nick().to_string(),
                     None => format!("{} (deceased)", prev_play.user_nick)
                 };
-                m.reply(match prev_play.roll.total_score().cmp(&roll.total_score()) {
+
+                let prev_play_score = prev_play.roll.total_score() as uint;
+                let cur_play_score = roll.total_score() as uint;
+                let cmp_result = prev_play_score.cmp(&cur_play_score);
+
+                let (prev_user_wins, cur_user_wins) = match cmp_result {
+                    Less => (0, 1),
+                    Equal => (0, 0),
+                    Greater => (1, 0)
+                };
+                m.reply(match cmp_result {
                      Less => format!("{} wins!", source_nick),
                      Equal => format!("{} and {} tie.", source_nick, prev_play_nick),
                      Greater => format!("{} wins!", prev_play_nick)
                 });
+                {
+                    let cur_user = match self.userstats.entry(user_id) {
+                        Occupied(entry) => entry.into_mut(),
+                        Vacant(entry) => entry.set(Default::default())
+                    };
+                    cur_user.games += 1;
+                    cur_user.wins += cur_user_wins;
+                    cur_user.score_sum += cur_play_score;
+                    cur_user.opponent_score_sum += prev_play_score;
+                }
+                {
+                    let prev_user = match self.userstats.entry(user_id) {
+                        Occupied(entry) => entry.into_mut(),
+                        Vacant(entry) => entry.set(Default::default())
+                    };
+                    prev_user.games += 1;
+                    prev_user.wins += prev_user_wins;
+                    prev_user.score_sum += prev_play_score;
+                    prev_user.opponent_score_sum += cur_play_score;
+                }
             }
         }
     }
@@ -250,11 +327,13 @@ impl GreedPlugin {
 impl RustBotPlugin for GreedPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
         conf.map_format(Format::from_str("greed").unwrap());
+        conf.map_format(Format::from_str("greed-stats").unwrap());
     }
     
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
         match parse_command(m) {
             Some(Greed) => self.dispatch_cmd_greed(m, message),
+            Some(GreedStats) => self.dispatch_cmd_greed_stats(m, message),
             None => ()
         }
     }
