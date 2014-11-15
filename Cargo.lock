@@ -3,9 +3,20 @@ name = "ircbot"
 version = "0.1.0"
 dependencies = [
  "http 0.1.0-pre (git+https://github.com/chris-morgan/rust-http)",
+ "hyper 0.0.1 (git+https://github.com/hyperium/hyper)",
  "irc 0.1.0 (git+https://github.com/infinityb/rust-irc)",
  "time 0.0.1 (git+http://github.com/rust-lang/time)",
  "toml 0.1.0 (git+https://github.com/alexcrichton/toml-rs)",
+]
+
+[[package]]
+name = "cookie"
+version = "0.0.1"
+source = "git+https://github.com/alexcrichton/cookie-rs#3f0e8a55569a9f4ed2e1f36917004ba1fae79887"
+dependencies = [
+ "openssl 0.0.1 (git+https://github.com/sfackler/rust-openssl.git)",
+ "time 0.0.1 (git+http://github.com/rust-lang/time)",
+ "url 0.1.0 (git+https://github.com/servo/rust-url)",
 ]
 
 [[package]]
@@ -61,6 +72,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyper"
+version = "0.0.1"
+source = "git+https://github.com/hyperium/hyper#6206afe7fea7b706bd9ea575affa5a435be808af"
+dependencies = [
+ "cookie 0.0.1 (git+https://github.com/alexcrichton/cookie-rs)",
+ "mime 0.0.1 (git+https://github.com/hyperium/mime.rs)",
+ "move-acceptor 0.0.1 (git+https://github.com/reem/rust-move-acceptor)",
+ "openssl 0.0.1 (git+https://github.com/sfackler/rust-openssl.git)",
+ "time 0.0.1 (git+http://github.com/rust-lang/time)",
+ "typeable 0.0.1 (git+https://github.com/reem/rust-typeable)",
+ "unsafe-any 0.1.0 (git+https://github.com/reem/rust-unsafe-any)",
+ "url 0.1.0 (git+https://github.com/servo/rust-url)",
+]
+
+[[package]]
 name = "irc"
 version = "0.1.0"
 source = "git+https://github.com/infinityb/rust-irc#088a7dc3a741602b7eef29dc68dcf5e262e65437"
@@ -75,6 +101,16 @@ source = "git+https://github.com/DiamondLovesYou/libressl-pnacl-sys.git#24b68009
 dependencies = [
  "pnacl-build-helper 0.0.1 (git+https://github.com/DiamondLovesYou/cargo-pnacl-helper.git)",
 ]
+
+[[package]]
+name = "mime"
+version = "0.0.1"
+source = "git+https://github.com/hyperium/mime.rs#467c271814d51659f12de88f87dcd3dc3280ee9b"
+
+[[package]]
+name = "move-acceptor"
+version = "0.0.1"
+source = "git+https://github.com/reem/rust-move-acceptor#25c5c33a83f605fdd0f3d37d2589e2b0b4e6cbd1"
 
 [[package]]
 name = "openssl"
@@ -115,6 +151,16 @@ dependencies = [
 name = "toml"
 version = "0.1.0"
 source = "git+https://github.com/alexcrichton/toml-rs#796a127adf15e074f6483da5885dbf26535755b9"
+
+[[package]]
+name = "typeable"
+version = "0.0.1"
+source = "git+https://github.com/reem/rust-typeable#55154e1809db8ceec8f8519bdbb638c2fbd712f5"
+
+[[package]]
+name = "unsafe-any"
+version = "0.1.0"
+source = "git+https://github.com/reem/rust-unsafe-any#2863af363bbd83079b6773920bba5b736408db33"
 
 [[package]]
 name = "url"

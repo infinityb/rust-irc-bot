@@ -12,17 +12,7 @@ use state::{
 };
 
 pub use self::format::{
-    InvalidAtom,
-    Unspecified,
-    WholeNumeric,
-    Atom,
-    LiteralAtom,
-    FormattedAtom,
-    Value,
-    StringValue,
-    WholeNumericValue,
     Format,
-    FormatKind,
     FormatResult,
     EmptyFormat,
     CommandPhrase
@@ -182,12 +172,11 @@ impl PluginContainer {
                 if is_command_message(message, self.cmd_prefix[]) {
                     let message_body = message.get_args()[1][self.cmd_prefix.len()..];
                     match mapper_format.parse(message_body) {
-                        Ok(Some(command_phrase)) => {
+                        Ok(command_phrase) => {
                             dispatch.command = Some(command_phrase);
                             plugin.dispatch_cmd(&dispatch, message);
                             dispatch.command = None;
                         },
-                        Ok(None) => (),
                         Err(_) => ()
                     } 
                 }

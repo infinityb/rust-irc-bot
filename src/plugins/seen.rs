@@ -10,7 +10,6 @@ use command_mapper::{
     CommandMapperDispatch,
     IrcBotConfigurator,
     Format,
-    StringValue
 };
 
 
@@ -188,12 +187,12 @@ impl RustBotPlugin for SeenPlugin {
             Some(command_phrase) => command_phrase,
             None => return
         };
+
         let parsed_command = match command_phrase.command[] {
-            "seen" => Some(Seen(match command_phrase.args.get(&"nick".to_string()) {
-                Some(&StringValue(ref rest)) => rest.clone(),
-                Some(_) => return,
-                None => return
-            })),
+            "seen" => match command_phrase.get("nick") {
+                Some(nick) => Some(Seen(nick)),
+                None => None
+            },
             _ => None
         };
 

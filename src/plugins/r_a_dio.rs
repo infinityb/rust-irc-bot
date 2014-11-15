@@ -7,9 +7,9 @@ use std::time::Duration;
 use serialize::json;
 use serialize::json::DecoderError;
 use url::Url;
-use http::client::RequestWriter;
-use http::method::Get;
 use time::{get_time, Timespec};
+use hyper::client::request::Request;
+use hyper::HttpError;
 
 use irc::IrcMessage;
 
@@ -40,7 +40,7 @@ struct RadioStreamApiResponse {
 
 #[deriving(Show)]
 enum RadioApiFailure {
-    NoResponseError(IoError),
+    RequestError(HttpError),
     ResponseReadError(IoError),
     ResponseDecodeError,
     ResponseDeserializeError(DecoderError)
@@ -50,13 +50,18 @@ enum RadioApiFailure {
 fn get_radio_api_result() -> Result<RadioApiResponse, RadioApiFailure> {
     info!("Making r/a/dio API request");
     let url = Url::parse(API_URL).ok().expect("Invalid URL :-(");
-    let request: RequestWriter = RequestWriter::new(Get, url).unwrap();
-
-    let mut response = match request.read_response() {
-        Ok(response) => response,
-        Err((_, io_error)) => return Err(NoResponseError(io_error))
+    let mut resp = match Request::get(url) {
+        Ok(req) => match req.start() {
+            Ok(req) => match req.send() {
+                Ok(resp) => resp,
+                Err(err) => return Err(RequestError(err))
+            },
+            Err(err) => return Err(RequestError(err))
+        },
+        Err(err) => return Err(RequestError(err))
     };
-    let body = match response.read_to_end() {
+
+    let body = match resp.read_to_end() {
         Ok(body) => body,
         Err(io_error) => return Err(ResponseReadError(io_error))
     };

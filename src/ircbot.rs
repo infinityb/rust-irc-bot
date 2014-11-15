@@ -8,7 +8,7 @@ extern crate time;
 extern crate serialize;
 
 extern crate url;
-extern crate http;
+extern crate hyper;
 extern crate toml;
 extern crate irc;
 

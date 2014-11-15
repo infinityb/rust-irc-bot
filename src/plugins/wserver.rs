@@ -2,9 +2,9 @@ use std::task::TaskBuilder;
 use std::io::IoError;
 
 use url::{Url, ParseError};
-use http::client::RequestWriter;
-use http::method::Head;
-
+use hyper::client::request::Request;
+use hyper::header::common::server::Server;
+use hyper::HttpError;
 use irc::IrcMessage;
 
 use command_mapper::{
@@ -12,22 +12,18 @@ use command_mapper::{
     CommandMapperDispatch,
     IrcBotConfigurator,
     Format,
-    StringValue,
 };
 
 
 #[deriving(Show)]
 enum WserverFailure {
-    BadUrl(ParseError),
     NoServerFound,
-    WriterCreateError(IoError),
-    NoResponseError(IoError),
-    ResponseReadError(IoError),
+    BadUrl(ParseError),
+    RequestError(HttpError)
 }
 
 
 fn get_wserver_result(urlstr: &str) -> Result<String, WserverFailure> {
-
     let url = match Url::parse(urlstr) {
         Ok(url) => url,
         Err(_) => {
@@ -38,21 +34,22 @@ fn get_wserver_result(urlstr: &str) -> Result<String, WserverFailure> {
             }
         }
     };
-
-    let request: RequestWriter = match RequestWriter::new(Head, url) {
-        Ok(request) => request,
-        Err(err) => return Err(WriterCreateError(err))
+    let resp = match Request::head(url) {
+        Ok(req) => match req.start() {
+            Ok(req) => match req.send() {
+                Ok(resp) => resp,
+                Err(err) => return Err(RequestError(err))
+            },
+            Err(err) => return Err(RequestError(err))
+        },
+        Err(err) => return Err(RequestError(err))
     };
-    let mut response = match request.read_response() {
-        Ok(response) => response,
-        Err((_, io_error)) => return Err(NoResponseError(io_error))
-    };
-    match response.read_to_end() {
-        Ok(_) => (),
-        Err(io_error) => return Err(ResponseReadError(io_error))
-    };
-    match response.headers.server {
-        Some(server) => Ok(server),
+    // let resp = match resp_res {
+    //     Ok(resp) => resp,
+    //     Err(err) => return Err(RequestError(err))
+    // };
+    match resp.headers.get::<Server>() {
+        Some(&Server(ref server)) => Ok(server.clone()),
         None => Err(NoServerFound)
     }
 }
@@ -75,9 +72,8 @@ impl WserverInternalState {
             Some(ref command) => command,
             None => return
         };
-        let host = match command.args.get(&"host".to_string()) {
-            Some(&StringValue(ref host)) => host,
-            Some(_) => return,
+        let host = match command.get::<String>("host") {
+            Some(host) => host,
             None => return
         };
         match get_wserver_result(host[]) {
@@ -90,26 +86,22 @@ impl WserverInternalState {
         }
     }
 
-    fn start(&mut self, rx: Receiver<WserverCommand>) {
-        for comm in rx.iter() {
-            match comm {
-                Dispatch(m) => {
-                    let command_phrase = match m.command() {
-                        Some(command_phrase) => command_phrase,
-                        None => continue
-                    };
-                    match command_phrase.command[] {
-                        "wserver" => self.handle_wserver(&m),
-                        _ => ()
-                    };
-                }
+    fn start(&mut self, rx: Receiver<CommandMapperDispatch>) {
+        for m in rx.iter() {
+            let command_phrase = match m.command() {
+                Some(command_phrase) => command_phrase,
+                None => continue
+            };
+            match command_phrase.command[] {
+                "wserver" => self.handle_wserver(&m),
+                _ => ()
             }
         }
     }
 }
 
 pub struct WserverPlugin {
-    sender: Option<SyncSender<WserverCommand>>
+    sender: Option<SyncSender<CommandMapperDispatch>>
 }
 
 
@@ -124,11 +116,6 @@ impl WserverPlugin {
         "wserver"
     }
 }
-
-enum WserverCommand {
-    Dispatch(CommandMapperDispatch)
-}
-
 
 impl RustBotPlugin for WserverPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
@@ -145,20 +132,9 @@ impl RustBotPlugin for WserverPlugin {
     }
 
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, _message: &IrcMessage) {
-        loop {
-            let remote_went_down = {
-                let sender = match self.sender {
-                    Some(ref sender) => sender,
-                    None => return
-                };
-                sender.send_opt(Dispatch(m.clone())).is_err()
-            };
-            if remote_went_down {
-                m.reply("wserver plugin crashed. restarting...".to_string());
-                self.start();
-            } else {
-                break;
-            }
+        match self.sender {
+            Some(ref sender) => sender.send(m.clone()),
+            None => ()
         }
     }
 }

@@ -7,8 +7,8 @@ use serialize::json::DecoderError;
 use time::{get_time, Timespec};
 use url::Url;
 use url::form_urlencoded::serialize_owned;
-use http::client::RequestWriter;
-use http::method::Get;
+use hyper::client::request::Request;
+use hyper::HttpError;
 
 use irc::IrcMessage;
 
@@ -23,7 +23,6 @@ use command_mapper::{
     CommandMapperDispatch,
     IrcBotConfigurator,
     Format,
-    StringValue
 };
 
 
@@ -55,7 +54,7 @@ struct DeerApiResponse {
 
 #[deriving(Show)]
 enum DeerApiFailure {
-    NoResponseError(IoError),
+    RequestError(HttpError),
     ResponseReadError(IoError),
     ResponseDecodeError,
     ResponseDeserializeError(DecoderError)
@@ -70,20 +69,24 @@ fn get_deer_nocache(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> 
     url.query = Some(serialize_owned(vec![
         (String::from_str("deer"), String::from_str(deer_name)),
     ][]));
-
-    let request: RequestWriter = RequestWriter::new(Get, url).unwrap();
-
-    let mut response = match request.read_response() {
-        Ok(response) => response,
-        Err((_, io_error)) => return Err(NoResponseError(io_error))
+    
+    let mut resp = match Request::get(url) {
+        Ok(req) => match req.start() {
+            Ok(req) => match req.send() {
+                Ok(resp) => resp,
+                Err(err) => return Err(RequestError(err))
+            },
+            Err(err) => return Err(RequestError(err))
+        },
+        Err(err) => return Err(RequestError(err))
     };
-    let body = match response.read_to_end() {
-        Ok(body) => body,
+
+    let body = match resp.read_to_end() {
+        Ok(body) => match String::from_utf8(body) {
+            Ok(body) => body,
+            Err(_err) => return Err(ResponseDecodeError)
+        },
         Err(io_error) => return Err(ResponseReadError(io_error))
-    };
-    let body = match String::from_utf8(body) {
-        Ok(body) => body,
-        Err(_err) => return Err(ResponseDecodeError)
     };
 
     match json::decode::<DeerApiResponse>(body[]) {
@@ -216,17 +219,7 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<DeerCommandType> {
         None => return None
     };
     match command_phrase.command[] {
-        "deer" => Some(Deer(match command_phrase.args.get(&"deername".to_string()) {
-            Some(&StringValue(ref rest)) => {
-                if rest.as_slice() == "" {
-                    None
-                } else {
-                    Some(rest.clone())
-                }
-            }
-            Some(_) => None,
-            None => return None
-        })),
+        "deer" => Some(Deer(command_phrase.get("deername"))),
         "deerstats" => Some(DeerStats),
         _ => None
     }
