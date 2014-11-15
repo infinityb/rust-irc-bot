@@ -4,9 +4,9 @@ use std::collections::hash_map::{
     Occupied,
 };
 use std::default::Default;
+use std::num::SignedInt;
 use std::rand::distributions::{Sample, Range};
 use std::cmp::{Less, Equal, Greater};
-use std::num::abs;
 use std::fmt::{Formatter, FormatError, Show};
 use std::rand::{task_rng, Rng, Rand};
 
@@ -303,7 +303,7 @@ impl GreedPlugin {
                 Equal => (false, false),
                 Greater => (true, false)
             };
-            let score_diff = abs(prev_play_score - cur_play_score); 
+            let score_diff = (prev_play_score - cur_play_score).abs();
             m.reply(match cmp_result {
                  Less => format!("{} wins {} points from {}!",
                     source_nick, score_diff, prev_play_nick),

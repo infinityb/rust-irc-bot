@@ -312,7 +312,7 @@ fn cons_the_basics() {
 #[test]
 fn parse_the_basics() {
     {
-        let cmd_str = "articles my_bar my_category 01234";
+        let cmd_str = "articles my_bar my_category 1234";
         let fmt_str = "articles {foo} {category:s} {id:d}";
 
         let fmt = match Format::from_str(fmt_str) {
@@ -326,16 +326,15 @@ fn parse_the_basics() {
             Err(err) => panic!("parse failure: {}", err)
         };
         assert_eq!(cmdlet.command[], "articles");
-        assert!(cmdlet.args.contains_key(&"foo".to_string()));
-        assert!(cmdlet.args.contains_key(&"foo".to_string()));
+        assert_eq!(
+            cmdlet.get::<String>("foo"),
+            Some("my_bar".to_string()));
 
         assert_eq!(
-            cmdlet.args["foo".to_string()],
-            StringValue("my_bar".to_string()));
+            cmdlet.get::<String>("category"),
+            Some("my_category".to_string()));
 
-        assert_eq!(
-            cmdlet.args["category".to_string()],
-            StringValue("my_category".to_string()));
+        assert_eq!(cmdlet.get::<u64>("id"), Some(1234));
     }
     {
         match Format::from_str("") {
