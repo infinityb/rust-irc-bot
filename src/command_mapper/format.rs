@@ -19,7 +19,7 @@ pub enum ValueParseError {
 pub type ValueResult<T> = Result<T, ValueParseError>;
 
 #[deriving(Show, PartialEq, Eq, Clone, Copy)]
-pub enum AtomType {
+enum AtomType {
     LiteralAtomType,
     StringAtomType,
     WholeNumericAtomType

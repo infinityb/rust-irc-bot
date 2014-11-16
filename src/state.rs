@@ -373,10 +373,7 @@ impl State {
         let user_id = deref_opt_or_return!(self.user_map.get(&user_nick),
             "Got user without knowing about it.", ());
 
-        match self.validate_state_internal() {
-            Ok(()) => (),
-            Err(err) => panic!("{}", err)
-        };
+        self.validate_state_internal_panic();
         self.unlink_user_channel(user_id, chan_id);
     }
 
@@ -633,7 +630,14 @@ impl State {
             IrcEventWhoBundle(Err(_)) => (),
         };
     }
-    #[cfg(test)]
+
+    fn validate_state_internal_panic(&mut self) {
+        match self.validate_state_internal() {
+            Ok(()) => (),
+            Err(msg) => panic!("invalid state: {}, dump = {}", msg, self)
+        };
+    }
+
     fn validate_state_internal(&self) -> Result<(), String> {
         for (&id, state) in self.channels.iter() {
             if id != state.id {
@@ -688,11 +692,6 @@ impl State {
         Ok(())
     }
 
-    #[cfg(not(test))]
-    fn validate_state_internal(&self) -> Result<(), String> {
-        Ok(())
-    }
-
     pub fn get_self_nick<'a>(&'a self) -> &'a str {
         self.self_nick.as_slice()
     }
@@ -713,6 +712,7 @@ impl State {
         self.user_map.insert(new_nick.clone(), self.self_id);
         self.users.insert(self.self_id, User {
             id: self.self_id,
+            // FIXME: hack
             prefix: IrcMsgPrefix::new(format!("{}!someone@somewhere", new_nick[]).into_maybe_owned()),
             channels: HashSet::new(),
         });
@@ -853,7 +853,7 @@ impl State {
         let chan_id = deref_opt_or_return!(
             self.channel_map.get(&lowered), "Unknown channel name", false);
         let result = self.update_channel(chan_id, modfunc);
-        assert!(self.validate_state_internal().is_ok());
+        self.validate_state_internal_panic();
         result
     }
 
@@ -862,7 +862,7 @@ impl State {
         let chan_id = deref_opt_or_return!(
             self.channel_map.get(&lowered), "Unknown channel name", None);
         assert!(self.remove_channel_by_id(chan_id));
-        assert!(self.validate_state_internal().is_ok());
+        self.validate_state_internal_panic();
         Some(chan_id)
     }
 
@@ -881,7 +881,7 @@ impl State {
         }
         self.channels.remove(&id);
         self.channel_map.remove(&chan_name);
-        assert!(self.validate_state_internal().is_ok());
+        self.validate_state_internal_panic();
         true
     }
 
@@ -901,14 +901,15 @@ impl State {
         let nick = user.prefix.nick().unwrap().to_string();
         assert!(self.users.insert(user_id, user).is_none());
         assert!(self.user_map.insert(nick, user_id).is_none());
-        assert!(self.validate_state_internal().is_ok());
+        self.validate_state_internal_panic();
     }
 
     fn update_user_by_nick(&mut self, nick: &str, modfunc: proc(&mut User)) -> bool {
         let user_id = deref_opt_or_return!(self.user_map.get(&nick.to_string()),
             "Couldn't find user by nick", false);
         let result = self.update_user(user_id, modfunc);
-        assert!(self.validate_state_internal().is_ok());
+
+        self.validate_state_internal_panic();
         result
     }
 
@@ -952,7 +953,6 @@ impl State {
             ),
             None => return false
         };
-        let xx = channels.clone();
         for chan_id in channels.into_iter() {
             self.channels.get_mut(&chan_id).unwrap().users.remove(&id);
             self.users.get_mut(&id).unwrap().channels.remove(&chan_id);
@@ -960,11 +960,7 @@ impl State {
 
         self.users.remove(&id).unwrap();
         self.user_map.remove(&nick).unwrap();
-
-        match self.validate_state_internal() {
-            Ok(()) => (),
-            Err(msg) => panic!("{} ;  {}", msg, xx)
-        };
+        self.validate_state_internal_panic();
         true
     }
 
@@ -1202,10 +1198,7 @@ mod tests {
                     if let ContentLine(ref content) = rec {
                         for event in bundler.on_message(content).iter() {
                             state.on_event(event);
-                                match state.validate_state_internal() {
-                                    Ok(()) => (),
-                                    Err(msg) => panic!(msg)
-                                };
+                            state.validate_state_internal_panic();
                         }
                     }
                 }

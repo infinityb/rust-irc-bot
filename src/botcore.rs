@@ -1,6 +1,7 @@
 use std::io::IoResult;
 use std::task::TaskBuilder;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use url::{
     Url, RelativeScheme, SchemeType,
@@ -159,6 +160,7 @@ impl BotConnection {
         let cmd_queue = conn.get_command_queue();
 
         TaskBuilder::new().named("bot-sender").spawn(proc() {
+
             for message in rx.iter() {
                 cmd_queue.send(RawWrite(message));
             }
@@ -167,7 +169,7 @@ impl BotConnection {
         for event in event_queue_rxu.iter() {
             state.on_event(&event);
             if let IrcEventMessage(ref message) = event {
-                container.dispatch(&state, &tx, message);
+                container.dispatch(Arc::new(state.clone()), &tx, message);
             }
         }
 

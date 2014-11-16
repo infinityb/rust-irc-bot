@@ -230,7 +230,7 @@ impl RustBotPlugin for DeerPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
         conf.map_format(Format::from_str("deer {*deername}").unwrap());
         conf.map_format(Format::from_str("deer").unwrap());
-        conf.map_format(Format::from_str("deerstats").unwrap());
+        conf.map_format(Format::from_str("deer-stats").unwrap());
     }
 
     fn start(&mut self) {

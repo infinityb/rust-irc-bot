@@ -57,7 +57,7 @@ pub struct CommandMapperDispatch {
     state: Arc<State>,
     bot_nick: string::String,
     pub command: Option<CommandPhrase>,
-    sender:  SyncSender<string::String>,
+    sender: SyncSender<string::String>,
     pub channel: Option<string::String>,
     pub source: Option<MessageEndpoint>,
     pub target: Option<MessageEndpoint>
@@ -122,9 +122,7 @@ impl PluginContainer {
 
     /// Dispatches messages to plugins, if they have expressed interest in the message.
     /// Interest is expressed via calling map during the configuration phase.
-    pub fn dispatch(&mut self, bot_state: &State, raw_tx: &SyncSender<string::String>, message: &IrcMessage) {
-        let state = Arc::new(bot_state.clone());
-
+    pub fn dispatch(&mut self, state: Arc<State>, raw_tx: &SyncSender<string::String>, message: &IrcMessage) {
         let channel = match message.channel() {
             Some(channel) => Some(string::String::from_str(channel)),
             None => None
@@ -150,11 +148,11 @@ impl PluginContainer {
                 }
             };
         }
-
+        let self_nick = state.get_self_nick().to_string();
         let mut dispatch = CommandMapperDispatch {
             state: state,
             command: None,
-            bot_nick: bot_state.get_self_nick().to_string(),
+            bot_nick: self_nick,
             sender: raw_tx.clone(),
             channel: match channel {
                 Some(ref channel) => Some(channel.clone()),
