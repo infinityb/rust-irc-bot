@@ -1130,8 +1130,8 @@ mod tests {
 
     #[deriving(Show)]
     enum SessionRecord {
-        ContentLine(IrcMessage),
-        CommentLine(String),
+        Content(IrcMessage),
+        Comment(String),
     }
 
     struct SessionReplayer<'a> {
@@ -1157,19 +1157,19 @@ mod tests {
 
         if slice.starts_with(">> ") {
             return match IrcMessage::from_str(slice[3..]) {
-                Ok(irc_msg) => Some(ContentLine(irc_msg)),
+                Ok(irc_msg) => Some(SessionRecord::Content(irc_msg)),
                 Err(_) => None
             }
         }
         if slice.starts_with("## ") {
-            return Some(CommentLine(slice[3..].to_string()));
+            return Some(SessionRecord::Comment(slice[3..].to_string()));
         }
         None
     }
 
     fn marker_match(rec: &SessionRecord, target: &str) -> bool {
         match *rec {
-            CommentLine(ref comm) => comm.as_slice() == target,
+            SessionRecord::Comment(ref comm) => comm.as_slice() == target,
             _ => false
         }
     }
@@ -1190,7 +1190,7 @@ mod tests {
                     if marker_match(&rec, target) {
                         break;
                     }
-                    if let ContentLine(ref content) = rec {
+                    if let SessionRecord::Content(ref content) = rec {
                         for event in bundler.on_message(content).iter() {
                             state.on_event(event);
                             state.validate_state_internal_panic();
