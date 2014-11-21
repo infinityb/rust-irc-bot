@@ -9,9 +9,7 @@ use url::{
     ParseResult, UrlParser
 };
 
-use irc::IrcMessage;
-use irc::{IrcConnection, IrcEventMessage};
-use irc::connection::RawWrite;
+use irc::{IrcConnection, IrcEvent, IrcConnectionCommand};
 
 use command_mapper::PluginContainer;
 
@@ -134,25 +132,25 @@ impl BotConnection {
         let mut state = State::new();
 
         let mut container = PluginContainer::new(conf.command_prefix.clone());
-        if conf.enabled_plugins.contains_equiv(PingPlugin::get_plugin_name()) {
+        if conf.enabled_plugins.contains(PingPlugin::get_plugin_name()) {
             container.register(box PingPlugin::new());
         }
-        if conf.enabled_plugins.contains_equiv(GreedPlugin::get_plugin_name()) {
+        if conf.enabled_plugins.contains(GreedPlugin::get_plugin_name()) {
             container.register(box GreedPlugin::new());
         }
-        if conf.enabled_plugins.contains_equiv(SeenPlugin::get_plugin_name()) {
+        if conf.enabled_plugins.contains(SeenPlugin::get_plugin_name()) {
             container.register(box SeenPlugin::new());
         }
-        if conf.enabled_plugins.contains_equiv(DeerPlugin::get_plugin_name()) {
+        if conf.enabled_plugins.contains(DeerPlugin::get_plugin_name()) {
             container.register(box DeerPlugin::new());
         }
-        if conf.enabled_plugins.contains_equiv(RadioPlugin::get_plugin_name()) {
+        if conf.enabled_plugins.contains(RadioPlugin::get_plugin_name()) {
             container.register(box RadioPlugin::new());
         }
-        if conf.enabled_plugins.contains_equiv(WserverPlugin::get_plugin_name()) {
+        if conf.enabled_plugins.contains(WserverPlugin::get_plugin_name()) {
             container.register(box WserverPlugin::new());
         }
-        if conf.enabled_plugins.contains_equiv(WhoAmIPlugin::get_plugin_name()) {
+        if conf.enabled_plugins.contains(WhoAmIPlugin::get_plugin_name()) {
             container.register(box WhoAmIPlugin::new());
         }
 
@@ -162,13 +160,13 @@ impl BotConnection {
         TaskBuilder::new().named("bot-sender").spawn(proc() {
 
             for message in rx.iter() {
-                cmd_queue.send(RawWrite(message));
+                cmd_queue.send(IrcConnectionCommand::raw_write(message));
             }
         });
 
         for event in event_queue_rxu.iter() {
             state.on_event(&event);
-            if let IrcEventMessage(ref message) = event {
+            if let IrcEvent::Message(ref message) = event {
                 container.dispatch(Arc::new(state.clone()), &tx, message);
             }
         }

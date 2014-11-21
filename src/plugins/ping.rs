@@ -30,7 +30,7 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<PingCommandType> {
         None => return None
     };
     match command_phrase.command[] {
-        "ping" => Some(Ping),
+        "ping" => Some(PingCommandType::Ping),
         _ => None
     }
 }
@@ -43,7 +43,7 @@ impl RustBotPlugin for PingPlugin {
 
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, _: &IrcMessage) {
         match parse_command(m) {
-            Some(Ping) => m.reply(format!("pong")),
+            Some(PingCommandType::Ping) => m.reply(format!("pong")),
             None => return
         }
     }

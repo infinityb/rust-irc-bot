@@ -1,5 +1,5 @@
 use std::task::TaskBuilder;
-use std::io::IoError;
+use std::error::FromError;
 
 use url::{Url, ParseError};
 use hyper::client::request::Request;
@@ -22,35 +22,31 @@ enum WserverFailure {
     RequestError(HttpError)
 }
 
+impl FromError<ParseError> for WserverFailure {
+    fn from_error(err: ParseError) -> WserverFailure {
+        WserverFailure::BadUrl(err)
+    }
+}
+
+impl FromError<HttpError> for WserverFailure {
+    fn from_error(err: HttpError) -> WserverFailure {
+        WserverFailure::RequestError(err)
+    }
+}
 
 fn get_wserver_result(urlstr: &str) -> Result<String, WserverFailure> {
     let url = match Url::parse(urlstr) {
         Ok(url) => url,
         Err(_) => {
             let http_url = format!("http://{}", urlstr);
-            match Url::parse(http_url[]) {
-                Ok(url) => url,
-                Err(err) => return Err(BadUrl(err))
-            }
+            try!(Url::parse(http_url[]))
         }
     };
-    let resp = match Request::head(url) {
-        Ok(req) => match req.start() {
-            Ok(req) => match req.send() {
-                Ok(resp) => resp,
-                Err(err) => return Err(RequestError(err))
-            },
-            Err(err) => return Err(RequestError(err))
-        },
-        Err(err) => return Err(RequestError(err))
-    };
-    // let resp = match resp_res {
-    //     Ok(resp) => resp,
-    //     Err(err) => return Err(RequestError(err))
-    // };
+    let resp = try!(try!(try!(Request::head(url)).start()).send());
+
     match resp.headers.get::<Server>() {
         Some(&Server(ref server)) => Ok(server.clone()),
-        None => Err(NoServerFound)
+        None => Err(WserverFailure::NoServerFound)
     }
 }
 
@@ -118,8 +114,8 @@ impl WserverPlugin {
 }
 
 impl RustBotPlugin for WserverPlugin {
-    fn configure(&mut self, conf: &mut IrcBotConfigurator) {
-        conf.map_format(Format::from_str("wserver {host:s}").unwrap());
+    fn configure(&mut self, configurator: &mut IrcBotConfigurator) {
+        configurator.map_format(Format::from_str("wserver {host:s}").unwrap());
     }
 
     fn start(&mut self) {

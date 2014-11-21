@@ -32,8 +32,8 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<WhoAmICommandType> {
         None => return None
     };
     match command_phrase.command[] {
-        "whoami" => Some(WhoAmI),
-        "whereami" => Some(WhereAmI),
+        "whoami" => Some(WhoAmICommandType::WhoAmI),
+        "whereami" => Some(WhoAmICommandType::WhereAmI),
         _ => None
     }
 }
@@ -47,13 +47,13 @@ impl RustBotPlugin for WhoAmIPlugin {
 
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, msg: &IrcMessage) {
         match parse_command(m) {
-            Some(WhoAmI) => match (msg.source_nick(), &m.source) {
+            Some(WhoAmICommandType::WhoAmI) => match (msg.source_nick(), &m.source) {
                 (Some(source_nick), &Some(ref uid)) => {
                     m.reply(format!("{}: you are {}", source_nick, uid));
                 },
                 (_, _) => ()
             },
-            Some(WhereAmI) => match (msg.source_nick(), &m.target) {
+            Some(WhoAmICommandType::WhereAmI) => match (msg.source_nick(), &m.target) {
                 (Some(source_nick), &Some(ref cid)) => {
                     m.reply(format!("{}: you are in {}", source_nick, cid));
                 },

@@ -1,3 +1,4 @@
+use std::error::FromError;
 use std::task::TaskBuilder;
 use std::io::IoError;
 use std::collections::HashMap;
@@ -54,10 +55,28 @@ struct DeerApiResponse {
 
 #[deriving(Show)]
 enum DeerApiFailure {
+    ResponseDecodeError,
     RequestError(HttpError),
     ResponseReadError(IoError),
-    ResponseDecodeError,
     ResponseDeserializeError(DecoderError)
+}
+
+impl FromError<HttpError> for DeerApiFailure {
+    fn from_error(err: HttpError) -> DeerApiFailure {
+        DeerApiFailure::RequestError(err)
+    }
+}
+
+impl FromError<IoError> for DeerApiFailure {
+    fn from_error(err: IoError) -> DeerApiFailure {
+        DeerApiFailure::ResponseReadError(err)
+    }
+}
+
+impl FromError<DecoderError> for DeerApiFailure {
+    fn from_error(err: DecoderError) -> DeerApiFailure {
+        DeerApiFailure::ResponseDeserializeError(err)
+    }
 }
 
 
@@ -70,29 +89,13 @@ fn get_deer_nocache(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> 
         (String::from_str("deer"), String::from_str(deer_name)),
     ][]));
     
-    let mut resp = match Request::get(url) {
-        Ok(req) => match req.start() {
-            Ok(req) => match req.send() {
-                Ok(resp) => resp,
-                Err(err) => return Err(RequestError(err))
-            },
-            Err(err) => return Err(RequestError(err))
-        },
-        Err(err) => return Err(RequestError(err))
+    let mut resp = try!(try!(try!(Request::get(url)).start()).send());
+    let body = match String::from_utf8(try!(resp.read_to_end())) {
+        Ok(body) => body,
+        Err(_err) => return Err(DeerApiFailure::ResponseDecodeError)
     };
 
-    let body = match resp.read_to_end() {
-        Ok(body) => match String::from_utf8(body) {
-            Ok(body) => body,
-            Err(_err) => return Err(ResponseDecodeError)
-        },
-        Err(io_error) => return Err(ResponseReadError(io_error))
-    };
-
-    match json::decode::<DeerApiResponse>(body[]) {
-        Ok(result) => Ok(result),
-        Err(error) => Err(ResponseDeserializeError(error))
-    }
+    Ok(try!(json::decode::<DeerApiResponse>(body[])))
 }
 
 
@@ -164,14 +167,14 @@ impl DeerInternalState {
             _ => return
         };
 
-        if let Deer(_) = *cmd {
+        if let DeerCommandType::Deer(_) = *cmd {
             if !self.throttle_ok(source, target) {
                 m.reply(String::from_str("2deer4plus"));
                 return;
             }
         }
         match *cmd {
-            Deer(Some(ref deer_name)) => {
+            DeerCommandType::Deer(Some(ref deer_name)) => {
                 match get_deer(self, deer_name[]) {
                     Ok(deer_data) => {
                         for deer_line in deer_data.irccode[].split('\n') {
@@ -185,14 +188,14 @@ impl DeerInternalState {
                     }
                 } 
             },
-            Deer(None) => {
+            DeerCommandType::Deer(None) => {
                 for deer_line in DEER.split('\n') {
                     m.reply(String::from_str(deer_line));
                     self.lines_sent += 1;
                 }
                 self.throttle_bump(source, target);
             },
-            DeerStats => {
+            DeerCommandType::DeerStats => {
                 m.reply(format!("lines sent: {}", self.lines_sent));
             }
         };
@@ -219,8 +222,8 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<DeerCommandType> {
         None => return None
     };
     match command_phrase.command[] {
-        "deer" => Some(Deer(command_phrase.get("deername"))),
-        "deerstats" => Some(DeerStats),
+        "deer" => Some(DeerCommandType::Deer(command_phrase.get("deername"))),
+        "deerstats" => Some(DeerCommandType::DeerStats),
         _ => None
     }
 }

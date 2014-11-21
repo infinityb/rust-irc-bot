@@ -3,6 +3,7 @@ use std::io::IoError;
 use std::collections::HashSet;
 use std::default::Default;
 use std::time::Duration;
+use std::error::FromError;
 
 use serialize::json;
 use serialize::json::DecoderError;
@@ -40,40 +41,42 @@ struct RadioStreamApiResponse {
 
 #[deriving(Show)]
 enum RadioApiFailure {
+    ResponseDecodeError,
     RequestError(HttpError),
     ResponseReadError(IoError),
-    ResponseDecodeError,
     ResponseDeserializeError(DecoderError)
+}
+
+
+impl FromError<HttpError> for RadioApiFailure {
+    fn from_error(err: HttpError) -> RadioApiFailure {
+        RadioApiFailure::RequestError(err)
+    }
+}
+
+impl FromError<IoError> for RadioApiFailure {
+    fn from_error(err: IoError) -> RadioApiFailure {
+        RadioApiFailure::ResponseReadError(err)
+    }
+}
+
+impl FromError<DecoderError> for RadioApiFailure {
+    fn from_error(err: DecoderError) -> RadioApiFailure {
+        RadioApiFailure::ResponseDeserializeError(err)
+    }
 }
 
 
 fn get_radio_api_result() -> Result<RadioApiResponse, RadioApiFailure> {
     info!("Making r/a/dio API request");
     let url = Url::parse(API_URL).ok().expect("Invalid URL :-(");
-    let mut resp = match Request::get(url) {
-        Ok(req) => match req.start() {
-            Ok(req) => match req.send() {
-                Ok(resp) => resp,
-                Err(err) => return Err(RequestError(err))
-            },
-            Err(err) => return Err(RequestError(err))
-        },
-        Err(err) => return Err(RequestError(err))
-    };
-
-    let body = match resp.read_to_end() {
+    let mut resp = try!(try!(try!(Request::get(url)).start()).send());
+    let body = match String::from_utf8(try!(resp.read_to_end())) {
         Ok(body) => body,
-        Err(io_error) => return Err(ResponseReadError(io_error))
-    };
-    let body = match String::from_utf8(body) {
-        Ok(body) => body,
-        Err(_err) => return Err(ResponseDecodeError)
+        Err(_err) => return Err(RadioApiFailure::ResponseDecodeError)
     };
     info!("r/a/dio result: ``{}''", body.as_slice());
-    match json::decode::<RadioApiResponse>(body.as_slice()) {
-        Ok(result) => Ok(result),
-        Err(error) => Err(ResponseDeserializeError(error))
-    }
+    Ok(try!(json::decode::<RadioApiResponse>(body.as_slice())))
 }
 
 

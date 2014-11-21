@@ -23,9 +23,11 @@ use irc::{
     WhoRecord,
     WhoSuccess,
     IrcEvent,
-    IrcEventMessage,
-    IrcEventJoinBundle,
-    IrcEventWhoBundle,
+};
+pub use self::MessageEndpoint::{
+    KnownUser,
+    KnownChannel,
+    AnonymousUser,
 };
 
 macro_rules! deref_opt_or_return(
@@ -51,6 +53,9 @@ pub enum MessageEndpoint {
     Server(String),
     AnonymousUser,
 }
+
+
+
 
 #[deriving(Clone, Show, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct UserId(u64);
@@ -112,34 +117,34 @@ impl User {
     }
 }
 
-impl Diff<Vec<UserDiffCommand>> for User {
-    fn diff(&self, other: &User) -> Vec<UserDiffCommand> {
+impl Diff<Vec<UserDiffCmd>> for User {
+    fn diff(&self, other: &User) -> Vec<UserDiffCmd> {
         let mut cmds = Vec::new();
         if self.prefix != other.prefix {
-            cmds.push(user_diff::ChangePrefix(other.prefix.as_slice().to_string()));
+            cmds.push(UserDiffCmd::ChangePrefix(other.prefix.as_slice().to_string()));
         }
         for &added_channel in other.channels.difference(&self.channels) {
-            cmds.push(user_diff::AddChannel(added_channel));
+            cmds.push(UserDiffCmd::AddChannel(added_channel));
         }
         for &removed_channel in self.channels.difference(&other.channels) {
-            cmds.push(user_diff::RemoveChannel(removed_channel));
+            cmds.push(UserDiffCmd::RemoveChannel(removed_channel));
         }
         cmds
     }
 }
 
-impl Patch<Vec<UserDiffCommand>> for User {
-    fn patch(&self, diff: &Vec<UserDiffCommand>) -> User {
+impl Patch<Vec<UserDiffCmd>> for User {
+    fn patch(&self, diff: &Vec<UserDiffCmd>) -> User {
         let mut other = self.clone();
         for cmd in diff.iter() {
             match *cmd {
-                user_diff::ChangePrefix(ref prefix_str) => {
+                UserDiffCmd::ChangePrefix(ref prefix_str) => {
                     other.prefix = IrcMsgPrefix::new(prefix_str.clone().into_maybe_owned());
                 },
-                user_diff::AddChannel(chan_id) => {
+                UserDiffCmd::AddChannel(chan_id) => {
                     other.channels.insert(chan_id);
                 },
-                user_diff::RemoveChannel(chan_id) => {
+                UserDiffCmd::RemoveChannel(chan_id) => {
                     other.channels.remove(&chan_id);
                 }
             }
@@ -176,35 +181,35 @@ impl Channel {
     }
 }
 
-impl Diff<Vec<ChannelDiffCommand>> for Channel {
-    fn diff(&self, other: &Channel) -> Vec<ChannelDiffCommand> {
+impl Diff<Vec<ChannelDiffCmd>> for Channel {
+    fn diff(&self, other: &Channel) -> Vec<ChannelDiffCmd> {
         let mut cmds = Vec::new();
         if self.topic != other.topic {
-            cmds.push(channel_diff::ChangeTopic(other.topic.clone()));
+            cmds.push(ChannelDiffCmd::ChangeTopic(other.topic.clone()));
         }
         for &added_user in other.users.difference(&self.users) {
-            cmds.push(channel_diff::AddUser(added_user));
+            cmds.push(ChannelDiffCmd::AddUser(added_user));
         }
         for &removed_user in self.users.difference(&other.users) {
-            cmds.push(channel_diff::RemoveUser(removed_user));
+            cmds.push(ChannelDiffCmd::RemoveUser(removed_user));
         }
         assert_eq!(self.clone().patch(&cmds), *other);
         cmds
     }
 }
 
-impl Patch<Vec<ChannelDiffCommand>> for Channel {
-    fn patch(&self, diff: &Vec<ChannelDiffCommand>) -> Channel {
+impl Patch<Vec<ChannelDiffCmd>> for Channel {
+    fn patch(&self, diff: &Vec<ChannelDiffCmd>) -> Channel {
         let mut other = self.clone();
         for cmd in diff.iter() {
             match *cmd {
-                channel_diff::ChangeTopic(ref topic) => {
+                ChannelDiffCmd::ChangeTopic(ref topic) => {
                     other.topic = topic.clone();
                 },
-                channel_diff::AddUser(user_id) => {
+                ChannelDiffCmd::AddUser(user_id) => {
                     other.users.insert(user_id);
                 },
-                channel_diff::RemoveUser(user_id) => {
+                ChannelDiffCmd::RemoveUser(user_id) => {
                     other.users.remove(&user_id);
                 }
             }
@@ -224,13 +229,6 @@ impl UserInfo {
         UserInfo {
             id: user.id,
             prefix: user.prefix.into_owned(),
-        }
-    }
-
-    fn from_who(id: UserId, who: &WhoRecord) -> UserInfo {
-        UserInfo {
-            id: id,
-            prefix: who.get_prefix().into_owned(),
         }
     }
 
@@ -273,39 +271,29 @@ impl ChannelInfo {
     }
 }
 
-type ChannelDiffCommand = channel_diff::ChannelDiffCommand;
-mod channel_diff {
-    use super::UserId;
-
-    #[deriving(Show)]
-    pub enum ChannelDiffCommand {
-        ChangeTopic(String),
-        AddUser(UserId),
-        RemoveUser(UserId),
-    }
+#[deriving(Show)]
+pub enum ChannelDiffCmd {
+    ChangeTopic(String),
+    AddUser(UserId),
+    RemoveUser(UserId),
 }
 
-type UserDiffCommand = user_diff::UserDiffCommand;
-mod user_diff {
-    use super::ChannelId;
-
-    #[deriving(Show)]
-    pub enum UserDiffCommand {
-        ChangePrefix(String),
-        AddChannel(ChannelId),
-        RemoveChannel(ChannelId),
-    }
+#[deriving(Show)]
+pub enum UserDiffCmd {
+    ChangePrefix(String),
+    AddChannel(ChannelId),
+    RemoveChannel(ChannelId),
 }
 
 
 #[deriving(Show)]
 pub enum StateCommand {
     CreateUser(UserInfo),
-    UpdateUser(UserId, Vec<UserDiffCommand>),
+    UpdateUser(UserId, Vec<UserDiffCmd>),
     RemoveUser(UserId),
 
     CreateChannel(ChannelInfo),
-    UpdateChannel(ChannelId, Vec<ChannelDiffCommand>),
+    UpdateChannel(ChannelId, Vec<ChannelDiffCmd>),
     RemoveChannel(ChannelId),
 
     UpdateSelfNick(String),
@@ -623,11 +611,11 @@ impl State {
 
     pub fn on_event(&mut self, event: &IrcEvent) {
         let () = match *event {
-            IrcEventMessage(ref message) => self.from_message(message),
-            IrcEventJoinBundle(Ok(ref join_bun)) => self.on_self_join(join_bun),
-            IrcEventJoinBundle(Err(_)) => (),
-            IrcEventWhoBundle(Ok(ref who_bun)) => self.on_who(who_bun),
-            IrcEventWhoBundle(Err(_)) => (),
+            IrcEvent::Message(ref message) => self.from_message(message),
+            IrcEvent::JoinBundle(Ok(ref join_bun)) => self.on_self_join(join_bun),
+            IrcEvent::JoinBundle(Err(_)) => (),
+            IrcEvent::WhoBundle(Ok(ref who_bun)) => self.on_who(who_bun),
+            IrcEvent::WhoBundle(Err(_)) => (),
         };
     }
 
@@ -739,7 +727,7 @@ impl State {
         self.channel_map.insert(channel_name, chan_info.id);
     }
 
-    fn apply_update_chan(&mut self, id: ChannelId, diff: &Vec<ChannelDiffCommand>) {
+    fn apply_update_chan(&mut self, id: ChannelId, diff: &Vec<ChannelDiffCmd>) {
         match self.channels.entry(id) {
             Occupied(mut entry) => {
                 let new_thing = entry.get().patch(diff);
@@ -757,7 +745,7 @@ impl State {
         self.user_map.insert(user_info.get_nick().to_string(), user_info.id);
     }
 
-    fn apply_update_user(&mut self, id: UserId, diff: &Vec<UserDiffCommand>) {
+    fn apply_update_user(&mut self, id: UserId, diff: &Vec<UserDiffCmd>) {
         match self.users.entry(id) {
             Occupied(mut entry) => {
                 let old_nick = entry.get().get_nick().to_string();
@@ -790,16 +778,23 @@ impl State {
 
     pub fn apply_command(&mut self, cmd: &StateCommand) {
         match *cmd {
-            UpdateSelfNick(ref new_nick) => self.apply_update_self_nick(new_nick),
-            SetGeneration(generation) => self.generation = generation,
+            StateCommand::UpdateSelfNick(ref new_nick) =>
+                self.apply_update_self_nick(new_nick),
+            StateCommand::SetGeneration(generation) => self.generation = generation,
 
-            CreateUser(ref info) => self.apply_create_user(info),
-            UpdateUser(id, ref diff) => self.apply_update_user(id, diff),
-            RemoveUser(id) => self.apply_remove_user(id),
+            StateCommand::CreateUser(ref info) =>
+                self.apply_create_user(info),
+            StateCommand::UpdateUser(id, ref diff) =>
+                self.apply_update_user(id, diff),
+            StateCommand::RemoveUser(id) =>
+                self.apply_remove_user(id),
 
-            CreateChannel(ref info) => self.apply_create_chan(info),
-            UpdateChannel(id, ref diff) => self.apply_update_chan(id, diff),
-            RemoveChannel(id) => self.apply_remove_channel(id),
+            StateCommand::CreateChannel(ref info) =>
+                self.apply_create_chan(info),
+            StateCommand::UpdateChannel(id, ref diff) =>
+                self.apply_update_chan(id, diff),
+            StateCommand::RemoveChannel(id) =>
+                self.apply_remove_channel(id),
         }
     }
 
@@ -1051,51 +1046,51 @@ impl Diff<StateDiff> for State {
     fn diff(&self, other: &State) -> StateDiff {
         let mut commands = Vec::new();
         if self.self_nick != other.self_nick {
-            commands.push(UpdateSelfNick(other.self_nick.clone()));
+            commands.push(StateCommand::UpdateSelfNick(other.self_nick.clone()));
         }
 
         for (&id, cstate) in other.channels.iter() {
             if let Some(old_channel) = self.channels.get(&id) {
                 if cstate != old_channel {
-                    commands.push(UpdateChannel(id, old_channel.diff(cstate)));
+                    commands.push(StateCommand::UpdateChannel(id, old_channel.diff(cstate)));
                 }
             } else {
-                commands.push(CreateChannel(ChannelInfo::from_internal(cstate)));
+                commands.push(StateCommand::CreateChannel(ChannelInfo::from_internal(cstate)));
                 if !cstate.users.is_empty() {
                     let diff: Vec<_> = cstate.users.iter()
-                        .map(|&x| channel_diff::AddUser(x)).collect();
-                    commands.push(UpdateChannel(id, diff));
+                        .map(|&x| ChannelDiffCmd::AddUser(x)).collect();
+                    commands.push(StateCommand::UpdateChannel(id, diff));
                 }
             }
         }
         for (&id, _) in self.channels.iter() {
             if !other.channels.contains_key(&id) {
-                commands.push(RemoveChannel(id));
+                commands.push(StateCommand::RemoveChannel(id));
             }
         }
 
         for (&id, ustate) in other.users.iter() {
             if let Some(old_user) = self.users.get(&id) {
                 if ustate != old_user {
-                    commands.push(UpdateUser(id, old_user.diff(ustate)));
+                    commands.push(StateCommand::UpdateUser(id, old_user.diff(ustate)));
                 }
             } else {
-                commands.push(CreateUser(UserInfo::from_internal(ustate)));
+                commands.push(StateCommand::CreateUser(UserInfo::from_internal(ustate)));
                 if !ustate.channels.is_empty() {
                     let diff: Vec<_> = ustate.channels.iter()
-                        .map(|&x| user_diff::AddChannel(x)).collect();
-                    commands.push(UpdateUser(id, diff));
+                        .map(|&x| UserDiffCmd::AddChannel(x)).collect();
+                    commands.push(StateCommand::UpdateUser(id, diff));
                 }
             }
         }
         for (&id, _) in self.users.iter() {
             if !other.users.contains_key(&id) {
-                commands.push(RemoveUser(id));
+                commands.push(StateCommand::RemoveUser(id));
             }
         }
 
         if self.generation != other.generation {
-            commands.push(SetGeneration(other.generation));
+            commands.push(StateCommand::SetGeneration(other.generation));
         }
 
         StateDiff {

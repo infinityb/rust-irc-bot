@@ -7,7 +7,7 @@ use std::default::Default;
 use std::num::SignedInt;
 use std::rand::distributions::{Sample, Range};
 use std::cmp::{Less, Equal, Greater};
-use std::fmt::{Formatter, FormatError, Show};
+use std::fmt;
 use std::rand::{task_rng, Rng, Rand};
 
 use irc::IrcMessage;
@@ -153,8 +153,8 @@ impl Rand for RollResult {
     }
 }
 
-impl Show for RollResult {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
+impl fmt::Show for RollResult {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         let RollResult(ref roll) = *self;
         write!(f, "[{}] => [{}] for {} points",
             RollResult::format_score_component_bare(roll),
@@ -185,8 +185,8 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<GreedCommandType> {
         None => return None
     };
     match command_phrase.command[] {
-        "greed" => Some(Greed),
-        "greed-stats" => Some(GreedStats),
+        "greed" => Some(GreedCommandType::Greed),
+        "greed-stats" => Some(GreedCommandType::GreedStats),
         _ => None
     }
 }
@@ -209,8 +209,8 @@ impl Default for UserStats {
     }
 }
 
-impl Show for UserStats {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FormatError> {
+impl fmt::Show for UserStats {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "{} wins over {} games; points: {}",
             self.wins, self.games, self.score_sum - self.opponent_score_sum)
     }
@@ -328,8 +328,8 @@ impl RustBotPlugin for GreedPlugin {
     
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
         match parse_command(m) {
-            Some(Greed) => self.dispatch_cmd_greed(m, message),
-            Some(GreedStats) => self.dispatch_cmd_greed_stats(m, message),
+            Some(GreedCommandType::Greed) => self.dispatch_cmd_greed(m, message),
+            Some(GreedCommandType::GreedStats) => self.dispatch_cmd_greed_stats(m, message),
             None => ()
         }
     }

@@ -1,7 +1,9 @@
 use std::string;
 use std::str::MaybeOwned;
 use std::collections::TreeMap;
-
+use self::Atom::{LiteralAtom, FormattedAtom, RestAtom};
+use self::Value::{LiteralValue, StringValue, WholeNumericValue};
+use self::AtomType::{LiteralAtomType, StringAtomType, WholeNumericAtomType};
 
 #[deriving(Show, PartialEq, Eq)]
 pub enum FormatParseError {
@@ -67,19 +69,11 @@ fn consume_literal<'a>(from: &'a str, literal: &str) -> ValueResult<(&'a str, &'
         let length = literal.len();
         Ok((from[..length], from[length..]))
     } else {
-        Err(Mismatch("literal mismatch"))
+        Err(ValueParseError::Mismatch("literal mismatch"))
     }
 }
 
 impl Atom {
-    fn parse(&self, input: &str) -> ValueResult<Value> {
-        match *self {
-            LiteralAtom(_) => Value::parse(LiteralAtomType, input),
-            FormattedAtom(_, kind) => Value::parse(kind, input),
-            RestAtom(_) => Value::parse(StringAtomType, input),
-        }
-    }
-
     fn consume<'a>(&self, input: &'a str) -> ValueResult<(Value, &'a str)> {
         match *self {
             LiteralAtom(ref val) => {
@@ -100,15 +94,6 @@ impl Atom {
 #[deriving(Show)]
 pub struct Format {
     atoms: Vec<Atom>
-}
-
-impl Format {
-    pub fn get_command(&self) -> &str {
-        match self.atoms[0] {
-            LiteralAtom(ref literal) => literal[],
-            _ => panic!("Malformed Format")
-        }
-    }
 }
 
 #[deriving(Show, Clone)]
@@ -152,7 +137,7 @@ impl ValueExtract for u64 {
 impl Format {
     pub fn from_str(definition: &str) -> FormatResult<Format> {
         if definition == "" {
-            return Err(EmptyFormat)
+            return Err(FormatParseError::EmptyFormat)
         }
         let mut format = Format { atoms: vec![] };
         for node in definition.split(' ') {
@@ -165,7 +150,7 @@ impl Format {
             LiteralAtom(ref literal) => {
                 literal.to_string()
             },
-            _ => return Err(InvalidAtom(
+            _ => return Err(FormatParseError::InvalidAtom(
                 "first atom must be literal".into_maybe_owned()))
         };
         Ok(format)
@@ -179,13 +164,13 @@ impl Format {
 
         let command = match self.atoms[0] {
             LiteralAtom(ref literal) => literal.to_string(),
-            _ => return Err(Mismatch("first atom must be literal"))
+            _ => return Err(ValueParseError::Mismatch("first atom must be literal"))
         };
         let mut remaining = input;
 
         for atom in self.atoms.iter() {
             if remaining == "" {
-                return Err(MessageTooShort)
+                return Err(ValueParseError::MessageTooShort)
             }
             println!("atom = {}, matching against {}", atom, remaining);
             let value = match atom.consume(remaining) {
@@ -209,7 +194,7 @@ impl Format {
             };
         }
         if remaining != "" {
-            return Err(MessageTooLong)
+            return Err(ValueParseError::MessageTooLong)
         }
         Ok(CommandPhrase {
             command: command,
@@ -222,7 +207,7 @@ impl Format {
 fn parse_atom(atom: &str) -> FormatResult<Atom> {
     if atom.starts_with("{") {
         if !atom.ends_with("}") {
-            return Err(InvalidAtom(
+            return Err(FormatParseError::InvalidAtom(
                 "atom begins with { but doesn't end with }".into_maybe_owned()));
         }
         let atom = atom[1..atom.len()-1];
@@ -232,17 +217,17 @@ fn parse_atom(atom: &str) -> FormatResult<Atom> {
             None => (atom, None)
         };
         let format_kind = match format_spec {
-            Some("") => return Err(
-                InvalidAtom("atom has empty format specifier".into_maybe_owned())),
+            Some("") => return Err(FormatParseError::InvalidAtom(
+                "atom has empty format specifier".into_maybe_owned())),
             Some("s") => StringAtomType,
             Some("d") => WholeNumericAtomType,
-            Some(spec) => return Err(InvalidAtom(
+            Some(spec) => return Err(FormatParseError::InvalidAtom(
                 format!("atom has unknown format specifier `{}'", spec).into_maybe_owned())),
             None => StringAtomType
         };
         if name.starts_with("*") {
             if format_kind != StringAtomType {
-                return Err(InvalidAtom(
+                return Err(FormatParseError::InvalidAtom(
                     "format specifier not allowed on *atom".into_maybe_owned()));
             }
             return Ok(RestAtom(name[1..].to_string()));
@@ -279,7 +264,7 @@ fn cons_the_basics() {
     
     match Format::from_str("") {
         Ok(_) => panic!("empty string must not succeed"),
-        Err(EmptyFormat) => (),
+        Err(FormatParseError::EmptyFormat) => (),
         Err(err) => panic!("wrong error for empty: {}", err),
     };
     
@@ -339,7 +324,7 @@ fn parse_the_basics() {
     {
         match Format::from_str("") {
             Ok(_) => panic!("empty string must not succeed"),
-            Err(EmptyFormat) => (),
+            Err(FormatParseError::EmptyFormat) => (),
             Err(err) => panic!("wrong error for empty: {}", err),
         };
     }

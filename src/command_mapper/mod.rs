@@ -14,9 +14,9 @@ use state::{
 pub use self::format::{
     Format,
     FormatResult,
-    EmptyFormat,
     CommandPhrase
 };
+pub use self::format::FormatParseError::EmptyFormat;
 
 mod format;
 
