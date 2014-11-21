@@ -4,8 +4,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use url::{
-    Url, RelativeScheme, SchemeType,
-    Domain, Ipv6, NonRelativeScheme,
+    Url, SchemeType, Host,
     ParseResult, UrlParser
 };
 
@@ -36,9 +35,9 @@ pub struct BotConfig {
 
 pub fn irc_scheme_type_mapper(scheme: &str) -> SchemeType {
     match scheme {
-        "irc" => RelativeScheme(6667),
-        "ircs" => RelativeScheme(6697),
-        _ => NonRelativeScheme,
+        "irc" => SchemeType::Relative(6667),
+        "ircs" => SchemeType::Relative(6697),
+        _ => SchemeType::NonRelative,
     }    
 }
 
@@ -53,8 +52,8 @@ impl BotConfig {
     fn get_host(&self) -> String {
         let server = self.get_url().unwrap();
         match server.host() {
-            Some(&Domain(ref string)) => string.clone(),
-            Some(&Ipv6(ref addr)) => addr.serialize(),
+            Some(&Host::Domain(ref string)) => string.clone(),
+            Some(&Host::Ipv6(ref addr)) => addr.serialize(),
             None => panic!()
         }
     }
