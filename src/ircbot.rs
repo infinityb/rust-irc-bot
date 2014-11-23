@@ -19,7 +19,6 @@ use std::os::args_as_bytes;
 
 use botcore::{BotConfig, BotConnection};
 
-mod state;
 mod botcore;
 mod plugins;
 mod command_mapper;

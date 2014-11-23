@@ -8,11 +8,10 @@ use url::{
     ParseResult, UrlParser
 };
 
-use irc::{IrcConnection, IrcEvent, IrcConnectionCommand};
+use irc::{IrcConnection, IrcEvent, IrcConnectionCommand, State};
 
 use command_mapper::PluginContainer;
 
-use state::State;
 use plugins::{
     DeerPlugin,
     GreedPlugin,

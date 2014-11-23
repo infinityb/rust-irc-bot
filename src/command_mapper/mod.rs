@@ -3,9 +3,9 @@ use std::sync::Arc;
 
 use irc::IrcMessage;
 
-use state::{
-    State,
-    MessageEndpoint,
+use irc::State;
+use irc::MessageEndpoint::{
+    mod,
     KnownUser,
     KnownChannel,
     AnonymousUser,

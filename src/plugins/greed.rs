@@ -10,7 +10,15 @@ use std::cmp::{Less, Equal, Greater};
 use std::fmt;
 use std::rand::{task_rng, Rng, Rand};
 
-use irc::IrcMessage;
+use irc::{
+    IrcMessage,
+    ChannelId,
+    UserId,
+};
+use irc::MessageEndpoint::{
+    KnownChannel,
+    KnownUser,
+};
 
 use command_mapper::{
     RustBotPlugin,
@@ -18,12 +26,7 @@ use command_mapper::{
     IrcBotConfigurator,
     Format,
 };
-use state::{
-    BotChannelId,
-    BotUserId,
-    KnownChannel,
-    KnownUser,
-};
+
 
 type ScorePrefix = [u8, ..6];
 type ScoreRec = (uint, ScorePrefix, int);
@@ -164,8 +167,8 @@ impl fmt::Show for RollResult {
 }
 
 pub struct GreedPlugin {
-    games: HashMap<BotChannelId, GreedPlayResult>,
-    userstats: HashMap<BotUserId, UserStats>,
+    games: HashMap<ChannelId, GreedPlayResult>,
+    userstats: HashMap<UserId, UserStats>,
 }
 
 enum GreedCommandType {
@@ -174,7 +177,7 @@ enum GreedCommandType {
 }
 
 struct GreedPlayResult {
-    user_id: BotUserId,
+    user_id: UserId,
     user_nick: String,
     roll: RollResult,
 }
@@ -244,7 +247,7 @@ impl GreedPlugin {
         })
     }
 
-    fn add_userstats_roll(&mut self, uid: BotUserId, win: bool, self_score: int, opp_score: int) {
+    fn add_userstats_roll(&mut self, uid: UserId, win: bool, self_score: int, opp_score: int) {
         let cur_user = match self.userstats.entry(uid) {
             Occupied(entry) => entry.into_mut(),
             Vacant(entry) => entry.set(Default::default())

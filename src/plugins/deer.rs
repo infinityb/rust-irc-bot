@@ -11,13 +11,14 @@ use url::form_urlencoded::serialize_owned;
 use hyper::client::request::Request;
 use hyper::HttpError;
 
-use irc::IrcMessage;
-
-use state::{
+use irc::{
+    IrcMessage,
+    UserId,
+    ChannelId,
+};
+use irc::MessageEndpoint::{
     KnownUser,
     KnownChannel,
-    BotUserId,
-    BotChannelId
 };
 use command_mapper::{
     RustBotPlugin,
@@ -137,7 +138,7 @@ impl DeerPlugin {
 struct DeerInternalState {
     lines_sent: u64,
     cache: HashMap<String, DeerApiResponse>,
-    throttle_map: HashMap<(BotUserId, BotChannelId), Timespec>,
+    throttle_map: HashMap<(UserId, ChannelId), Timespec>,
 }
 
 
@@ -150,14 +151,14 @@ impl DeerInternalState {
         }
     }
 
-    fn throttle_ok(&mut self, uid: BotUserId, cid: BotChannelId) -> bool {
+    fn throttle_ok(&mut self, uid: UserId, cid: ChannelId) -> bool {
         match self.throttle_map.get(&(uid, cid)) {
             Some(entry) => 60 < (get_time() - *entry).num_seconds(),
             None => true
         }
     }
 
-    fn throttle_bump(&mut self, uid: BotUserId, cid: BotChannelId) {
+    fn throttle_bump(&mut self, uid: UserId, cid: ChannelId) {
         self.throttle_map.insert((uid, cid), get_time());
     }
 

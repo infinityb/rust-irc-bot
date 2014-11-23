@@ -6,7 +6,7 @@ dependencies = [
  "hyper 0.0.1 (git+https://github.com/hyperium/hyper)",
  "irc 0.1.0 (git+https://github.com/infinityb/rust-irc)",
  "time 0.0.3 (git+http://github.com/rust-lang/time)",
- "toml 0.1.0 (git+https://github.com/alexcrichton/toml-rs)",
+ "toml 0.1.2 (git+https://github.com/alexcrichton/toml-rs)",
 ]
 
 [[package]]
@@ -14,7 +14,7 @@ name = "cookie"
 version = "0.0.1"
 source = "git+https://github.com/alexcrichton/cookie-rs#c7e1464489ec0cf338196fb4e2a8e7aa74aa672c"
 dependencies = [
- "openssl 0.0.1 (git+https://github.com/sfackler/rust-openssl)",
+ "openssl 0.0.2 (git+https://github.com/sfackler/rust-openssl.git)",
  "time 0.0.3 (git+http://github.com/rust-lang/time)",
  "url 0.1.0 (git+https://github.com/servo/rust-url)",
 ]
@@ -29,7 +29,7 @@ name = "http"
 version = "0.1.0-pre"
 source = "git+https://github.com/chris-morgan/rust-http#443d13f08375e1d19fe0b5f11050293f7c2d74d3"
 dependencies = [
- "openssl 0.0.1 (git+https://github.com/sfackler/rust-openssl)",
+ "openssl 0.0.2 (git+https://github.com/sfackler/rust-openssl.git)",
  "time 0.0.3 (git+http://github.com/rust-lang/time)",
  "url 0.1.0 (git+https://github.com/servo/rust-url)",
 ]
@@ -37,13 +37,12 @@ dependencies = [
 [[package]]
 name = "hyper"
 version = "0.0.1"
-source = "git+https://github.com/hyperium/hyper#368e46d3d9ebb337a43d970cb16d556874597fc0"
+source = "git+https://github.com/hyperium/hyper#ad75fc62efd31ca0449e7caf4d03815e0972139a"
 dependencies = [
  "cookie 0.0.1 (git+https://github.com/alexcrichton/cookie-rs)",
  "mime 0.0.1 (git+https://github.com/hyperium/mime.rs)",
- "openssl 0.0.1 (git+https://github.com/sfackler/rust-openssl)",
+ "openssl 0.0.2 (git+https://github.com/sfackler/rust-openssl.git)",
  "time 0.0.3 (git+http://github.com/rust-lang/time)",
- "typeable 0.0.2 (git+https://github.com/reem/rust-typeable)",
  "unsafe-any 0.1.0 (git+https://github.com/reem/rust-unsafe-any)",
  "url 0.1.0 (git+https://github.com/servo/rust-url)",
 ]
@@ -58,8 +57,8 @@ dependencies = [
 
 [[package]]
 name = "libressl-pnacl-sys"
-version = "2.0.1"
-source = "git+https://github.com/DiamondLovesYou/libressl-pnacl-sys.git#9a42eeb52070ae0aa4f666d36198899e1e54cda5"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "pnacl-build-helper 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -71,25 +70,25 @@ source = "git+https://github.com/hyperium/mime.rs#7898f1c29c7f5d35d0c3c7aed37ebc
 
 [[package]]
 name = "openssl"
-version = "0.0.1"
-source = "git+https://github.com/sfackler/rust-openssl#33af6a0b7a1037945181db96cf4f6915457a3df6"
+version = "0.0.2"
+source = "git+https://github.com/sfackler/rust-openssl.git#b7c88101f5afd764f1bab5b1a4b8d0c95bc17a52"
 dependencies = [
- "libressl-pnacl-sys 2.0.1 (git+https://github.com/DiamondLovesYou/libressl-pnacl-sys.git)",
- "openssl-sys 0.0.1 (git+https://github.com/sfackler/rust-openssl)",
+ "libressl-pnacl-sys 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "openssl-sys 0.0.2 (git+https://github.com/sfackler/rust-openssl.git)",
 ]
 
 [[package]]
 name = "openssl-sys"
-version = "0.0.1"
-source = "git+https://github.com/sfackler/rust-openssl#33af6a0b7a1037945181db96cf4f6915457a3df6"
+version = "0.0.2"
+source = "git+https://github.com/sfackler/rust-openssl.git#b7c88101f5afd764f1bab5b1a4b8d0c95bc17a52"
 dependencies = [
- "pkg-config 0.0.1 (git+https://github.com/alexcrichton/pkg-config-rs)",
+ "pkg-config 0.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "pkg-config"
 version = "0.0.1"
-source = "git+https://github.com/alexcrichton/pkg-config-rs#d24a08d87d63df8dc9526c503944415b86719220"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "pnacl-build-helper"
@@ -106,13 +105,8 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.1.0"
-source = "git+https://github.com/alexcrichton/toml-rs#4bb575fdaf5fd88580abbac6fdb057ef76d32251"
-
-[[package]]
-name = "typeable"
-version = "0.0.2"
-source = "git+https://github.com/reem/rust-typeable#2f240fb44ce2fcdbb2b890623bfb2afe18a67c05"
+version = "0.1.2"
+source = "git+https://github.com/alexcrichton/toml-rs#1e35b001094b20d2452adff305e418591d4000fb"
 
 [[package]]
 name = "unsafe-any"
