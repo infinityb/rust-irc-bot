@@ -3,22 +3,16 @@ name = "ircbot"
 version = "0.1.0"
 authors = [ "Stacey Ell <stacey.ell@gmail.com>" ]
 
+
 [[bin]]
 name = "ircbot"
 path = "src/ircbot.rs"
 
 
-[dependencies.toml]
-git = "https://github.com/alexcrichton/toml-rs"
-
-[dependencies.http]
-git = "https://github.com/chris-morgan/rust-http"
+[dependencies]
+hyper = "~0.0.1"
+toml = "~0.1.3"
+time = "~0.0.3"
 
 [dependencies.irc]
 git = "https://github.com/infinityb/rust-irc"
-
-[dependencies.time]
-git = "http://github.com/rust-lang/time"
-
-[dependencies.hyper]
-git = "https://github.com/hyperium/hyper"
