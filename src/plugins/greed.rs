@@ -183,10 +183,7 @@ struct GreedPlayResult {
 }
 
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<GreedCommandType> {
-    let command_phrase = match m.command() {
-        Some(command_phrase) => command_phrase,
-        None => return None
-    };
+    let command_phrase = m.command();
     match command_phrase.command[] {
         "greed" => Some(GreedCommandType::Greed),
         "greed-stats" => Some(GreedCommandType::GreedStats),
@@ -234,9 +231,10 @@ impl GreedPlugin {
     
     fn dispatch_cmd_greed_stats(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
         let user_id = match m.source {
-            Some(KnownUser(uid)) => uid,
+            KnownUser(user_id) => user_id,
             _ => return
         };
+
         let source_nick = match message.source_nick() {
             Some(nickname) => nickname,
             None => return
@@ -260,7 +258,7 @@ impl GreedPlugin {
 
     fn dispatch_cmd_greed(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
         let (user_id, channel_id) = match (m.source.clone(), m.target.clone()) {
-            (Some(KnownUser(uid)), Some(KnownChannel(cid))) => (uid, cid),
+            (KnownUser(uid), KnownChannel(cid)) => (uid, cid),
             _ => return
         };
 

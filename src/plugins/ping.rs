@@ -25,11 +25,7 @@ enum PingCommandType {
 }
 
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<PingCommandType> {
-    let command_phrase = match m.command() {
-        Some(command_phrase) => command_phrase,
-        None => return None
-    };
-    match command_phrase.command[] {
+    match m.command().command[] {
         "ping" => Some(PingCommandType::Ping),
         _ => None
     }

@@ -17,6 +17,7 @@ use irc::{
     ChannelId,
 };
 use irc::MessageEndpoint::{
+    mod,
     KnownUser,
     KnownChannel,
 };
@@ -138,7 +139,7 @@ impl DeerPlugin {
 struct DeerInternalState {
     lines_sent: u64,
     cache: HashMap<String, DeerApiResponse>,
-    throttle_map: HashMap<(UserId, ChannelId), Timespec>,
+    throttle_map: HashMap<(UserId, MessageEndpoint), Timespec>,
 }
 
 
@@ -151,25 +152,25 @@ impl DeerInternalState {
         }
     }
 
-    fn throttle_ok(&mut self, uid: UserId, cid: ChannelId) -> bool {
-        match self.throttle_map.get(&(uid, cid)) {
+    fn throttle_ok(&mut self, uid: UserId, endpoint: MessageEndpoint) -> bool {
+        match self.throttle_map.get(&(uid, endpoint)) {
             Some(entry) => 60 < (get_time() - *entry).num_seconds(),
             None => true
         }
     }
 
-    fn throttle_bump(&mut self, uid: UserId, cid: ChannelId) {
-        self.throttle_map.insert((uid, cid), get_time());
+    fn throttle_bump(&mut self, uid: UserId, endpoint: MessageEndpoint) {
+        self.throttle_map.insert((uid, endpoint), get_time());
     }
 
     fn handle_command<'a>(&mut self, m: &CommandMapperDispatch, cmd: &'a DeerCommandType) {
-        let (source, target) = match (m.source.clone(), m.target.clone()) {
-            (Some(KnownUser(source)), Some(KnownChannel(target))) => (source, target),
+        let source = match m.source {
+            KnownUser(source) => source,
             _ => return
         };
 
         if let DeerCommandType::Deer(_) = *cmd {
-            if !self.throttle_ok(source, target) {
+            if !self.throttle_ok(source, m.target.clone()) {
                 m.reply(String::from_str("2deer4plus"));
                 return;
             }
@@ -182,7 +183,7 @@ impl DeerInternalState {
                             m.reply(String::from_str(deer_line));
                             self.lines_sent += 1;
                         }
-                        self.throttle_bump(source, target);
+                        self.throttle_bump(source, m.target.clone());
                     },
                     Err(err) => {
                         m.reply(format!("error: {}", err));
@@ -194,7 +195,7 @@ impl DeerInternalState {
                     m.reply(String::from_str(deer_line));
                     self.lines_sent += 1;
                 }
-                self.throttle_bump(source, target);
+                self.throttle_bump(source, m.target.clone());
             },
             DeerCommandType::DeerStats => {
                 m.reply(format!("lines sent: {}", self.lines_sent));
@@ -218,10 +219,7 @@ enum DeerCommandType {
 }
 
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<DeerCommandType> {
-    let command_phrase = match m.command() {
-        Some(command_phrase) => command_phrase,
-        None => return None
-    };
+    let command_phrase = m.command();
     match command_phrase.command[] {
         "deer" => Some(DeerCommandType::Deer(command_phrase.get("deername"))),
         "deerstats" => Some(DeerCommandType::DeerStats),

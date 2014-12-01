@@ -2,8 +2,9 @@ use std::collections::TreeMap;
 use std::time::Duration;
 
 use time::{get_time, Timespec};
-
 use irc::IrcMessage;
+use irc::message_types::server;
+
 
 use command_mapper::{
     RustBotPlugin,
@@ -59,17 +60,6 @@ fn trim_vec<T>(vec: Vec<T>) -> Vec<T> {
     }
     let excess_elem = vec.len() - MAX_USER_RECORDS_KEPT;
     vec.into_iter().skip(excess_elem).collect()
-}
-
-
-fn is_message_interesting(message: &IrcMessage) -> bool {
-    match message.command() {
-        // "JOIN" => true,
-        // "ACTION" => true,
-        "PRIVMSG" => true,
-        "QUIT" => true,
-        _ => false
-    }
 }
 
 enum SeenCommandType {
@@ -149,45 +139,38 @@ impl RustBotPlugin for SeenPlugin {
         conf.map_format(Format::from_str("seen {nick:s}").unwrap());
     }
 
-    fn accept(&mut self, _m: &CommandMapperDispatch, message: &IrcMessage) {
-        if !is_message_interesting(message) {
-            return;
-        }
-        let source_nick = match message.source_nick() {
-            Some(source_nick) => source_nick,
-            None => return
+    fn on_message(&mut self, message: &IrcMessage) {
+        let privmsg = match *message.get_typed_message() {
+            server::IncomingMsg::Privmsg(ref privmsg) => privmsg,
+            _ => return
         };
-        match self.map.remove(&source_nick.to_string()) {
+
+        match self.map.remove(&privmsg.get_nick().to_string()) {
             Some(mut records) => {
                 records.push(SeenRecord::with_now(message.clone()));
-                self.map.insert(source_nick.to_string(), trim_vec(records));
+                self.map.insert(privmsg.get_nick().to_string(), trim_vec(records));
             },
             None => {
                 let records = vec![SeenRecord::with_now(message.clone())];
-                self.map.insert(source_nick.to_string(), records);
+                self.map.insert(privmsg.get_nick().to_string(), records);
             }
         }
     }
 
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
-        let source_nick = match message.source_nick() {
-            Some(source_nick) => source_nick,
-            None => return
+        let privmsg = match *message.get_typed_message() {
+            server::IncomingMsg::Privmsg(ref privmsg) => privmsg,
+            _ => return
         };
 
-        if !message.target_is_channel() {
-            return;
+        // Hacky is-channel
+        if !privmsg.get_target().starts_with("#") {
+            return
         }
+        let source_nick = privmsg.get_nick();
 
-        if !message.is_privmsg() {
-            return;
-        }
+        let command_phrase = m.command();
         
-        let command_phrase = match m.command() {
-            Some(command_phrase) => command_phrase,
-            None => return
-        };
-
         let parsed_command = match command_phrase.command[] {
             "seen" => match command_phrase.get("nick") {
                 Some(nick) => Some(SeenCommandType::Seen(nick)),

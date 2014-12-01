@@ -9,6 +9,7 @@ use url::{
 };
 
 use irc::{IrcConnection, IrcEvent, IrcConnectionCommand, State};
+use irc::parse::IrcMsg;
 
 use command_mapper::PluginContainer;
 
@@ -152,12 +153,12 @@ impl BotConnection {
             container.register(box WhoAmIPlugin::new());
         }
 
-        let (tx, rx) = sync_channel(0);
+        let (tx, rx) = sync_channel::<IrcMsg>(0);
         let cmd_queue = conn.get_command_queue();
 
         TaskBuilder::new().named("bot-sender").spawn(proc() {
             for message in rx.iter() {
-                cmd_queue.send(IrcConnectionCommand::raw_write(message));
+                cmd_queue.send(IrcConnectionCommand::raw_write(message.into_bytes()));
             }
         });
 

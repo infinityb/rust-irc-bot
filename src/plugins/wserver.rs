@@ -64,11 +64,7 @@ impl WserverInternalState {
     }
 
     fn handle_wserver(&mut self, m: &CommandMapperDispatch) {
-        let command = match m.command {
-            Some(ref command) => command,
-            None => return
-        };
-        let host = match command.get::<String>("host") {
+        let host = match m.command().get::<String>("host") {
             Some(host) => host,
             None => return
         };
@@ -84,10 +80,7 @@ impl WserverInternalState {
 
     fn start(&mut self, rx: Receiver<CommandMapperDispatch>) {
         for m in rx.iter() {
-            let command_phrase = match m.command() {
-                Some(command_phrase) => command_phrase,
-                None => continue
-            };
+            let command_phrase = m.command();
             match command_phrase.command[] {
                 "wserver" => self.handle_wserver(&m),
                 _ => ()

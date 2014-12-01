@@ -1,13 +1,11 @@
 use std::string;
 use std::collections::TreeMap;
-use self::Atom::{LiteralAtom, FormattedAtom, RestAtom};
-use self::Value::{LiteralValue, StringValue, WholeNumericValue};
-use self::AtomType::{LiteralAtomType, StringAtomType, WholeNumericAtomType};
 
 #[deriving(Show, PartialEq, Eq)]
 pub enum FormatParseError {
     EmptyFormat,
-    InvalidAtom(String)
+    InvalidAtom(String),
+    BrokenFormat,
 }
 pub type FormatResult<T> = Result<T, FormatParseError>;
 
@@ -21,36 +19,36 @@ pub type ValueResult<T> = Result<T, ValueParseError>;
 
 #[deriving(Show, PartialEq, Eq, Clone, Copy)]
 enum AtomType {
-    LiteralAtomType,
-    StringAtomType,
-    WholeNumericAtomType
+    Literal,
+    String,
+    WholeNumeric
 }
 
 #[deriving(Show, PartialEq, Eq, Clone)]
 enum Atom {
-    // LiteralAtom(value)
-    LiteralAtom(string::String),
-    // FormattedAtom(name, kind)
-    FormattedAtom(string::String, AtomType),
-    // RestAtom(name)
-    RestAtom(string::String),
+    // Literal(value)
+    Literal(string::String),
+    // Formatted(name, kind)
+    Formatted(string::String, AtomType),
+    // Rest(name)
+    Rest(string::String),
 }
 
 #[deriving(Show, PartialEq, Eq, Clone)]
 enum Value {
-    LiteralValue(string::String),
-    StringValue(string::String),
-    WholeNumericValue(string::String)
+    Literal(string::String),
+    String(string::String),
+    WholeNumeric(string::String)
 }
 
 impl Value {
     fn parse(kind: AtomType, input: &str) -> ValueResult<Value> {
         match kind {
-            LiteralAtomType => Ok(LiteralValue(input.to_string())),
-            StringAtomType => Ok(StringValue(input.to_string())),
-            WholeNumericAtomType => {
+            AtomType::Literal => Ok(Value::Literal(input.to_string())),
+            AtomType::String => Ok(Value::String(input.to_string())),
+            AtomType::WholeNumeric => {
                 // TODO: check if it is a numberish thing
-                Ok(WholeNumericValue(input.to_string()))
+                Ok(Value::WholeNumeric(input.to_string()))
             }
         }
     }
@@ -75,16 +73,16 @@ fn consume_literal<'a>(from: &'a str, literal: &str) -> ValueResult<(&'a str, &'
 impl Atom {
     fn consume<'a>(&self, input: &'a str) -> ValueResult<(Value, &'a str)> {
         match *self {
-            LiteralAtom(ref val) => {
+            Atom::Literal(ref val) => {
                 let (lit, rest) = try!(consume_literal(input, val[]));
-                Ok((LiteralValue(lit.to_string()), rest))
+                Ok((Value::Literal(lit.to_string()), rest))
             },
-            FormattedAtom(_, kind) => {
+            Atom::Formatted(_, kind) => {
                 let (lit, rest) = try!(consume_token(input));
                 Ok((try!(Value::parse(kind, lit)), rest))
             },
-            RestAtom(_) => {
-                Ok((try!(Value::parse(StringAtomType, input)), ""))
+            Atom::Rest(_) => {
+                Ok((try!(Value::parse(AtomType::String, input)), ""))
             }
         }
     }
@@ -118,7 +116,7 @@ trait ValueExtract {
 impl ValueExtract for string::String {
     fn value_extract(val: &Value) -> Option<string::String> {
         match *val {
-            StringValue(ref str_val) => Some(str_val.clone()),
+            Value::String(ref str_val) => Some(str_val.clone()),
             _ => None
         }
     }
@@ -127,7 +125,7 @@ impl ValueExtract for string::String {
 impl ValueExtract for u64 {
     fn value_extract(val: &Value) -> Option<u64> {
         match *val {
-            WholeNumericValue(ref str_val) => from_str(str_val[]),
+            Value::WholeNumeric(ref str_val) => from_str(str_val[]),
             _ => None
         }
     }
@@ -135,24 +133,16 @@ impl ValueExtract for u64 {
 
 impl Format {
     pub fn from_str(definition: &str) -> FormatResult<Format> {
-        if definition == "" {
-            return Err(FormatParseError::EmptyFormat)
-        }
-        let mut format = Format { atoms: vec![] };
-        for node in definition.split(' ') {
-            match parse_atom(node) {
-                Ok(atom) => format.atoms.push(atom),
-                Err(err) => return Err(err)
-            };
-        }
-        match format.atoms[0] {
-            LiteralAtom(ref literal) => {
-                literal.to_string()
+        match atom_parser::parse_atoms(definition) {
+            Ok(atoms) => {
+                match atoms[0] {
+                    Atom::Literal(_) => Ok(Format { atoms: atoms }),
+                    _ => return Err(FormatParseError::InvalidAtom(
+                        "first atom must be literal".into_cow().into_owned()))
+                }
             },
-            _ => return Err(FormatParseError::InvalidAtom(
-                "first atom must be literal".into_cow().into_owned()))
-        };
-        Ok(format)
+            Err(err) => Err(err)
+        }
     }
 
     pub fn parse(&self, input: &str) -> ValueResult<CommandPhrase> {
@@ -162,16 +152,17 @@ impl Format {
         let mut args_map: TreeMap<string::String, Value> = TreeMap::new();
 
         let command = match self.atoms[0] {
-            LiteralAtom(ref literal) => literal.to_string(),
+            Atom::Literal(ref literal) => literal.to_string(),
             _ => return Err(ValueParseError::Mismatch("first atom must be literal"))
         };
         let mut remaining = input;
 
         for atom in self.atoms.iter() {
+
             if remaining == "" {
                 return Err(ValueParseError::MessageTooShort)
             }
-            println!("atom = {}, matching against {}", atom, remaining);
+            println!("atom = {}, matching against ``{}``", atom, remaining);
             let value = match atom.consume(remaining) {
                 Ok((value, tmp)) => {
                     remaining = tmp;
@@ -179,15 +170,14 @@ impl Format {
                 },
                 Err(err) => return Err(err)
             };
-            remaining = remaining.trim_left_chars(' ');
             let name = match *atom {
-                LiteralAtom(_) => continue,
-                FormattedAtom(ref name, _) => name.clone(),
-                RestAtom(ref name) => name.clone(),
+                Atom::Literal(_) => continue,
+                Atom::Formatted(ref name, _) => name.clone(),
+                Atom::Rest(ref name) => name.clone(),
             };
             match value {
-                LiteralValue(_) => (),
-                StringValue(_) | WholeNumericValue(_) => {
+                Value::Literal(_) => (),
+                Value::String(_) |  Value::WholeNumeric(_) => {
                     args_map.insert(name, value);
                 },
             };
@@ -196,21 +186,41 @@ impl Format {
             return Err(ValueParseError::MessageTooLong)
         }
         Ok(CommandPhrase {
-            command: command,
+            command: command.trim_right_chars(' ').to_string(),
             original_command: original_input.to_string(),
             args: args_map,
         })
     }
 }
 
-fn parse_atom(atom: &str) -> FormatResult<Atom> {
-    if atom.starts_with("{") {
-        if !atom.ends_with("}") {
-            return Err(FormatParseError::InvalidAtom(
-                "atom begins with { but doesn't end with }".into_cow().into_owned()));
-        }
-        let atom = atom[1..atom.len()-1];
+// use self::atom_parser::parse_atom;
 
+pub mod atom_parser {
+    use super::{Atom, AtomType, FormatResult, FormatParseError};
+
+    static ASCII_ALPHANUMERIC: [u8, ..62] = [
+        b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9',
+
+        b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J',
+        b'K', b'L', b'M', b'N', b'O', b'P', b'Q', b'R', b'S', b'T',
+        b'U', b'V', b'W', b'X', b'Y', b'Z',
+
+        b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h', b'i', b'j',
+        b'k', b'l', b'm', b'n', b'o', b'p', b'q', b'r', b's', b't',
+        b'u', b'v', b'w', b'x', b'y', b'z'
+    ];
+
+    #[inline]
+    fn is_ascii_alphanumeric(target: u8) -> bool {
+        for &allowed in ASCII_ALPHANUMERIC.iter() {
+            if target == allowed {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn parse_var_atom(atom: &str) -> FormatResult<Atom> {
         let (name, format_spec) = match atom.find(':') {
             Some(idx) => (atom[..idx], Some(atom[1 + idx ..])),
             None => (atom, None)
@@ -218,22 +228,205 @@ fn parse_atom(atom: &str) -> FormatResult<Atom> {
         let format_kind = match format_spec {
             Some("") => return Err(FormatParseError::InvalidAtom(
                 "atom has empty format specifier".into_cow().into_owned())),
-            Some("s") => StringAtomType,
-            Some("d") => WholeNumericAtomType,
+            Some("s") => AtomType::String,
+            Some("d") => AtomType::WholeNumeric,
             Some(spec) => return Err(FormatParseError::InvalidAtom(
                 format!("atom has unknown format specifier `{}'", spec).into_cow().into_owned())),
-            None => StringAtomType
+            None => AtomType::String
         };
-        if name.starts_with("*") {
-            if format_kind != StringAtomType {
-                return Err(FormatParseError::InvalidAtom(
-                    "format specifier not allowed on *atom".into_cow().into_owned()));
-            }
-            return Ok(RestAtom(name[1..].to_string()));
-        }
-        return Ok(FormattedAtom(name.to_string(), format_kind));
+        Ok(Atom::Formatted(name.to_string(), format_kind))
     }
-    Ok(LiteralAtom(atom.to_string()))
+
+
+    enum State {
+        Zero,
+        InLiteral,
+        InVariable,
+        InRestVariable,
+        ForceEnd,
+        Errored,
+    }
+
+    struct AtomParser {
+        byte_idx: uint,
+        atoms: Vec<Atom>,
+        state: State,
+        cur_atom: Vec<u8>,
+        error: Option<FormatParseError>
+    }
+
+    impl AtomParser {
+        fn new() -> AtomParser {
+            AtomParser {
+                byte_idx: 0,
+                atoms: Vec::new(),
+                state: State::Zero,
+                cur_atom: Vec::new(),
+                error: None,
+            }
+        }
+
+        fn push_byte(&mut self, byte: u8) {
+            use self::State::{
+                Zero, InLiteral, InVariable, InRestVariable, ForceEnd, Errored
+            };
+
+            let new_state = match (self.state, byte) {
+                (State::Zero, b'{') => InVariable,
+                (State::Zero, cur_byte) => {
+                    self.cur_atom.push(cur_byte);
+                    InLiteral
+                }
+
+                (State::InVariable, b'}') => {
+                    let atom_res = {
+                        // These should be fine unless we break parse_atom ...
+                        let string = String::from_utf8_lossy(self.cur_atom.as_slice());
+                        parse_var_atom(string[])
+                    };
+                    match atom_res {
+                        Ok(atom) => {
+                            self.atoms.push(atom);
+                            self.cur_atom.clear();
+                            Zero
+                        },
+                        Err(err) => {
+                            self.error = Some(err);
+                            println!("??? from InVariable");
+                            State::Errored
+                        }
+                    }
+                },
+                (State::InVariable, b'*') if self.cur_atom.len() == 0 => {
+                    InRestVariable
+                },
+                (State::InVariable, b':') if self.cur_atom.len() > 0 => {
+                    self.cur_atom.push(b':');
+                    InVariable
+                },
+                (State::InVariable, cur_byte) if is_ascii_alphanumeric(cur_byte) => {
+                    self.cur_atom.push(cur_byte);
+                    InVariable
+                },
+                (State::InVariable, _) => {
+                    self.error = Some(FormatParseError::BrokenFormat);
+                    println!("BrokenFormat from InVariable");
+                    Errored
+                },
+
+                (State::InRestVariable, b'}') => {
+                    {
+                        // These should be fine unless we break parse_atom ...
+                        let string = String::from_utf8_lossy(self.cur_atom.as_slice());
+                        self.atoms.push(Atom::Rest(string.into_owned()));
+                    }
+                    self.cur_atom.clear();
+                    ForceEnd
+                },
+                (State::InRestVariable, cur_byte) if is_ascii_alphanumeric(cur_byte) => {
+                    self.cur_atom.push(cur_byte);
+                    InRestVariable
+                },
+                (State::InRestVariable, _) => {
+                    self.error = Some(FormatParseError::BrokenFormat);
+                    println!("BrokenFormat from InRestVariable");
+                    Errored
+                },
+
+                (State::InLiteral, b'{') => {
+                    {
+                        // These should be fine unless we break parse_atom ...
+                        let string = String::from_utf8_lossy(self.cur_atom.as_slice());
+                        self.atoms.push(Atom::Literal(string.into_owned()));
+                    }
+                    self.cur_atom.clear();
+                    InVariable
+                },
+                (State::InLiteral, cur_byte)  => {
+                    self.cur_atom.push(cur_byte);
+                    InLiteral
+                },
+                
+                (State::Errored, _) => State::Errored,
+                (State::ForceEnd, _) => {
+                    println!("BrokenFormat from ForceEnd");
+                    self.error = Some(FormatParseError::BrokenFormat);
+                    Errored
+                },
+            };
+            self.byte_idx += 1;
+            self.state = new_state;
+        }
+
+        fn finish(mut self) -> FormatResult<Vec<Atom>> {
+            match self.state {
+                State::InLiteral => {
+                    let string = String::from_utf8_lossy(self.cur_atom.as_slice());
+                    self.atoms.push(Atom::Literal(string.into_owned()));
+                    Ok(self.atoms)
+                },
+                State::Zero | State::ForceEnd => Ok(self.atoms),
+                State::Errored => Err(self.error.unwrap()),
+                State::InVariable => Err(FormatParseError::BrokenFormat),
+                State::InRestVariable => Err(FormatParseError::BrokenFormat),
+            }
+        }
+    }
+
+    pub fn parse_atoms(atom: &str) -> FormatResult<Vec<Atom>> {
+        let mut parser = AtomParser::new();
+        for &byte in atom.as_bytes().iter() {
+            parser.push_byte(byte);
+        }
+        match parser.finish() {
+            Ok(vec) => {
+                if vec.len() == 0 {
+                    return Err(FormatParseError::EmptyFormat)
+                }
+                Ok(vec)
+            },
+            Err(err) => Err(err),
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::parse_atoms;
+        use super::super::{Atom, AtomType};
+
+        #[test]
+        fn test_basics() {
+            let atoms = parse_atoms("deer").ok().unwrap();
+            assert_eq!(atoms, vec!(Atom::Literal("deer".to_string())));
+
+            let atoms = parse_atoms("deer{a}").ok().unwrap();
+            assert_eq!(atoms, vec!(
+                Atom::Literal("deer".to_string()),
+                Atom::Formatted("a".to_string(), AtomType::String),
+            ));
+
+            let atoms = parse_atoms("deer {a}").ok().unwrap();
+            assert_eq!(atoms, vec!(
+                Atom::Literal("deer ".to_string()),
+                Atom::Formatted("a".to_string(), AtomType::String),
+            ));
+
+            let atoms = parse_atoms("deer {a} {*b}").ok().unwrap();
+            assert_eq!(atoms, vec!(
+                Atom::Literal("deer ".to_string()),
+                Atom::Formatted("a".to_string(), AtomType::String),
+                Atom::Literal(" ".to_string()),
+                Atom::Rest("b".to_string()),
+            ));
+
+            assert!(parse_atoms("deer {a} {*b}xxx").is_err());
+
+            match parse_atoms("deer {a:s} {*b}") {
+                Ok(ok) => (),
+                Err(err) => assert!(false, format!("{}", err))
+            };
+        }
+    }
 }
 
 
@@ -246,19 +439,25 @@ fn cons_the_basics() {
             Err(err) => panic!("parse failure: {}", err)
         };
 
-        assert_eq!(fmt.atoms.len(), 4);
+        assert_eq!(fmt.atoms.len(), 6);
         assert_eq!(
             fmt.atoms[0],
-            LiteralAtom("articles".to_string()));
+            Atom::Literal("articles ".to_string()));
         assert_eq!(
             fmt.atoms[1],
-            FormattedAtom("foo".to_string(), StringAtomType));
+            Atom::Formatted("foo".to_string(), AtomType::String));
         assert_eq!(
             fmt.atoms[2],
-            FormattedAtom("category".to_string(), StringAtomType));
+            Atom::Literal(" ".to_string()));
         assert_eq!(
             fmt.atoms[3],
-            FormattedAtom("id".to_string(), WholeNumericAtomType));
+            Atom::Formatted("category".to_string(), AtomType::String));
+        assert_eq!(
+            fmt.atoms[4],
+            Atom::Literal(" ".to_string()));
+        assert_eq!(
+            fmt.atoms[5],
+            Atom::Formatted("id".to_string(), AtomType::WholeNumeric));
     }
     
     match Format::from_str("") {
@@ -285,10 +484,10 @@ fn cons_the_basics() {
         assert_eq!(cmdlet.command[], "articles");
         assert_eq!(
             cmdlet.args["foo".to_string()],
-            StringValue("bar".to_string()));
+            Value::String("bar".to_string()));
         assert_eq!(
             cmdlet.args["rest".to_string()],
-            StringValue("test article argument".to_string()));
+            Value::String("test article argument".to_string()));
     }
     
 }
