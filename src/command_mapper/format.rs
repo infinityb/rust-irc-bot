@@ -1,5 +1,4 @@
 use std::string;
-use std::str::MaybeOwned;
 use std::collections::TreeMap;
 use self::Atom::{LiteralAtom, FormattedAtom, RestAtom};
 use self::Value::{LiteralValue, StringValue, WholeNumericValue};
@@ -8,7 +7,7 @@ use self::AtomType::{LiteralAtomType, StringAtomType, WholeNumericAtomType};
 #[deriving(Show, PartialEq, Eq)]
 pub enum FormatParseError {
     EmptyFormat,
-    InvalidAtom(MaybeOwned<'static>)
+    InvalidAtom(String)
 }
 pub type FormatResult<T> = Result<T, FormatParseError>;
 
@@ -151,7 +150,7 @@ impl Format {
                 literal.to_string()
             },
             _ => return Err(FormatParseError::InvalidAtom(
-                "first atom must be literal".into_maybe_owned()))
+                "first atom must be literal".into_cow().into_owned()))
         };
         Ok(format)
     }
@@ -208,7 +207,7 @@ fn parse_atom(atom: &str) -> FormatResult<Atom> {
     if atom.starts_with("{") {
         if !atom.ends_with("}") {
             return Err(FormatParseError::InvalidAtom(
-                "atom begins with { but doesn't end with }".into_maybe_owned()));
+                "atom begins with { but doesn't end with }".into_cow().into_owned()));
         }
         let atom = atom[1..atom.len()-1];
 
@@ -218,17 +217,17 @@ fn parse_atom(atom: &str) -> FormatResult<Atom> {
         };
         let format_kind = match format_spec {
             Some("") => return Err(FormatParseError::InvalidAtom(
-                "atom has empty format specifier".into_maybe_owned())),
+                "atom has empty format specifier".into_cow().into_owned())),
             Some("s") => StringAtomType,
             Some("d") => WholeNumericAtomType,
             Some(spec) => return Err(FormatParseError::InvalidAtom(
-                format!("atom has unknown format specifier `{}'", spec).into_maybe_owned())),
+                format!("atom has unknown format specifier `{}'", spec).into_cow().into_owned())),
             None => StringAtomType
         };
         if name.starts_with("*") {
             if format_kind != StringAtomType {
                 return Err(FormatParseError::InvalidAtom(
-                    "format specifier not allowed on *atom".into_maybe_owned()));
+                    "format specifier not allowed on *atom".into_cow().into_owned()));
             }
             return Ok(RestAtom(name[1..].to_string()));
         }

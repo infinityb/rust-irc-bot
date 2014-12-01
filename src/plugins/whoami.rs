@@ -48,14 +48,14 @@ impl RustBotPlugin for WhoAmIPlugin {
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, msg: &IrcMessage) {
         match parse_command(m) {
             Some(WhoAmICommandType::WhoAmI) => match (msg.source_nick(), &m.source) {
-                (Some(source_nick), &Some(ref uid)) => {
-                    m.reply(format!("{}: you are {}", source_nick, uid));
+                (Some(ref source_nick), &Some(ref uid)) => {
+                    m.reply(format!("{}: you are {}", source_nick[], uid));
                 },
                 (_, _) => ()
             },
             Some(WhoAmICommandType::WhereAmI) => match (msg.source_nick(), &m.target) {
-                (Some(source_nick), &Some(ref cid)) => {
-                    m.reply(format!("{}: you are in {}", source_nick, cid));
+                (Some(ref source_nick), &Some(ref cid)) => {
+                    m.reply(format!("{}: you are in {}", source_nick[], cid));
                 },
                 (_, _) => ()
             },

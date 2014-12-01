@@ -156,7 +156,6 @@ impl BotConnection {
         let cmd_queue = conn.get_command_queue();
 
         TaskBuilder::new().named("bot-sender").spawn(proc() {
-
             for message in rx.iter() {
                 cmd_queue.send(IrcConnectionCommand::raw_write(message));
             }

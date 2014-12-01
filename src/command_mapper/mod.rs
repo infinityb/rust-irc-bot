@@ -132,7 +132,7 @@ impl PluginContainer {
         let mut target: Option<MessageEndpoint> = None;
 
         if let Some(source_nick) = message.source_nick() {
-            source = match state.identify_nick(source_nick) {
+            source = match state.identify_nick(source_nick[]) {
                 Some(bot_user) => Some(KnownUser(bot_user)),
                 None => Some(AnonymousUser)
             };

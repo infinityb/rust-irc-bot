@@ -198,7 +198,7 @@ impl RustBotPlugin for SeenPlugin {
 
         match parsed_command {
             Some(SeenCommandType::Seen(target_nick)) => {
-                if source_nick == target_nick.as_slice() {
+                if source_nick[] == target_nick.as_slice() {
                     m.reply(format!("Looking for yourself, {}?", source_nick));
                     return;
                 }
