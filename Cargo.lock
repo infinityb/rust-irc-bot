@@ -11,9 +11,9 @@ dependencies = [
 [[package]]
 name = "cookie"
 version = "0.0.1"
-source = "git+https://github.com/alexcrichton/cookie-rs#2468d5cf1b84c7778839c3c0024cd84871d978ec"
+source = "git+https://github.com/alexcrichton/cookie-rs#7289bfd50aa03cb9fd44bb76047f284484acf9e4"
 dependencies = [
- "openssl 0.2.1 (git+https://github.com/sfackler/rust-openssl)",
+ "openssl 0.2.2 (git+https://github.com/sfackler/rust-openssl)",
  "time 0.1.0 (git+https://github.com/rust-lang/time)",
  "url 0.1.0 (git+https://github.com/servo/rust-url)",
 ]
@@ -21,7 +21,7 @@ dependencies = [
 [[package]]
 name = "gcc"
 version = "0.1.0"
-source = "git+https://github.com/alexcrichton/gcc-rs#96c9e44ce3dfccc47c16fcfd743a33b3b4205daf"
+source = "git+https://github.com/alexcrichton/gcc-rs#d32b24466d3e0094cef1c1809a04d7a28536f0e0"
 
 [[package]]
 name = "gcc"
@@ -31,11 +31,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "hyper"
 version = "0.0.1"
-source = "git+https://github.com/hyperium/hyper#b1761ad4e1bce98deb73827df5b134b141c574d5"
+source = "git+https://github.com/hyperium/hyper#1ed4ea5a279d2b9098a717f2d4b44df0be593669"
 dependencies = [
  "cookie 0.0.1 (git+https://github.com/alexcrichton/cookie-rs)",
  "mime 0.0.1 (git+https://github.com/hyperium/mime.rs)",
- "openssl 0.2.1 (git+https://github.com/sfackler/rust-openssl)",
+ "openssl 0.2.2 (git+https://github.com/sfackler/rust-openssl)",
  "time 0.1.0 (git+https://github.com/rust-lang/time)",
  "unsafe-any 0.1.1 (git+https://github.com/reem/rust-unsafe-any)",
  "url 0.1.0 (git+https://github.com/servo/rust-url)",
@@ -44,7 +44,7 @@ dependencies = [
 [[package]]
 name = "irc"
 version = "0.1.0"
-source = "git+https://github.com/infinityb/rust-irc#055a0898421b08d850b7dab852e4bc2ff1c2ff7f"
+source = "git+https://github.com/infinityb/rust-irc#038f86f7fca688a7554ae6f55e58c72bcc0fd630"
 dependencies = [
  "time 0.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -56,16 +56,16 @@ source = "git+https://github.com/hyperium/mime.rs#7898f1c29c7f5d35d0c3c7aed37ebc
 
 [[package]]
 name = "openssl"
-version = "0.2.1"
-source = "git+https://github.com/sfackler/rust-openssl#c3603b0db00d044c8332d39dd9d49e3c76a2a978"
+version = "0.2.2"
+source = "git+https://github.com/sfackler/rust-openssl#fd680e8a336f8870a411a3047c45b47ee72beb37"
 dependencies = [
- "openssl-sys 0.2.1 (git+https://github.com/sfackler/rust-openssl)",
+ "openssl-sys 0.2.2 (git+https://github.com/sfackler/rust-openssl)",
 ]
 
 [[package]]
 name = "openssl-sys"
-version = "0.2.1"
-source = "git+https://github.com/sfackler/rust-openssl#c3603b0db00d044c8332d39dd9d49e3c76a2a978"
+version = "0.2.2"
+source = "git+https://github.com/sfackler/rust-openssl#fd680e8a336f8870a411a3047c45b47ee72beb37"
 dependencies = [
  "pkg-config 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
