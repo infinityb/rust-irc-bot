@@ -14,12 +14,10 @@ use hyper::HttpError;
 use irc::{
     IrcMessage,
     UserId,
-    ChannelId,
 };
 use irc::MessageEndpoint::{
     mod,
     KnownUser,
-    KnownChannel,
 };
 use command_mapper::{
     RustBotPlugin,

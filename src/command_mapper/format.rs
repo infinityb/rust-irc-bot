@@ -237,7 +237,7 @@ pub mod atom_parser {
         Ok(Atom::Formatted(name.to_string(), format_kind))
     }
 
-
+    #[deriving(Copy)]
     enum State {
         Zero,
         InLiteral,
