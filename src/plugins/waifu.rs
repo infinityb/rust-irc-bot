@@ -44,7 +44,7 @@ impl RustBotPlugin for WaifuPlugin {
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, _: &IrcMessage) {
         match parse_command(m) {
             Some(WaifuCommand::Waifu) => {
-                let c = Connection::get_private(BusType::Session).unwrap();
+                let c = Connection::get_private(BusType::System).unwrap();
                 let mut methcall = Message::new_method_call(
                      "org.yasashiisyndicate.waifuserv", "/org/yasashiisyndicate/waifuserv",
                      "org.yasashiisyndicate.waifuserv", "GetRandom").unwrap();
