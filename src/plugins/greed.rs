@@ -1,12 +1,8 @@
-use std::collections::HashMap;
-use std::collections::hash_map::{
-    Vacant,
-    Occupied,
-};
+use std::collections::{hash_map, HashMap};
 use std::default::Default;
 use std::num::SignedInt;
 use std::rand::distributions::{Sample, Range};
-use std::cmp::{Less, Equal, Greater};
+use std::cmp::Ordering;
 use std::fmt;
 use std::rand::{task_rng, Rng, Rand};
 
@@ -247,8 +243,8 @@ impl GreedPlugin {
 
     fn add_userstats_roll(&mut self, uid: UserId, win: bool, self_score: int, opp_score: int) {
         let cur_user = match self.userstats.entry(uid) {
-            Occupied(entry) => entry.into_mut(),
-            Vacant(entry) => entry.set(Default::default())
+            hash_map::Entry::Occupied(entry) => entry.into_mut(),
+            hash_map::Entry::Vacant(entry) => entry.set(Default::default())
         };
         cur_user.games += 1;
         cur_user.wins += if win { 1 } else { 0 };
@@ -268,7 +264,7 @@ impl GreedPlugin {
         };
 
         let prev_play_opt = match self.games.entry(channel_id) {
-            Vacant(entry) => {
+            hash_map::Entry::Vacant(entry) => {
                 let roll = task_rng().gen::<RollResult>();
                 m.reply(format!("{}: {}", source_nick, roll));
                 entry.set(GreedPlayResult {
@@ -278,7 +274,7 @@ impl GreedPlugin {
                 });
                 None
             },
-            Occupied(entry) => {
+            hash_map::Entry::Occupied(entry) => {
                 if entry.get().user_id == user_id {
                     m.reply(format!("You can't go twice in a row, {}", source_nick));
                     None
@@ -300,9 +296,9 @@ impl GreedPlugin {
             let cur_play_score = roll.total_score();
             let cmp_result = prev_play_score.cmp(&cur_play_score);
             let (prev_user_wins, cur_user_wins) = match cmp_result {
-                Less => (false, true),
-                Equal => (false, false),
-                Greater => (true, false)
+                Ordering::Less => (false, true),
+                Ordering::Equal => (false, false),
+                Ordering::Greater => (true, false)
             };
             let score_diff = (prev_play_score - cur_play_score).abs();
             m.reply(match cmp_result {

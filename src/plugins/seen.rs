@@ -1,4 +1,4 @@
-use std::collections::TreeMap;
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use time::{get_time, Timespec};
@@ -37,14 +37,14 @@ impl SeenRecord {
 
 
 pub struct SeenPlugin {
-    map: TreeMap<String, Vec<SeenRecord>>,
+    map: BTreeMap<String, Vec<SeenRecord>>,
 }
 
 
 impl SeenPlugin {
     pub fn new() -> SeenPlugin {
         SeenPlugin {
-            map: TreeMap::new()
+            map: BTreeMap::new()
         }
     }
 

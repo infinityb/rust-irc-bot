@@ -1,12 +1,10 @@
-#![deny(unused_must_use)]
-
+#![deny(unused_must_use, unused_variables, unused_mut, unused_imports)]
 #![feature(slicing_syntax, phase, macro_rules)]
 
 #[phase(plugin, link)] extern crate log;
 
 extern crate time;
-extern crate serialize;
-
+extern crate "rustc-serialize" as rustc_serialize;
 extern crate url;
 extern crate hyper;
 extern crate toml;

@@ -1,4 +1,3 @@
-use std::task::TaskBuilder;
 use std::error::FromError;
 
 use url::{Url, ParseError};
@@ -113,10 +112,11 @@ impl RustBotPlugin for WserverPlugin {
 
     fn start(&mut self) {
         let (tx, rx) = sync_channel(10);
-        TaskBuilder::new().named("plugin-wserver").spawn(proc() {
+
+        ::std::thread::Builder::new().name("plugin-wserver".to_string()).spawn(move |:| {
             let mut internal_state = WserverInternalState::new();
             internal_state.start(rx);
-        });
+        }).detach();
         self.sender = Some(tx);
     }
 

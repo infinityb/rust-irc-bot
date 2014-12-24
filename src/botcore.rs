@@ -1,5 +1,4 @@
 use std::io::IoResult;
-use std::task::TaskBuilder;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -24,7 +23,7 @@ use plugins::{
 };
 
 
-#[deriving(Decodable, Encodable, Show)]
+#[deriving(RustcDecodable, RustcEncodable, Show)]
 pub struct BotConfig {
     pub server: String,
     pub command_prefix: String,
@@ -76,11 +75,11 @@ impl BotConnection {
 		(conf.get_host().as_slice(), conf.get_port())));
 
         let (event_queue_txu, event_queue_rxu) = channel();
-        spawn(proc() {
+        ::std::thread::Builder::new().spawn(move |:| {
             for event in event_queue.iter() {
                 event_queue_txu.send(event);
             }
-        });
+        }).detach();
 
         let mut nick = conf.nickname.clone();
         loop {
@@ -156,11 +155,11 @@ impl BotConnection {
         let (tx, rx) = sync_channel::<IrcMsg>(0);
         let cmd_queue = conn.get_command_queue();
 
-        TaskBuilder::new().named("bot-sender").spawn(proc() {
+        ::std::thread::Builder::new().name("bot-sender".to_string()).spawn(move |:| {
             for message in rx.iter() {
                 cmd_queue.send(IrcConnectionCommand::raw_write(message.into_bytes()));
             }
-        });
+        }).detach();
 
         for event in event_queue_rxu.iter() {
             state.on_event(&event);

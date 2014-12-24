@@ -1,10 +1,9 @@
 use std::error::FromError;
-use std::task::TaskBuilder;
 use std::io::IoError;
 use std::collections::HashMap;
 
-use serialize::json;
-use serialize::json::DecoderError;
+use rustc_serialize::json;
+use rustc_serialize::json::DecoderError;
 use time::{get_time, Timespec};
 use url::Url;
 use url::form_urlencoded::serialize_owned;
@@ -28,26 +27,26 @@ use command_mapper::{
 
 
 static DEER: &'static str = concat!(
-    "\u000301,01@@@@@@@@\u000300,00@\u000301,01@@\u000300,00@\u000301,01@\n",
-    "\u000301,01@@@@@@@@\u000300,00@\u000301,01@@\u000300,00@\u000301,01@\n",
-    "\u000301,01@@@@@@@@@\u000300,00@@\u000301,01@@\n",
-    "\u000301,01@@@@@@@@\u000300,00@@@\u000301,01@@\n",
-    "\u000301,01@@@@@@@@@\u000300,00@@\u000301,01@@\n",
-    "\u000301,01@@\u000300,00@@@@@@@@@\u000301,01@@\n",
-    "\u000301,01@\u000300,00@@@@@@@@@@\u000301,01@@\n",
-    "\u000301,01@\u000300,00@@@@@@@@@@\u000301,01@@\n",
-    "\u000301,01@\u000300,00@\u000301,01@\u000300,00@",
-    "\u000301,01@@@@\u000300,00@\u000301,01@\u000300,00@\u000301,01@@\n",
-    "\u000301,01@\u000300,00@\u000301,01@\u000300,00@",
-    "\u000301,01@@@@\u000300,00@\u000301,01@\u000300,00@\u000301,01@@\n",
-    "\u000301,01@\u000300,00@\u000301,01@\u000300,00@",
-    "\u000301,01@@@@\u000300,00@\u000301,01@\u000300,00@\u000301,01@@");
+    "\u{3}01,01@@@@@@@@\u{3}00,00@\u{3}01,01@@\u{3}00,00@\u{3}01,01@\n",
+    "\u{3}01,01@@@@@@@@\u{3}00,00@\u{3}01,01@@\u{3}00,00@\u{3}01,01@\n",
+    "\u{3}01,01@@@@@@@@@\u{3}00,00@@\u{3}01,01@@\n",
+    "\u{3}01,01@@@@@@@@\u{3}00,00@@@\u{3}01,01@@\n",
+    "\u{3}01,01@@@@@@@@@\u{3}00,00@@\u{3}01,01@@\n",
+    "\u{3}01,01@@\u{3}00,00@@@@@@@@@\u{3}01,01@@\n",
+    "\u{3}01,01@\u{3}00,00@@@@@@@@@@\u{3}01,01@@\n",
+    "\u{3}01,01@\u{3}00,00@@@@@@@@@@\u{3}01,01@@\n",
+    "\u{3}01,01@\u{3}00,00@\u{3}01,01@\u{3}00,00@",
+    "\u{3}01,01@@@@\u{3}00,00@\u{3}01,01@\u{3}00,00@\u{3}01,01@@\n",
+    "\u{3}01,01@\u{3}00,00@\u{3}01,01@\u{3}00,00@",
+    "\u{3}01,01@@@@\u{3}00,00@\u{3}01,01@\u{3}00,00@\u{3}01,01@@\n",
+    "\u{3}01,01@\u{3}00,00@\u{3}01,01@\u{3}00,00@",
+    "\u{3}01,01@@@@\u{3}00,00@\u{3}01,01@\u{3}00,00@\u{3}01,01@@");
 
 
 static BASE_URL: &'static str = "http://deer.satf.se/deerlist.php";
 
 
-#[deriving(Decodable, Encodable, Clone)]
+#[deriving(RustcDecodable, RustcEncodable, Clone)]
 struct DeerApiResponse {
     irccode: String
 }
@@ -237,10 +236,10 @@ impl RustBotPlugin for DeerPlugin {
         let (tx, rx) = sync_channel(10);
         self.sender = Some(tx);
 
-        TaskBuilder::new().named("plugin-deer").spawn(proc() {
+        ::std::thread::Builder::new().name("plugin-deer".to_string()).spawn(move |:| {
             let mut deer_internal_state = DeerInternalState::new();
             deer_internal_state.start(rx);
-        });
+        }).detach();
     }
 
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {

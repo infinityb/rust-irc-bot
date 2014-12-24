@@ -1,9 +1,8 @@
-use std::task::TaskBuilder;
 use std::io::IoError;
 use std::error::FromError;
 
-use serialize::json;
-use serialize::json::DecoderError;
+use rustc_serialize::json;
+use rustc_serialize::json::DecoderError;
 use url::Url;
 use hyper::client::request::Request;
 use hyper::HttpError;
@@ -21,13 +20,13 @@ use command_mapper::{
 static API_URL: &'static str = "http://r-a-d.io/api/";
 
 
-#[deriving(Decodable, Encodable, Clone)]
+#[deriving(RustcDecodable, RustcEncodable, Clone)]
 struct RadioApiResponse {
     main: RadioStreamApiResponse
 }
 
 
-#[deriving(Decodable, Encodable, Clone)]
+#[deriving(RustcDecodable, RustcEncodable, Clone)]
 struct RadioStreamApiResponse {
     np: String,
     listeners: uint,
@@ -77,7 +76,7 @@ fn get_radio_api_result() -> Result<RadioApiResponse, RadioApiFailure> {
 
 
 fn format_radio_stream_response(resp: RadioStreamApiResponse) -> String {
-    format!("{} \u2014 np: {}", resp.djname.as_slice(), resp.np.as_slice())
+    format!("{} \u{2014} np: {}", resp.djname.as_slice(), resp.np.as_slice())
 }
 
 struct RadioInternalState {
@@ -151,10 +150,11 @@ impl RustBotPlugin for RadioPlugin {
     fn start(&mut self) {
         let (tx, rx) = sync_channel(10);
         
-        TaskBuilder::new().named("plugin-radio").spawn(proc() {
+
+        ::std::thread::Builder::new().name("plugin-radio".to_string()).spawn(move |:| {
             let mut internal_state = RadioInternalState::new();
             internal_state.start(rx);
-        });
+        }).detach();
 
         self.sender = Some(tx);
     }

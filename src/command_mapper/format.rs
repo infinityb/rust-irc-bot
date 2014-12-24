@@ -1,5 +1,5 @@
 use std::string;
-use std::collections::TreeMap;
+use std::collections::BTreeMap;
 
 #[deriving(Show, PartialEq, Eq)]
 pub enum FormatParseError {
@@ -97,7 +97,7 @@ pub struct Format {
 pub struct CommandPhrase {
     pub command: string::String,
     pub original_command: string::String,
-    args: TreeMap<string::String, Value>
+    args: BTreeMap<string::String, Value>
 }
 
 impl CommandPhrase {
@@ -149,7 +149,7 @@ impl Format {
         println!("{} is parsing <<{}>>", self, input);
         let original_input = input[];
         let input = input[];
-        let mut args_map: TreeMap<string::String, Value> = TreeMap::new();
+        let mut args_map: BTreeMap<string::String, Value> = BTreeMap::new();
 
         let command = match self.atoms[0] {
             Atom::Literal(ref literal) => literal.to_string(),
