@@ -5,6 +5,7 @@
 
 extern crate time;
 extern crate "rustc-serialize" as rustc_serialize;
+extern crate "dbus-rs" as dbus;
 extern crate url;
 extern crate hyper;
 extern crate toml;

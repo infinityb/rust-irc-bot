@@ -422,7 +422,7 @@ pub mod atom_parser {
             assert!(parse_atoms("deer {a} {*b}xxx").is_err());
 
             match parse_atoms("deer {a:s} {*b}") {
-                Ok(ok) => (),
+                Ok(_) => (),
                 Err(err) => assert!(false, format!("{}", err))
             };
         }

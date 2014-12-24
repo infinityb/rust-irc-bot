@@ -20,6 +20,7 @@ use plugins::{
     PingPlugin,
     WserverPlugin,
     WhoAmIPlugin,
+    WaifuPlugin,
 };
 
 
@@ -150,6 +151,9 @@ impl BotConnection {
         }
         if conf.enabled_plugins.contains(WhoAmIPlugin::get_plugin_name()) {
             container.register(box WhoAmIPlugin::new());
+        }
+            if conf.enabled_plugins.contains(WaifuPlugin::get_plugin_name()) {
+            container.register(box WaifuPlugin::new());
         }
 
         let (tx, rx) = sync_channel::<IrcMsg>(0);

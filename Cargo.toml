@@ -18,3 +18,7 @@ hyper = "~0.0.17"
 
 [dependencies.irc]
 git = "https://github.com/infinityb/rust-irc"
+
+[dependencies.dbus-rs]
+git = "https://github.com/infinityb/dbus-rs"
+branch = "experimental"

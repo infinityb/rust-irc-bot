@@ -5,6 +5,7 @@ pub use self::r_a_dio::RadioPlugin;
 pub use self::ping::PingPlugin;
 pub use self::wserver::WserverPlugin;
 pub use self::whoami::WhoAmIPlugin;
+pub use self::waifu::WaifuPlugin;
 
 mod deer;
 mod greed;
@@ -13,3 +14,4 @@ mod r_a_dio;
 mod ping;
 mod wserver;
 mod whoami;
+mod waifu;
