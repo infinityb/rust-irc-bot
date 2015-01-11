@@ -1,11 +1,11 @@
 #![deny(unused_must_use, unused_variables, unused_mut, unused_imports)]
-#![feature(slicing_syntax, phase, macro_rules)]
+#![feature(slicing_syntax)]
 
-#[phase(plugin, link)] extern crate log;
+#[macro_use] extern crate log;
 
 extern crate time;
 extern crate "rustc-serialize" as rustc_serialize;
-extern crate "dbus-rs" as dbus;
+// extern crate "dbus-rs" as dbus;
 extern crate url;
 extern crate hyper;
 extern crate toml;
@@ -19,7 +19,7 @@ use std::os::args_as_bytes;
 use botcore::{BotConfig, BotConnection};
 
 mod botcore;
-mod plugins;
+// mod plugins;
 mod command_mapper;
 
 
@@ -60,9 +60,15 @@ fn main() {
     };
 
     let conn = BotConnection::new(&appconfig);
-    let conn = match conn {
+    let _ = match conn {
         Ok(stream) => stream,
         Err(err) => panic!("{}", err)
     };
-    drop(conn);
+    loop {
+        std::io::timer::sleep(std::time::duration::Duration::hours(24));
+    }    
+    // match conn.join() {
+    //     Ok(()) => (),
+    //     Err(err) => panic!(err)
+    // }
 }

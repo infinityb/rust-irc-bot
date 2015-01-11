@@ -1,13 +1,12 @@
 use std::string;
 use std::sync::Arc;
-
-use irc::IrcMessage;
+use std::sync::mpsc::SyncSender;
 
 use irc::State;
 use irc::parse::IrcMsg;
 use irc::message_types::{client, server};
 use irc::MessageEndpoint::{
-    mod,
+    self,
     KnownUser,
     KnownChannel,
     AnonymousUser,
@@ -25,11 +24,11 @@ mod format;
 
 /// Defines the API a plugin implements
 // TODO: move to `plugin' module
-pub trait RustBotPlugin {
+pub trait RustBotPlugin: Send {
     fn configure(&mut self, _: &mut IrcBotConfigurator) {}
     fn start(&mut self) {}
-    fn on_message(&mut self, _: &IrcMessage) {}
-    fn dispatch_cmd(&mut self, _: &CommandMapperDispatch, _: &IrcMessage) {}
+    fn on_irc_msg(&mut self, _: &IrcMsg) {}
+    fn dispatch_cmd(&mut self, _: &CommandMapperDispatch, _: &IrcMsg) {}
 }
 
 
@@ -53,7 +52,7 @@ impl IrcBotConfigurator {
 
 struct DispatchBuilder {
     state: Arc<State>,
-    sender: SyncSender<IrcMsg>,
+    sender: SyncSender<Vec<u8>>,
     reply_target: string::String,
     source: MessageEndpoint,
     target: MessageEndpoint,
@@ -75,11 +74,11 @@ impl DispatchBuilder {
 
 /// Defines the public API the bot exposes to plugins, valid while
 /// the plugins dispatch_cmd method is called
-#[deriving(Clone)]
+#[derive(Clone)]
 pub struct CommandMapperDispatch {
     state: Arc<State>,
     command: CommandPhrase,
-    sender: SyncSender<IrcMsg>,
+    sender: SyncSender<Vec<u8>>,
     reply_target: string::String,
     pub source: MessageEndpoint,
     pub target: MessageEndpoint,
@@ -105,14 +104,14 @@ impl CommandMapperDispatch {
     /// Reply with a message to the channel/nick which sent the message being dispatched
     pub fn reply(&self, message: string::String) {
         let privmsg = client::Privmsg::new(self.reply_target.as_slice(), message.as_bytes());
-        self.sender.send(privmsg.into_irc_msg());
+        assert!(self.sender.send(privmsg.into_bytes()).is_ok());
     }
 }
 
 
 pub struct PluginContainer {
     cmd_prefix: string::String,
-    plugins: Vec<(Box<RustBotPlugin+'static>, Vec<Format>)>,
+    plugins: Vec<(Box<RustBotPlugin+Send+'static>, Vec<Format>)>,
 }
 
 
@@ -125,23 +124,25 @@ impl PluginContainer {
     }
 
     /// Register a plugin instance.  This will configure and start the plugin.
-    pub fn register(&mut self, plugin: Box<RustBotPlugin+'static>) {
+    pub fn register<Plugin>(&mut self, plugin: Plugin) where Plugin: RustBotPlugin {
         let mut plugin = plugin;
         let mut configurator = IrcBotConfigurator::new();
         plugin.configure(&mut configurator);
         plugin.start();
-        self.plugins.push((plugin, configurator.mapped));
+
+        let boxed_plugin = Box::new(plugin) as Box<RustBotPlugin+Send+'static>;
+        self.plugins.push((boxed_plugin, configurator.mapped));
     }
 
     /// Dispatches messages to plugins, if they have expressed interest in the message.
     /// Interest is expressed via calling map during the configuration phase.
-    pub fn dispatch(&mut self, state: Arc<State>, raw_tx: &SyncSender<IrcMsg>, message: &IrcMessage) {
-        for &(ref mut plugin, _) in self.plugins.iter_mut() {
-            plugin.on_message(message);
+    pub fn dispatch(&mut self, state: Arc<State>, raw_tx: &SyncSender<Vec<u8>>, msg: &IrcMsg) {
+        for &mut (ref mut plugin, _) in self.plugins.iter_mut() {
+            plugin.on_irc_msg(msg);
         }
         
-        let privmsg = match *message.get_typed_message() {
-            server::IncomingMsg::Privmsg(ref privmsg) => privmsg,
+        let privmsg = match server::IncomingMsg::from_msg(msg.clone()) {
+            server::IncomingMsg::Privmsg(privmsg) => privmsg,
             _ => return
         };
 
@@ -173,19 +174,20 @@ impl PluginContainer {
             target: target.clone(),
         };
 
-        if let server::IncomingMsg::Privmsg(ref privmsg) = *message.get_typed_message() {
-            if is_command_message(message, self.cmd_prefix[]) {
+        if let server::IncomingMsg::Privmsg(ref privmsg) = server::IncomingMsg::from_msg(msg.clone()) {
+            if is_command_message(msg, &self.cmd_prefix[]) {
                 let mut vec = Vec::new();
-                vec.push_all(privmsg.get_body_raw()[self.cmd_prefix.len()..]);
+                let body_raw = privmsg.get_body_raw();
+                vec.push_all(&body_raw[self.cmd_prefix.len()..]);
                 let message_body = match String::from_utf8(vec) {
                     Ok(string) => string,
                     Err(_) => return,
                 };            
-                for &(ref mut plugin, ref mappers) in self.plugins.iter_mut() {
+                for &mut (ref mut plugin, ref mappers) in self.plugins.iter_mut() {
                     for mapper_format in mappers.iter() {
-                        if let Ok(command_phrase) = mapper_format.parse(message_body[]) {
+                        if let Ok(command_phrase) = mapper_format.parse(&message_body[]) {
                             let dispatch = builder.build(command_phrase);
-                            plugin.dispatch_cmd(&dispatch, message);
+                            plugin.dispatch_cmd(&dispatch, msg);
                         }
                     }
                 }
@@ -195,8 +197,8 @@ impl PluginContainer {
 }
 
 
-fn is_command_message(message: &IrcMessage, prefix: &str) -> bool {
-    if let server::IncomingMsg::Privmsg(ref privmsg) = *message.get_typed_message() {
+fn is_command_message(msg: &IrcMsg, prefix: &str) -> bool {
+    if let server::IncomingMsg::Privmsg(ref privmsg) = server::IncomingMsg::from_msg(msg.clone()) {
         return privmsg.get_body_raw().starts_with(prefix.as_bytes());
     }
     false
