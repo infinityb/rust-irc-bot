@@ -115,7 +115,7 @@ fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
                     said_what,
                     duration_to_string(now - record.when),
                     duration_to_string(when_quit - record.when)),
-                Err(err) => format!("{} said something I cannot repeat {} ago before quitting {} later",
+                Err(_) => format!("{} said something I dare not repeat {} ago before quitting {} later",
                     nick,
                     duration_to_string(now - record.when),
                     duration_to_string(when_quit - record.when)),
@@ -128,8 +128,8 @@ fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
                     nick,
                     said_what,
                     duration_to_string(now - record.when)),
-                Err(err) => format!(
-                    "{} said something I cannot repeat {} ago",
+                Err(_) => format!(
+                    "{} said something I dare not repeat {} ago",
                     nick, duration_to_string(now - record.when))
             }
         },
