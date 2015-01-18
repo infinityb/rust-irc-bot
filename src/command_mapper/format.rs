@@ -33,6 +33,7 @@ enum Atom {
     Formatted(string::String, AtomType),
     // Rest(name)
     Rest(string::String),
+    Whitespace,
 }
 
 #[derive(Show, PartialEq, Eq, Clone)]
@@ -71,19 +72,35 @@ fn consume_literal<'a>(from: &'a str, literal: &str) -> ValueResult<(&'a str, &'
     }
 }
 
+fn consume_whitespace<'a>(from: &'a str) -> (&'a str, &'a str) {
+    let mut idx = 0;
+    while from[idx..].starts_with(" ") {
+        idx += 1;
+    }
+    (&from[..idx], &from[idx..])
+}
+
+
 impl Atom {
-    fn consume<'a>(&self, input: &'a str) -> ValueResult<(Value, &'a str)> {
+    fn consume<'a>(&self, input: &'a str) -> ValueResult<(Option<Value>, &'a str)> {
         match *self {
             Atom::Literal(ref val) => {
                 let (lit, rest) = try!(consume_literal(input, &val[]));
-                Ok((Value::Literal(lit.to_string()), rest))
+                let value = Value::Literal(lit.to_string());
+                Ok((Some(value), rest))
             },
             Atom::Formatted(_, kind) => {
                 let (lit, rest) = try!(consume_token(input));
-                Ok((try!(Value::parse(kind, lit)), rest))
+                let value = try!(Value::parse(kind, lit));
+                Ok((Some(value), rest))
             },
             Atom::Rest(_) => {
-                Ok((try!(Value::parse(AtomType::String, input)), ""))
+                let value = try!(Value::parse(AtomType::String, input));
+                Ok((Some(value), ""))
+            },
+            Atom::Whitespace => {
+                let (_whitespace, rest) = consume_whitespace(input);
+                Ok((None, rest))
             }
         }
     }
@@ -158,19 +175,24 @@ impl Format {
         let mut remaining = input;
 
         for atom in self.atoms.iter() {
-
             if remaining == "" {
                 return Err(ValueParseError::MessageTooShort)
             }
+            println!("{:?} it consuming on {:?}", atom, remaining);
             let value = match atom.consume(remaining) {
-                Ok((value, tmp)) => {
+                Ok((Some(value), tmp)) => {
                     remaining = tmp;
                     value
+                },
+                Ok((None, tmp)) => {
+                    remaining = tmp;
+                    continue;
                 },
                 Err(err) => return Err(err)
             };
             let name = match *atom {
                 Atom::Literal(_) => continue,
+                Atom::Whitespace => continue,
                 Atom::Formatted(ref name, _) => name.clone(),
                 Atom::Rest(ref name) => name.clone(),
             };
@@ -182,6 +204,7 @@ impl Format {
             };
         }
         if remaining != "" {
+            panic!("remaining : {:?}", remaining);
             return Err(ValueParseError::MessageTooLong)
         }
         Ok(CommandPhrase {
@@ -240,6 +263,7 @@ pub mod atom_parser {
     enum State {
         Zero,
         InLiteral,
+        InWhitespace,
         InVariable,
         InRestVariable,
         ForceEnd,
@@ -267,17 +291,18 @@ pub mod atom_parser {
 
         fn push_byte(&mut self, byte: u8) {
             use self::State::{
-                Zero, InLiteral, InVariable, InRestVariable, ForceEnd, Errored
+                Zero, InLiteral, InVariable, InRestVariable, ForceEnd, Errored, InWhitespace
             };
 
             let new_state = match (self.state, byte) {
-                (State::Zero, b'{') => InVariable,
-                (State::Zero, cur_byte) => {
+                (Zero, b'{') => InVariable,
+                (Zero, b' ') => InWhitespace,
+                (Zero, cur_byte) => {
                     self.cur_atom.push(cur_byte);
                     InLiteral
                 }
 
-                (State::InVariable, b'}') => {
+                (InVariable, b'}') => {
                     let atom_res = {
                         // These should be fine unless we break parse_atom ...
                         let string = String::from_utf8_lossy(self.cur_atom.as_slice());
@@ -291,27 +316,29 @@ pub mod atom_parser {
                         },
                         Err(err) => {
                             self.error = Some(err);
-                            State::Errored
+                            Errored
                         }
                     }
                 },
-                (State::InVariable, b'*') if self.cur_atom.len() == 0 => {
+                (InVariable, b'*') if self.cur_atom.len() == 0 => {
                     InRestVariable
                 },
-                (State::InVariable, b':') if self.cur_atom.len() > 0 => {
+                (InVariable, b'*') => Errored,
+                (InVariable, b':') if self.cur_atom.len() > 0 => {
                     self.cur_atom.push(b':');
                     InVariable
                 },
-                (State::InVariable, cur_byte) if is_ascii_alphanumeric(cur_byte) => {
+                (InVariable, b':') => Errored,
+                (InVariable, cur_byte) if is_ascii_alphanumeric(cur_byte) => {
                     self.cur_atom.push(cur_byte);
                     InVariable
                 },
-                (State::InVariable, _) => {
+                (InVariable, _) => {
                     self.error = Some(FormatParseError::BrokenFormat);
                     Errored
                 },
 
-                (State::InRestVariable, b'}') => {
+                (InRestVariable, b'}') => {
                     {
                         // These should be fine unless we break parse_atom ...
                         let string = String::from_utf8_lossy(self.cur_atom.as_slice());
@@ -320,16 +347,39 @@ pub mod atom_parser {
                     self.cur_atom.clear();
                     ForceEnd
                 },
-                (State::InRestVariable, cur_byte) if is_ascii_alphanumeric(cur_byte) => {
+                (InRestVariable, cur_byte) if is_ascii_alphanumeric(cur_byte) => {
                     self.cur_atom.push(cur_byte);
                     InRestVariable
                 },
-                (State::InRestVariable, _) => {
+                (InRestVariable, _) => {
                     self.error = Some(FormatParseError::BrokenFormat);
                     Errored
                 },
 
-                (State::InLiteral, b'{') => {
+                (InWhitespace, b' ') => {
+                    InWhitespace
+                },
+                (InWhitespace, b'{') => {
+                    assert_eq!(self.cur_atom.len(), 0);
+                    self.atoms.push(Atom::Whitespace);
+                    InVariable
+                },
+                (InWhitespace, cur_byte) => {
+                    assert_eq!(self.cur_atom.len(), 0);
+                    self.cur_atom.push(cur_byte);
+                    InLiteral
+                },
+
+                (InLiteral, b' ') => {
+                    {
+                        // These should be fine unless we break parse_atom ...
+                        let string = String::from_utf8_lossy(self.cur_atom.as_slice());
+                        self.atoms.push(Atom::Literal(string.into_owned()));
+                    }
+                    self.cur_atom.clear();
+                    InWhitespace
+                },
+                (InLiteral, b'{') => {
                     {
                         // These should be fine unless we break parse_atom ...
                         let string = String::from_utf8_lossy(self.cur_atom.as_slice());
@@ -338,13 +388,13 @@ pub mod atom_parser {
                     self.cur_atom.clear();
                     InVariable
                 },
-                (State::InLiteral, cur_byte)  => {
+                (InLiteral, cur_byte)  => {
                     self.cur_atom.push(cur_byte);
                     InLiteral
                 },
                 
-                (State::Errored, _) => State::Errored,
-                (State::ForceEnd, _) => {
+                (Errored, _) => Errored,
+                (ForceEnd, _) => {
                     self.error = Some(FormatParseError::BrokenFormat);
                     Errored
                 },
@@ -358,6 +408,10 @@ pub mod atom_parser {
                 State::InLiteral => {
                     let string = String::from_utf8_lossy(self.cur_atom.as_slice());
                     self.atoms.push(Atom::Literal(string.into_owned()));
+                    Ok(self.atoms)
+                },
+                State::InWhitespace => {
+                    self.atoms.pop();
                     Ok(self.atoms)
                 },
                 State::Zero | State::ForceEnd => Ok(self.atoms),
@@ -402,15 +456,17 @@ pub mod atom_parser {
 
             let atoms = parse_atoms("deer {a}").ok().unwrap();
             assert_eq!(atoms, vec!(
-                Atom::Literal("deer ".to_string()),
+                Atom::Literal("deer".to_string()),
+                Atom::Whitespace,
                 Atom::Formatted("a".to_string(), AtomType::String),
             ));
 
             let atoms = parse_atoms("deer {a} {*b}").ok().unwrap();
             assert_eq!(atoms, vec!(
-                Atom::Literal("deer ".to_string()),
+                Atom::Literal("deer".to_string()),
+                Atom::Whitespace,
                 Atom::Formatted("a".to_string(), AtomType::String),
-                Atom::Literal(" ".to_string()),
+                Atom::Whitespace,
                 Atom::Rest("b".to_string()),
             ));
 
@@ -418,7 +474,7 @@ pub mod atom_parser {
 
             match parse_atoms("deer {a:s} {*b}") {
                 Ok(ok) => (),
-                Err(err) => assert!(false, format!("{}", err))
+                Err(err) => assert!(false, format!("{:?}", err))
             };
         }
     }
@@ -431,34 +487,29 @@ fn cons_the_basics() {
         let fmt_str = "articles {foo} {category:s} {id:d}";
         let fmt = match Format::from_str(fmt_str) {
             Ok(fmt) => fmt,
-            Err(err) => panic!("parse failure: {}", err)
+            Err(err) => panic!("parse failure: {:?}", err)
         };
 
-        assert_eq!(fmt.atoms.len(), 6);
-        assert_eq!(
-            fmt.atoms[0],
-            Atom::Literal("articles ".to_string()));
-        assert_eq!(
-            fmt.atoms[1],
-            Atom::Formatted("foo".to_string(), AtomType::String));
+        assert_eq!(fmt.atoms.len(), 7);
+        assert_eq!(fmt.atoms[0], Atom::Literal("articles".to_string()));
+        assert_eq!(fmt.atoms[1], Atom::Whitespace);
         assert_eq!(
             fmt.atoms[2],
-            Atom::Literal(" ".to_string()));
-        assert_eq!(
-            fmt.atoms[3],
-            Atom::Formatted("category".to_string(), AtomType::String));
+            Atom::Formatted("foo".to_string(), AtomType::String));
+        assert_eq!(fmt.atoms[3], Atom::Whitespace);
         assert_eq!(
             fmt.atoms[4],
-            Atom::Literal(" ".to_string()));
+            Atom::Formatted("category".to_string(), AtomType::String));
+        assert_eq!(fmt.atoms[5], Atom::Whitespace);
         assert_eq!(
-            fmt.atoms[5],
+            fmt.atoms[6],
             Atom::Formatted("id".to_string(), AtomType::WholeNumeric));
     }
     
     match Format::from_str("") {
         Ok(_) => panic!("empty string must not succeed"),
         Err(FormatParseError::EmptyFormat) => (),
-        Err(err) => panic!("wrong error for empty: {}", err),
+        Err(err) => panic!("wrong error for empty: {:?}", err),
     };
     
     match Format::from_str("{category:s} articles") {
@@ -470,13 +521,13 @@ fn cons_the_basics() {
         let fmt_str = "articles {foo} {*rest}";
         let fmt = match Format::from_str(fmt_str) {
             Ok(fmt) => fmt,
-            Err(err) => panic!("parse failure: {}", err)
+            Err(err) => panic!("parse failure: {:?}", err)
         };
         let cmdlet = match fmt.parse("articles bar test article argument") {
             Ok(cmdlet) => cmdlet,
-            Err(err) => panic!("parse failure: {}", err)
+            Err(err) => panic!("parse failure: {:?}", err)
         };
-        assert_eq!(cmdlet.command[], "articles");
+        assert_eq!(cmdlet.command.as_slice(), "articles");
         assert_eq!(
             cmdlet.args["foo".to_string()],
             Value::String("bar".to_string()));
@@ -495,15 +546,15 @@ fn parse_the_basics() {
 
         let fmt = match Format::from_str(fmt_str) {
             Ok(fmt) => fmt,
-            Err(err) => panic!("parse failure: {}", err)
+            Err(err) => panic!("parse failure: {:?}", err)
         };
 
         assert!(fmt.parse("articles").is_err());
         let cmdlet = match fmt.parse(cmd_str) {
             Ok(cmdlet) => cmdlet,
-            Err(err) => panic!("parse failure: {}", err)
+            Err(err) => panic!("parse failure: {:?}", err)
         };
-        assert_eq!(cmdlet.command[], "articles");
+        assert_eq!(cmdlet.command.as_slice(), "articles");
         assert_eq!(
             cmdlet.get::<String>("foo"),
             Some("my_bar".to_string()));
@@ -518,7 +569,7 @@ fn parse_the_basics() {
         match Format::from_str("") {
             Ok(_) => panic!("empty string must not succeed"),
             Err(FormatParseError::EmptyFormat) => (),
-            Err(err) => panic!("wrong error for empty: {}", err),
+            Err(err) => panic!("wrong error for empty: {:?}", err),
         };
     }
 }

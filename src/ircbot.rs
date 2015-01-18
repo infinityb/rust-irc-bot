@@ -1,5 +1,6 @@
 #![deny(unused_must_use)]
 #![feature(slicing_syntax)]
+#![allow(unstable)]
 
 // #[use_macro] extern crate log;
 
