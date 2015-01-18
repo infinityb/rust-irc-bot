@@ -11,16 +11,10 @@ use hyper::client::request::Request;
 use hyper::HttpError;
 use hyper::method::Method::Get;
 
-use irc::{
-    UserId,
-    ChannelId,
-};
+use irc::UserId;
 use irc::parse::IrcMsg;
-use irc::MessageEndpoint::{
-    self,
-    KnownUser,
-    KnownChannel,
-};
+use irc::MessageEndpoint::{self, KnownUser};
+
 use command_mapper::{
     RustBotPlugin,
     CommandMapperDispatch,

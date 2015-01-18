@@ -1,4 +1,3 @@
-use std::string;
 use std::sync::Arc;
 use std::sync::mpsc::SyncSender;
 
@@ -53,7 +52,7 @@ impl IrcBotConfigurator {
 struct DispatchBuilder {
     state: Arc<State>,
     sender: SyncSender<IrcMsg>,
-    reply_target: string::String,
+    reply_target: String,
     source: MessageEndpoint,
     target: MessageEndpoint,
 }
@@ -79,7 +78,7 @@ pub struct CommandMapperDispatch {
     state: Arc<State>,
     command: CommandPhrase,
     sender: SyncSender<IrcMsg>,
-    reply_target: string::String,
+    reply_target: String,
     pub source: MessageEndpoint,
     pub target: MessageEndpoint,
 }
@@ -102,21 +101,27 @@ impl CommandMapperDispatch {
     }
 
     /// Reply with a message to the channel/nick which sent the message being dispatched
-    pub fn reply(&self, message: string::String) {
+    pub fn reply(&self, message: String) {
         let privmsg = client::Privmsg::new(self.reply_target.as_slice(), message.as_bytes());
+        self.sender.send(privmsg.into_irc_msg()).unwrap();
+    }
+
+    /// Reply with a message to the channel/nick which sent the message being dispatched
+    pub fn reply_bin(&self, message: Vec<u8>) {
+        let privmsg = client::Privmsg::new(self.reply_target.as_slice(), message.as_slice());
         self.sender.send(privmsg.into_irc_msg()).unwrap();
     }
 }
 
 
 pub struct PluginContainer {
-    cmd_prefix: string::String,
+    cmd_prefix: String,
     plugins: Vec<(Box<RustBotPlugin+'static>, Vec<Format>)>,
 }
 
 
 impl PluginContainer {
-    pub fn new(prefix: string::String) -> PluginContainer {
+    pub fn new(prefix: String) -> PluginContainer {
         PluginContainer {
             cmd_prefix: prefix,
             plugins: Vec::new()
