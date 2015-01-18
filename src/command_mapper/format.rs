@@ -204,7 +204,6 @@ impl Format {
             };
         }
         if remaining != "" {
-            panic!("remaining : {:?}", remaining);
             return Err(ValueParseError::MessageTooLong)
         }
         Ok(CommandPhrase {
