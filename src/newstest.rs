@@ -12,7 +12,7 @@ mod tests {
     const TEST_SESSION_STATETRACKER: &'static [u8] =
     	include_bin!("../testdata/news_transcript.txt");
 
-    #[deriving(Show)]
+    #[derive(Show)]
     enum SessionRecord {
         ContentLine(IrcMessage),
         CommentLine(String),

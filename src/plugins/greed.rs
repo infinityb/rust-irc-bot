@@ -1,16 +1,18 @@
-use std::collections::{hash_map, HashMap};
+use std::collections::HashMap;
+use std::collections::hash_map;
 use std::default::Default;
 use std::num::SignedInt;
 use std::rand::distributions::{Sample, Range};
 use std::cmp::Ordering;
 use std::fmt;
-use std::rand::{task_rng, Rng, Rand};
+use std::rand::{thread_rng, Rng, Rand};
 
 use irc::{
-    IrcMessage,
     ChannelId,
+    User,
     UserId,
 };
+use irc::parse::IrcMsg;
 use irc::MessageEndpoint::{
     KnownChannel,
     KnownUser,
@@ -24,10 +26,10 @@ use command_mapper::{
 };
 
 
-type ScorePrefix = [u8, ..6];
-type ScoreRec = (uint, ScorePrefix, int);
+type ScorePrefix = [u8; 6];
+type ScoreRec = (usize, ScorePrefix, i32);
 
-pub static SCORING_TABLE: [ScoreRec, ..28] = [
+pub static SCORING_TABLE: [ScoreRec; 28] = [
     (6, [1, 2, 3, 4, 5, 6], 1200),
     (6, [2, 2, 3, 3, 4, 4],  800),
     (6, [1, 1, 1, 1, 1, 1], 8000),
@@ -58,11 +60,11 @@ pub static SCORING_TABLE: [ScoreRec, ..28] = [
     (3, [6, 6, 6, 0, 0, 0],  600),
 ];
 
-struct RollResult([u8, ..6]);
+struct RollResult([u8; 6]);
 
 
 #[inline]
-fn is_prefix(rec: &ScoreRec, roll_res: &RollResult, start_idx: uint) -> bool {
+fn is_prefix(rec: &ScoreRec, roll_res: &RollResult, start_idx: usize) -> bool {
     let RollResult(ref roll_data) = *roll_res;
     let (prefix_len, ref roll_target, _) = *rec;
 
@@ -97,7 +99,7 @@ impl RollResult {
         score_comps
     }
 
-    fn total_score(&self) -> int {
+    fn total_score(&self) -> i32 {
         let mut sum = 0;
         for score in self.get_scores().iter() {
             let (_, _, score_val) = **score;
@@ -142,7 +144,7 @@ impl RollResult {
 
 impl Rand for RollResult {
     fn rand<R: Rng>(rng: &mut R) -> RollResult {
-        let mut out: ScorePrefix = [0u8, ..6];
+        let mut out: ScorePrefix = [0u8; 6];
         let mut between = Range::new(1u8, 7u8);
         for val in out.iter_mut() {
             *val = between.sample(rng);
@@ -152,7 +154,7 @@ impl Rand for RollResult {
     }
 }
 
-impl fmt::Show for RollResult {
+impl fmt::String for RollResult {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         let RollResult(ref roll) = *self;
         write!(f, "[{}] => [{}] for {} points",
@@ -180,7 +182,7 @@ struct GreedPlayResult {
 
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<GreedCommandType> {
     let command_phrase = m.command();
-    match command_phrase.command[] {
+    match &command_phrase.command[] {
         "greed" => Some(GreedCommandType::Greed),
         "greed-stats" => Some(GreedCommandType::GreedStats),
         _ => None
@@ -188,10 +190,10 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<GreedCommandType> {
 }
 
 struct UserStats {
-    games: uint,
-    wins: uint,
-    score_sum: int,
-    opponent_score_sum: int
+    games: u32,
+    wins: u32,
+    score_sum: i32,
+    opponent_score_sum: i32
 }
 
 impl Default for UserStats {
@@ -205,7 +207,7 @@ impl Default for UserStats {
     }
 }
 
-impl fmt::Show for UserStats {
+impl fmt::String for UserStats {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "{} wins over {} games; points: {}",
             self.wins, self.games, self.score_sum - self.opponent_score_sum)
@@ -225,14 +227,14 @@ impl GreedPlugin {
         "greed"
     }
     
-    fn dispatch_cmd_greed_stats(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
+    fn dispatch_cmd_greed_stats(&mut self, m: &CommandMapperDispatch, message: &IrcMsg) {
         let user_id = match m.source {
             KnownUser(user_id) => user_id,
             _ => return
         };
 
-        let source_nick = match message.source_nick() {
-            Some(nickname) => nickname,
+        let source_nick = match message.get_prefix().nick() {
+            Some(nickname) => nickname.to_string(),
             None => return
         };
         m.reply(match self.userstats.get(&user_id) {
@@ -241,10 +243,10 @@ impl GreedPlugin {
         })
     }
 
-    fn add_userstats_roll(&mut self, uid: UserId, win: bool, self_score: int, opp_score: int) {
+    fn add_userstats_roll(&mut self, uid: UserId, win: bool, self_score: i32, opp_score: i32) {
         let cur_user = match self.userstats.entry(uid) {
             hash_map::Entry::Occupied(entry) => entry.into_mut(),
-            hash_map::Entry::Vacant(entry) => entry.set(Default::default())
+            hash_map::Entry::Vacant(entry) => entry.insert(Default::default())
         };
         cur_user.games += 1;
         cur_user.wins += if win { 1 } else { 0 };
@@ -252,22 +254,22 @@ impl GreedPlugin {
         cur_user.opponent_score_sum += opp_score;
     }
 
-    fn dispatch_cmd_greed(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
+    fn dispatch_cmd_greed(&mut self, m: &CommandMapperDispatch, message: &IrcMsg) {
         let (user_id, channel_id) = match (m.source.clone(), m.target.clone()) {
             (KnownUser(uid), KnownChannel(cid)) => (uid, cid),
             _ => return
         };
 
-        let source_nick = match message.source_nick() {
-            Some(nickname) => nickname,
+        let source_nick = match message.get_prefix().nick() {
+            Some(nickname) => nickname.to_string(),
             None => return
         };
 
-        let prev_play_opt = match self.games.entry(channel_id) {
+        let prev_play_opt: Option<GreedPlayResult> = match self.games.entry(channel_id) {
             hash_map::Entry::Vacant(entry) => {
-                let roll = task_rng().gen::<RollResult>();
+                let roll = thread_rng().gen::<RollResult>();
                 m.reply(format!("{}: {}", source_nick, roll));
-                entry.set(GreedPlayResult {
+                entry.insert(GreedPlayResult {
                     user_id: user_id,
                     user_nick: source_nick.to_string(),
                     roll: roll
@@ -279,17 +281,17 @@ impl GreedPlugin {
                     m.reply(format!("You can't go twice in a row, {}", source_nick));
                     None
                 } else {
-                    Some(entry.take())
+                    Some(entry.remove())
                 }
             }
         };
         if let Some(prev_play) = prev_play_opt {
-            let roll = task_rng().gen::<RollResult>();
+            let roll = thread_rng().gen::<RollResult>();
             m.reply(format!("{}: {}", source_nick, roll));
 
-            let prev_play_nick = m.get_state().resolve_user(prev_play.user_id).and_then(|user| {
+            let prev_play_nick = m.get_state().resolve_user(prev_play.user_id).and_then(|&: user: &User| {
                 Some(user.get_nick().to_string())
-            }).unwrap_or_else(|| {
+            }).unwrap_or_else(|&:| {
                 format!("{} (deceased)", prev_play.user_nick)
             });
             let prev_play_score = prev_play.roll.total_score();
@@ -302,10 +304,10 @@ impl GreedPlugin {
             };
             let score_diff = (prev_play_score - cur_play_score).abs();
             m.reply(match cmp_result {
-                 Less => format!("{} wins {} points from {}!",
+                 Ordering::Less => format!("{} wins {} points from {}!",
                     source_nick, score_diff, prev_play_nick),
-                 Equal => format!("{} and {} tie.", source_nick, prev_play_nick),
-                 Greater => format!("{} wins {} points from {}!",
+                 Ordering::Equal => format!("{} and {} tie.", source_nick, prev_play_nick),
+                 Ordering::Greater => format!("{} wins {} points from {}!",
                     prev_play_nick, score_diff, source_nick),
             });
             self.add_userstats_roll(user_id, cur_user_wins,
@@ -323,7 +325,7 @@ impl RustBotPlugin for GreedPlugin {
         conf.map_format(Format::from_str("greed-stats").unwrap());
     }
     
-    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
+    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMsg) {
         match parse_command(m) {
             Some(GreedCommandType::Greed) => self.dispatch_cmd_greed(m, message),
             Some(GreedCommandType::GreedStats) => self.dispatch_cmd_greed_stats(m, message),

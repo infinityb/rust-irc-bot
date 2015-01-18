@@ -1,22 +1,25 @@
 use std::error::FromError;
 use std::io::IoError;
 use std::collections::HashMap;
+use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 
-use rustc_serialize::json;
-use rustc_serialize::json::DecoderError;
+use rustc_serialize::json::{self, DecoderError};
 use time::{get_time, Timespec};
 use url::Url;
 use url::form_urlencoded::serialize_owned;
 use hyper::client::request::Request;
 use hyper::HttpError;
+use hyper::method::Method::Get;
 
 use irc::{
-    IrcMessage,
     UserId,
+    ChannelId,
 };
+use irc::parse::IrcMsg;
 use irc::MessageEndpoint::{
-    mod,
+    self,
     KnownUser,
+    KnownChannel,
 };
 use command_mapper::{
     RustBotPlugin,
@@ -27,32 +30,32 @@ use command_mapper::{
 
 
 static DEER: &'static str = concat!(
-    "\u{3}01,01@@@@@@@@\u{3}00,00@\u{3}01,01@@\u{3}00,00@\u{3}01,01@\n",
-    "\u{3}01,01@@@@@@@@\u{3}00,00@\u{3}01,01@@\u{3}00,00@\u{3}01,01@\n",
-    "\u{3}01,01@@@@@@@@@\u{3}00,00@@\u{3}01,01@@\n",
-    "\u{3}01,01@@@@@@@@\u{3}00,00@@@\u{3}01,01@@\n",
-    "\u{3}01,01@@@@@@@@@\u{3}00,00@@\u{3}01,01@@\n",
-    "\u{3}01,01@@\u{3}00,00@@@@@@@@@\u{3}01,01@@\n",
-    "\u{3}01,01@\u{3}00,00@@@@@@@@@@\u{3}01,01@@\n",
-    "\u{3}01,01@\u{3}00,00@@@@@@@@@@\u{3}01,01@@\n",
-    "\u{3}01,01@\u{3}00,00@\u{3}01,01@\u{3}00,00@",
-    "\u{3}01,01@@@@\u{3}00,00@\u{3}01,01@\u{3}00,00@\u{3}01,01@@\n",
-    "\u{3}01,01@\u{3}00,00@\u{3}01,01@\u{3}00,00@",
-    "\u{3}01,01@@@@\u{3}00,00@\u{3}01,01@\u{3}00,00@\u{3}01,01@@\n",
-    "\u{3}01,01@\u{3}00,00@\u{3}01,01@\u{3}00,00@",
-    "\u{3}01,01@@@@\u{3}00,00@\u{3}01,01@\u{3}00,00@\u{3}01,01@@");
+    "\u{0003}01,01@@@@@@@@\u{0003}00,00@\u{0003}01,01@@\u{0003}00,00@\u{0003}01,01@\n",
+    "\u{0003}01,01@@@@@@@@\u{0003}00,00@\u{0003}01,01@@\u{0003}00,00@\u{0003}01,01@\n",
+    "\u{0003}01,01@@@@@@@@@\u{0003}00,00@@\u{0003}01,01@@\n",
+    "\u{0003}01,01@@@@@@@@\u{0003}00,00@@@\u{0003}01,01@@\n",
+    "\u{0003}01,01@@@@@@@@@\u{0003}00,00@@\u{0003}01,01@@\n",
+    "\u{0003}01,01@@\u{0003}00,00@@@@@@@@@\u{0003}01,01@@\n",
+    "\u{0003}01,01@\u{0003}00,00@@@@@@@@@@\u{0003}01,01@@\n",
+    "\u{0003}01,01@\u{0003}00,00@@@@@@@@@@\u{0003}01,01@@\n",
+    "\u{0003}01,01@\u{0003}00,00@\u{0003}01,01@\u{0003}00,00@",
+    "\u{0003}01,01@@@@\u{0003}00,00@\u{0003}01,01@\u{0003}00,00@\u{0003}01,01@@\n",
+    "\u{0003}01,01@\u{0003}00,00@\u{0003}01,01@\u{0003}00,00@",
+    "\u{0003}01,01@@@@\u{0003}00,00@\u{0003}01,01@\u{0003}00,00@\u{0003}01,01@@\n",
+    "\u{0003}01,01@\u{0003}00,00@\u{0003}01,01@\u{0003}00,00@",
+    "\u{0003}01,01@@@@\u{0003}00,00@\u{0003}01,01@\u{0003}00,00@\u{0003}01,01@@");
 
 
 static BASE_URL: &'static str = "http://deer.satf.se/deerlist.php";
 
 
-#[deriving(RustcDecodable, RustcEncodable, Clone)]
+#[derive(RustcDecodable, RustcEncodable, Clone)]
 struct DeerApiResponse {
     irccode: String
 }
 
 
-#[deriving(Show)]
+#[derive(Show)]
 enum DeerApiFailure {
     ResponseDecodeError,
     RequestError(HttpError),
@@ -84,17 +87,17 @@ fn get_deer_nocache(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> 
         Ok(url) => url,
         Err(_err) => unreachable!()
     };
-    url.query = Some(serialize_owned(vec![
+    url.query = Some(serialize_owned(&[
         (String::from_str("deer"), String::from_str(deer_name)),
-    ][]));
+    ]));
     
-    let mut resp = try!(try!(try!(Request::get(url)).start()).send());
+    let mut resp = try!(try!(try!(Request::new(Get, url)).start()).send());
     let body = match String::from_utf8(try!(resp.read_to_end())) {
         Ok(body) => body,
         Err(_err) => return Err(DeerApiFailure::ResponseDecodeError)
     };
 
-    Ok(try!(json::decode::<DeerApiResponse>(body[])))
+    Ok(try!(json::decode::<DeerApiResponse>(&body[])))
 }
 
 
@@ -119,7 +122,7 @@ fn get_deer(state: &mut DeerInternalState, deer_name: &str) -> Result<DeerApiRes
 
 
 pub struct DeerPlugin {
-    sender: Option<SyncSender<(CommandMapperDispatch, IrcMessage)>>
+    sender: Option<SyncSender<(CommandMapperDispatch, IrcMsg)>>
 }
 
 
@@ -174,7 +177,7 @@ impl DeerInternalState {
         }
         match *cmd {
             DeerCommandType::Deer(Some(ref deer_name)) => {
-                match get_deer(self, deer_name[]) {
+                match get_deer(self, &deer_name[]) {
                     Ok(deer_data) => {
                         for deer_line in deer_data.irccode[].split('\n') {
                             m.reply(String::from_str(deer_line));
@@ -183,7 +186,7 @@ impl DeerInternalState {
                         self.throttle_bump(source, m.target.clone());
                     },
                     Err(err) => {
-                        m.reply(format!("error: {}", err));
+                        m.reply(format!("error: {:?}", err));
                     }
                 } 
             },
@@ -200,7 +203,7 @@ impl DeerInternalState {
         };
     }
 
-    fn start(&mut self, rx: Receiver<(CommandMapperDispatch, IrcMessage)>) {
+    fn start(&mut self, rx: Receiver<(CommandMapperDispatch, IrcMsg)>) {
         for (m, _) in rx.iter() {
             match parse_command(&m) {
                 Some(ref command) => self.handle_command(&m, command),
@@ -217,7 +220,7 @@ enum DeerCommandType {
 
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<DeerCommandType> {
     let command_phrase = m.command();
-    match command_phrase.command[] {
+    match &command_phrase.command[] {
         "deer" => Some(DeerCommandType::Deer(command_phrase.get("deername"))),
         "deerstats" => Some(DeerCommandType::DeerStats),
         _ => None
@@ -239,13 +242,19 @@ impl RustBotPlugin for DeerPlugin {
         ::std::thread::Builder::new().name("plugin-deer".to_string()).spawn(move |:| {
             let mut deer_internal_state = DeerInternalState::new();
             deer_internal_state.start(rx);
-        }).detach();
+        });
     }
 
-    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
+    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMsg) {
         match self.sender {
-            Some(ref sender) => sender.send((m.clone(), message.clone())),
+            Some(ref sender) => {
+                if let Err(err) = sender.send((m.clone(), message.clone())) {
+                    m.reply(format!("Service ``wserver'' unavailable: {:?}", err));
+                }
+            }
             None => ()
         };
     }
 }
+
+

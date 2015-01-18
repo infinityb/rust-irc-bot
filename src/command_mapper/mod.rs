@@ -1,13 +1,12 @@
 use std::string;
 use std::sync::Arc;
-
-use irc::IrcMessage;
+use std::sync::mpsc::SyncSender;
 
 use irc::State;
 use irc::parse::IrcMsg;
 use irc::message_types::{client, server};
 use irc::MessageEndpoint::{
-    mod,
+    self,
     KnownUser,
     KnownChannel,
     AnonymousUser,
@@ -28,8 +27,8 @@ mod format;
 pub trait RustBotPlugin {
     fn configure(&mut self, _: &mut IrcBotConfigurator) {}
     fn start(&mut self) {}
-    fn on_message(&mut self, _: &IrcMessage) {}
-    fn dispatch_cmd(&mut self, _: &CommandMapperDispatch, _: &IrcMessage) {}
+    fn on_message(&mut self, _: &IrcMsg) {}
+    fn dispatch_cmd(&mut self, _: &CommandMapperDispatch, _: &IrcMsg) {}
 }
 
 
@@ -75,7 +74,7 @@ impl DispatchBuilder {
 
 /// Defines the public API the bot exposes to plugins, valid while
 /// the plugins dispatch_cmd method is called
-#[deriving(Clone)]
+#[derive(Clone)]
 pub struct CommandMapperDispatch {
     state: Arc<State>,
     command: CommandPhrase,
@@ -105,7 +104,7 @@ impl CommandMapperDispatch {
     /// Reply with a message to the channel/nick which sent the message being dispatched
     pub fn reply(&self, message: string::String) {
         let privmsg = client::Privmsg::new(self.reply_target.as_slice(), message.as_bytes());
-        self.sender.send(privmsg.into_irc_msg());
+        self.sender.send(privmsg.into_irc_msg()).unwrap();
     }
 }
 
@@ -125,8 +124,8 @@ impl PluginContainer {
     }
 
     /// Register a plugin instance.  This will configure and start the plugin.
-    pub fn register(&mut self, plugin: Box<RustBotPlugin+'static>) {
-        let mut plugin = plugin;
+    pub fn register<P>(&mut self, plugin: P) where P: RustBotPlugin+'static {
+        let mut plugin = Box::new(plugin) as Box<RustBotPlugin+'static>;
         let mut configurator = IrcBotConfigurator::new();
         plugin.configure(&mut configurator);
         plugin.start();
@@ -135,13 +134,13 @@ impl PluginContainer {
 
     /// Dispatches messages to plugins, if they have expressed interest in the message.
     /// Interest is expressed via calling map during the configuration phase.
-    pub fn dispatch(&mut self, state: Arc<State>, raw_tx: &SyncSender<IrcMsg>, message: &IrcMessage) {
-        for &(ref mut plugin, _) in self.plugins.iter_mut() {
-            plugin.on_message(message);
+    pub fn dispatch(&mut self, state: Arc<State>, raw_tx: &SyncSender<IrcMsg>, msg: &IrcMsg) {
+        for &mut (ref mut plugin, _) in self.plugins.iter_mut() {
+            plugin.on_message(msg);
         }
         
-        let privmsg = match *message.get_typed_message() {
-            server::IncomingMsg::Privmsg(ref privmsg) => privmsg,
+        let privmsg = match server::IncomingMsg::from_msg(msg.clone()) {
+            server::IncomingMsg::Privmsg(privmsg) => privmsg,
             _ => return
         };
 
@@ -173,20 +172,19 @@ impl PluginContainer {
             target: target.clone(),
         };
 
-        if let server::IncomingMsg::Privmsg(ref privmsg) = *message.get_typed_message() {
-            if is_command_message(message, self.cmd_prefix[]) {
-                let mut vec = Vec::new();
-                vec.push_all(privmsg.get_body_raw()[self.cmd_prefix.len()..]);
-                let message_body = match String::from_utf8(vec) {
-                    Ok(string) => string,
-                    Err(_) => return,
-                };            
-                for &(ref mut plugin, ref mappers) in self.plugins.iter_mut() {
-                    for mapper_format in mappers.iter() {
-                        if let Ok(command_phrase) = mapper_format.parse(message_body[]) {
-                            let dispatch = builder.build(command_phrase);
-                            plugin.dispatch_cmd(&dispatch, message);
-                        }
+        if is_command_message(privmsg.to_irc_msg(), &self.cmd_prefix[]) {
+            let mut vec = Vec::new();
+            let body_raw = privmsg.get_body_raw();
+            vec.push_all(&body_raw[self.cmd_prefix.len()..]);
+            let message_body = match String::from_utf8(vec) {
+                Ok(string) => string,
+                Err(_) => return,
+            };            
+            for &mut (ref mut plugin, ref mappers) in self.plugins.iter_mut() {
+                for mapper_format in mappers.iter() {
+                    if let Ok(command_phrase) = mapper_format.parse(&message_body[]) {
+                        let dispatch = builder.build(command_phrase);
+                        plugin.dispatch_cmd(&dispatch, privmsg.to_irc_msg());
                     }
                 }
             }
@@ -195,8 +193,8 @@ impl PluginContainer {
 }
 
 
-fn is_command_message(message: &IrcMessage, prefix: &str) -> bool {
-    if let server::IncomingMsg::Privmsg(ref privmsg) = *message.get_typed_message() {
+fn is_command_message(msg: &IrcMsg, prefix: &str) -> bool {
+    if let server::IncomingMsg::Privmsg(ref privmsg) = server::IncomingMsg::from_msg(msg.clone()) {
         return privmsg.get_body_raw().starts_with(prefix.as_bytes());
     }
     false

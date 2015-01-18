@@ -1,10 +1,12 @@
 use std::error::FromError;
+use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 
 use url::{Url, ParseError};
 use hyper::client::request::Request;
 use hyper::header::common::server::Server;
 use hyper::HttpError;
-use irc::IrcMessage;
+use hyper::method::Method::Head;
+use irc::parse::IrcMsg;
 
 use command_mapper::{
     RustBotPlugin,
@@ -14,7 +16,7 @@ use command_mapper::{
 };
 
 
-#[deriving(Show)]
+#[derive(Show)]
 enum WserverFailure {
     NoServerFound,
     BadUrl(ParseError),
@@ -38,10 +40,10 @@ fn get_wserver_result(urlstr: &str) -> Result<String, WserverFailure> {
         Ok(url) => url,
         Err(_) => {
             let http_url = format!("http://{}", urlstr);
-            try!(Url::parse(http_url[]))
+            try!(Url::parse(http_url.as_slice()))
         }
     };
-    let resp = try!(try!(try!(Request::head(url)).start()).send());
+    let resp = try!(try!(try!(Request::new(Head, url)).start()).send());
 
     match resp.headers.get::<Server>() {
         Some(&Server(ref server)) => Ok(server.clone()),
@@ -51,7 +53,7 @@ fn get_wserver_result(urlstr: &str) -> Result<String, WserverFailure> {
 
 
 fn format_wserver_response(resp: String) -> String {
-    format!("running: {}", resp[])
+    format!("running: {}", resp)
 }
 
 struct WserverInternalState;
@@ -67,12 +69,12 @@ impl WserverInternalState {
             Some(host) => host,
             None => return
         };
-        match get_wserver_result(host[]) {
+        match get_wserver_result(host.as_slice()) {
             Ok(res) => {
                 m.reply(format_wserver_response(res));
             }
             Err(err) => {
-                m.reply(format!("Error: {}", err));
+                m.reply(format!("Error: {:?}", err));
             }
         }
     }
@@ -80,7 +82,7 @@ impl WserverInternalState {
     fn start(&mut self, rx: Receiver<CommandMapperDispatch>) {
         for m in rx.iter() {
             let command_phrase = m.command();
-            match command_phrase.command[] {
+            match command_phrase.command.as_slice() {
                 "wserver" => self.handle_wserver(&m),
                 _ => ()
             }
@@ -112,17 +114,20 @@ impl RustBotPlugin for WserverPlugin {
 
     fn start(&mut self) {
         let (tx, rx) = sync_channel(10);
-
         ::std::thread::Builder::new().name("plugin-wserver".to_string()).spawn(move |:| {
             let mut internal_state = WserverInternalState::new();
             internal_state.start(rx);
-        }).detach();
+        });
         self.sender = Some(tx);
     }
 
-    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, _message: &IrcMessage) {
+    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, _message: &IrcMsg) {
         match self.sender {
-            Some(ref sender) => sender.send(m.clone()),
+            Some(ref sender) => {
+                if let Err(err) = sender.send(m.clone()) {
+                    m.reply(format!("Service ``wserver'' unavailable: {:?}", err));
+                }
+            }
             None => ()
         }
     }

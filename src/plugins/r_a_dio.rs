@@ -1,13 +1,14 @@
 use std::io::IoError;
 use std::error::FromError;
+use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 
-use rustc_serialize::json;
-use rustc_serialize::json::DecoderError;
+use rustc_serialize::json::{self, DecoderError};
 use url::Url;
 use hyper::client::request::Request;
 use hyper::HttpError;
+use hyper::method::Method::Get;
 
-use irc::IrcMessage;
+use irc::parse::IrcMsg;
 
 use command_mapper::{
     RustBotPlugin,
@@ -17,24 +18,24 @@ use command_mapper::{
 };
 
 
-static API_URL: &'static str = "http://r-a-d.io/api/";
+static API_URL: &'static str = "https://r-a-d.io/api/";
 
 
-#[deriving(RustcDecodable, RustcEncodable, Clone)]
+#[derive(RustcDecodable, RustcEncodable, Clone)]
 struct RadioApiResponse {
     main: RadioStreamApiResponse
 }
 
 
-#[deriving(RustcDecodable, RustcEncodable, Clone)]
+#[derive(RustcDecodable, RustcEncodable, Clone)]
 struct RadioStreamApiResponse {
     np: String,
-    listeners: uint,
+    listeners: u32,
     djname: String
 }
 
 
-#[deriving(Show)]
+#[derive(Show)]
 enum RadioApiFailure {
     ResponseDecodeError,
     RequestError(HttpError),
@@ -63,14 +64,12 @@ impl FromError<DecoderError> for RadioApiFailure {
 
 
 fn get_radio_api_result() -> Result<RadioApiResponse, RadioApiFailure> {
-    info!("Making r/a/dio API request");
     let url = Url::parse(API_URL).ok().expect("Invalid URL :-(");
-    let mut resp = try!(try!(try!(Request::get(url)).start()).send());
+    let mut resp = try!(try!(try!(Request::new(Get, url)).start()).send());
     let body = match String::from_utf8(try!(resp.read_to_end())) {
         Ok(body) => body,
         Err(_err) => return Err(RadioApiFailure::ResponseDecodeError)
     };
-    info!("r/a/dio result: ``{}''", body.as_slice());
     Ok(try!(json::decode::<RadioApiResponse>(body.as_slice())))
 }
 
@@ -80,8 +79,8 @@ fn format_radio_stream_response(resp: RadioStreamApiResponse) -> String {
 }
 
 struct RadioInternalState {
-    requests_made: uint,
-    requests_failed: uint,
+    requests_made: u32,
+    requests_failed: u32,
 }
 
 
@@ -102,7 +101,7 @@ impl RadioInternalState {
             }
             Err(err) => {
                 self.requests_failed += 1;
-                m.reply(format!("Error: {}", err));
+                m.reply(format!("Error: {:?}", err));
             }
         }
     }
@@ -110,7 +109,7 @@ impl RadioInternalState {
         for event in rx.iter() {
             match event {
                 EventType::Dispatch(dispatch) => {
-                    match dispatch.command().command[] {
+                    match dispatch.command().command.as_slice() {
                         "dj" => self.handle_dj(&dispatch),
                         _ => ()
                     }
@@ -149,18 +148,20 @@ impl RustBotPlugin for RadioPlugin {
 
     fn start(&mut self) {
         let (tx, rx) = sync_channel(10);
-        
-
         ::std::thread::Builder::new().name("plugin-radio".to_string()).spawn(move |:| {
             let mut internal_state = RadioInternalState::new();
             internal_state.start(rx);
-        }).detach();
+        });
 
         self.sender = Some(tx);
     }
-    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, _message: &IrcMessage) {
+    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, _message: &IrcMsg) {
         match self.sender {
-            Some(ref sender) => sender.send(EventType::Dispatch(m.clone())),
+            Some(ref sender) => {
+                if let Err(err) = sender.send(EventType::Dispatch(m.clone())) {
+                    m.reply(format!("Service ``wserver'' unavailable: {:?}", err));
+                }
+            },
             None => ()
         };
     }

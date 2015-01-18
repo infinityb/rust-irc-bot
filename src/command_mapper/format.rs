@@ -1,7 +1,8 @@
 use std::string;
 use std::collections::BTreeMap;
 
-#[deriving(Show, PartialEq, Eq)]
+
+#[derive(Show, PartialEq, Eq)]
 pub enum FormatParseError {
     EmptyFormat,
     InvalidAtom(String),
@@ -9,7 +10,7 @@ pub enum FormatParseError {
 }
 pub type FormatResult<T> = Result<T, FormatParseError>;
 
-#[deriving(Show, PartialEq, Eq)]
+#[derive(Show, PartialEq, Eq)]
 pub enum ValueParseError {
     Mismatch(&'static str),
     MessageTooShort,
@@ -17,14 +18,14 @@ pub enum ValueParseError {
 }
 pub type ValueResult<T> = Result<T, ValueParseError>;
 
-#[deriving(Show, PartialEq, Eq, Clone, Copy)]
+#[derive(Show, PartialEq, Eq, Clone, Copy)]
 enum AtomType {
     Literal,
     String,
     WholeNumeric
 }
 
-#[deriving(Show, PartialEq, Eq, Clone)]
+#[derive(Show, PartialEq, Eq, Clone)]
 enum Atom {
     // Literal(value)
     Literal(string::String),
@@ -34,7 +35,7 @@ enum Atom {
     Rest(string::String),
 }
 
-#[deriving(Show, PartialEq, Eq, Clone)]
+#[derive(Show, PartialEq, Eq, Clone)]
 enum Value {
     Literal(string::String),
     String(string::String),
@@ -56,7 +57,7 @@ impl Value {
 
 fn consume_token<'a>(from: &'a str) -> ValueResult<(&'a str, &'a str)> {
     match from.find(' ') {
-        Some(idx) => Ok((from[..idx], from[idx..])),
+        Some(idx) => Ok((&from[..idx], &from[idx..])),
         None => Ok((from, ""))
     }
 }
@@ -64,7 +65,7 @@ fn consume_token<'a>(from: &'a str) -> ValueResult<(&'a str, &'a str)> {
 fn consume_literal<'a>(from: &'a str, literal: &str) -> ValueResult<(&'a str, &'a str)> {
     if from.starts_with(literal) {
         let length = literal.len();
-        Ok((from[..length], from[length..]))
+        Ok((&from[..length], &from[length..]))
     } else {
         Err(ValueParseError::Mismatch("literal mismatch"))
     }
@@ -74,7 +75,7 @@ impl Atom {
     fn consume<'a>(&self, input: &'a str) -> ValueResult<(Value, &'a str)> {
         match *self {
             Atom::Literal(ref val) => {
-                let (lit, rest) = try!(consume_literal(input, val[]));
+                let (lit, rest) = try!(consume_literal(input, &val[]));
                 Ok((Value::Literal(lit.to_string()), rest))
             },
             Atom::Formatted(_, kind) => {
@@ -88,12 +89,12 @@ impl Atom {
     }
 }
 
-#[deriving(Show)]
+#[derive(Show)]
 pub struct Format {
     atoms: Vec<Atom>
 }
 
-#[deriving(Show, Clone)]
+#[derive(Show, Clone)]
 pub struct CommandPhrase {
     pub command: string::String,
     pub original_command: string::String,
@@ -125,7 +126,7 @@ impl ValueExtract for string::String {
 impl ValueExtract for u64 {
     fn value_extract(val: &Value) -> Option<u64> {
         match *val {
-            Value::WholeNumeric(ref str_val) => from_str(str_val[]),
+            Value::WholeNumeric(ref str_val) => str_val.parse(),
             _ => None
         }
     }
@@ -138,7 +139,7 @@ impl Format {
                 match atoms[0] {
                     Atom::Literal(_) => Ok(Format { atoms: atoms }),
                     _ => return Err(FormatParseError::InvalidAtom(
-                        "first atom must be literal".into_cow().into_owned()))
+                        "first atom must be literal".to_string()))
                 }
             },
             Err(err) => Err(err)
@@ -146,9 +147,8 @@ impl Format {
     }
 
     pub fn parse(&self, input: &str) -> ValueResult<CommandPhrase> {
-        println!("{} is parsing <<{}>>", self, input);
-        let original_input = input[];
-        let input = input[];
+        let original_input = &input[];
+        let input = &input[];
         let mut args_map: BTreeMap<string::String, Value> = BTreeMap::new();
 
         let command = match self.atoms[0] {
@@ -162,7 +162,6 @@ impl Format {
             if remaining == "" {
                 return Err(ValueParseError::MessageTooShort)
             }
-            println!("atom = {}, matching against ``{}``", atom, remaining);
             let value = match atom.consume(remaining) {
                 Ok((value, tmp)) => {
                     remaining = tmp;
@@ -186,7 +185,7 @@ impl Format {
             return Err(ValueParseError::MessageTooLong)
         }
         Ok(CommandPhrase {
-            command: command.trim_right_chars(' ').to_string(),
+            command: command.trim_right_matches(' ').to_string(),
             original_command: original_input.to_string(),
             args: args_map,
         })
@@ -198,7 +197,7 @@ impl Format {
 pub mod atom_parser {
     use super::{Atom, AtomType, FormatResult, FormatParseError};
 
-    static ASCII_ALPHANUMERIC: [u8, ..62] = [
+    static ASCII_ALPHANUMERIC: [u8; 62] = [
         b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9',
 
         b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J',
@@ -222,22 +221,22 @@ pub mod atom_parser {
 
     fn parse_var_atom(atom: &str) -> FormatResult<Atom> {
         let (name, format_spec) = match atom.find(':') {
-            Some(idx) => (atom[..idx], Some(atom[1 + idx ..])),
+            Some(idx) => (&atom[..idx], Some(&atom[1 + idx ..])),
             None => (atom, None)
         };
         let format_kind = match format_spec {
             Some("") => return Err(FormatParseError::InvalidAtom(
-                "atom has empty format specifier".into_cow().into_owned())),
+                "atom has empty format specifier".to_string())),
             Some("s") => AtomType::String,
             Some("d") => AtomType::WholeNumeric,
             Some(spec) => return Err(FormatParseError::InvalidAtom(
-                format!("atom has unknown format specifier `{}'", spec).into_cow().into_owned())),
+                format!("atom has unknown format specifier `{}'", spec))),
             None => AtomType::String
         };
         Ok(Atom::Formatted(name.to_string(), format_kind))
     }
 
-    #[deriving(Copy)]
+    #[derive(Copy)]
     enum State {
         Zero,
         InLiteral,
@@ -248,7 +247,7 @@ pub mod atom_parser {
     }
 
     struct AtomParser {
-        byte_idx: uint,
+        byte_idx: usize,
         atoms: Vec<Atom>,
         state: State,
         cur_atom: Vec<u8>,
@@ -282,7 +281,7 @@ pub mod atom_parser {
                     let atom_res = {
                         // These should be fine unless we break parse_atom ...
                         let string = String::from_utf8_lossy(self.cur_atom.as_slice());
-                        parse_var_atom(string[])
+                        parse_var_atom(&string[])
                     };
                     match atom_res {
                         Ok(atom) => {
@@ -292,7 +291,6 @@ pub mod atom_parser {
                         },
                         Err(err) => {
                             self.error = Some(err);
-                            println!("??? from InVariable");
                             State::Errored
                         }
                     }
@@ -310,7 +308,6 @@ pub mod atom_parser {
                 },
                 (State::InVariable, _) => {
                     self.error = Some(FormatParseError::BrokenFormat);
-                    println!("BrokenFormat from InVariable");
                     Errored
                 },
 
@@ -329,7 +326,6 @@ pub mod atom_parser {
                 },
                 (State::InRestVariable, _) => {
                     self.error = Some(FormatParseError::BrokenFormat);
-                    println!("BrokenFormat from InRestVariable");
                     Errored
                 },
 
@@ -349,7 +345,6 @@ pub mod atom_parser {
                 
                 (State::Errored, _) => State::Errored,
                 (State::ForceEnd, _) => {
-                    println!("BrokenFormat from ForceEnd");
                     self.error = Some(FormatParseError::BrokenFormat);
                     Errored
                 },
@@ -422,7 +417,7 @@ pub mod atom_parser {
             assert!(parse_atoms("deer {a} {*b}xxx").is_err());
 
             match parse_atoms("deer {a:s} {*b}") {
-                Ok(_) => (),
+                Ok(ok) => (),
                 Err(err) => assert!(false, format!("{}", err))
             };
         }

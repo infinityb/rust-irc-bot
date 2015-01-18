@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use time::{get_time, Timespec};
-use irc::IrcMessage;
+use irc::parse::IrcMsg;
 use irc::message_types::server;
 
 
@@ -14,23 +14,23 @@ use command_mapper::{
 };
 
 
-static MAX_USER_RECORDS_KEPT: uint = 5;
+static MAX_USER_RECORDS_KEPT: usize = 5;
 
 pub struct SeenRecord {
     when: Timespec,
-    message: IrcMessage
+    message: IrcMsg
 }
 
 
 impl SeenRecord {
-    fn new(when: Timespec, message: IrcMessage) -> SeenRecord {
+    fn new(when: Timespec, message: IrcMsg) -> SeenRecord {
         SeenRecord {
             when: when,
             message: message
         }
     }
 
-    fn with_now(message: IrcMessage) -> SeenRecord {
+    fn with_now(message: IrcMsg) -> SeenRecord {
         SeenRecord::new(get_time(), message)
     }
 }
@@ -94,11 +94,13 @@ fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
     let mut user_has_quit: Option<Timespec> = None;
     let mut prev_message: Option<&SeenRecord> = None;
 
+
+
     for record in records.iter().rev() {
-        if record.message.command() == "QUIT" {
+        if record.message.get_command() == "QUIT" {
             user_has_quit = Some(record.when.clone());
         }
-        if record.message.is_privmsg() {
+        if record.message.get_command() == "PRIVMSG" {
             prev_message = Some(record);
             break;
         }
@@ -106,20 +108,30 @@ fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
     let now = get_time();
     match (user_has_quit, prev_message) {
         (Some(when_quit), Some(record)) => {
-            format!(
-                "{} said ``{}'' {} ago before quitting {} later",
-                nick,
-                record.message.get_args()[1],
-                duration_to_string(now - record.when),
-                duration_to_string(when_quit - record.when))
+            match ::std::str::from_utf8(record.message.get_args()[1]) {
+                Ok(said_what) => format!(
+                    "{} said ``{}'' {} ago before quitting {} later",
+                    nick,
+                    said_what,
+                    duration_to_string(now - record.when),
+                    duration_to_string(when_quit - record.when)),
+                Err(err) => format!("{} said something I cannot repeat {} ago before quitting {} later",
+                    nick,
+                    duration_to_string(now - record.when),
+                    duration_to_string(when_quit - record.when)),
+            }
         },
         (None, Some(record)) => {
-            // let message_sent = format_message_sent(message);
-            format!(
-                "{} said ``{}'' {} ago",
-                nick,
-                record.message.get_args()[1],
-                duration_to_string(now - record.when))
+            match ::std::str::from_utf8(record.message.get_args()[1]) {
+                Ok(said_what) => format!(
+                    "{} said ``{}'' {} ago",
+                    nick,
+                    said_what,
+                    duration_to_string(now - record.when)),
+                Err(err) => format!(
+                    "{} said something I cannot repeat {} ago",
+                    nick, duration_to_string(now - record.when))
+            }
         },
         (Some(when_quit), None) => {
             format!(
@@ -139,27 +151,27 @@ impl RustBotPlugin for SeenPlugin {
         conf.map_format(Format::from_str("seen {nick:s}").unwrap());
     }
 
-    fn on_message(&mut self, message: &IrcMessage) {
-        let privmsg = match *message.get_typed_message() {
-            server::IncomingMsg::Privmsg(ref privmsg) => privmsg,
+    fn on_message(&mut self, msg: &IrcMsg) {
+        let privmsg = match server::IncomingMsg::from_msg(msg.clone()) {
+            server::IncomingMsg::Privmsg(privmsg) => privmsg,
             _ => return
         };
 
         match self.map.remove(&privmsg.get_nick().to_string()) {
             Some(mut records) => {
-                records.push(SeenRecord::with_now(message.clone()));
+                records.push(SeenRecord::with_now(privmsg.to_irc_msg().clone()));
                 self.map.insert(privmsg.get_nick().to_string(), trim_vec(records));
             },
             None => {
-                let records = vec![SeenRecord::with_now(message.clone())];
+                let records = vec![SeenRecord::with_now(privmsg.to_irc_msg().clone())];
                 self.map.insert(privmsg.get_nick().to_string(), records);
             }
         }
     }
 
-    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMessage) {
-        let privmsg = match *message.get_typed_message() {
-            server::IncomingMsg::Privmsg(ref privmsg) => privmsg,
+    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, msg: &IrcMsg) {
+        let privmsg = match server::IncomingMsg::from_msg(msg.clone()) {
+            server::IncomingMsg::Privmsg(privmsg) => privmsg,
             _ => return
         };
 
@@ -171,7 +183,7 @@ impl RustBotPlugin for SeenPlugin {
 
         let command_phrase = m.command();
         
-        let parsed_command = match command_phrase.command[] {
+        let parsed_command = match command_phrase.command.as_slice() {
             "seen" => match command_phrase.get("nick") {
                 Some(nick) => Some(SeenCommandType::Seen(nick)),
                 None => None
@@ -181,12 +193,12 @@ impl RustBotPlugin for SeenPlugin {
 
         match parsed_command {
             Some(SeenCommandType::Seen(target_nick)) => {
-                if source_nick[] == target_nick.as_slice() {
+                if source_nick == target_nick.as_slice() {
                     m.reply(format!("Looking for yourself, {}?", source_nick));
                     return;
                 }
 
-                if m.current_nick() == target_nick[] {
+                if m.current_nick() == target_nick.as_slice() {
                     m.reply(format!("You found me, {}!", source_nick));
                     return;
                 }
@@ -197,7 +209,7 @@ impl RustBotPlugin for SeenPlugin {
                         return
                     }
                 };
-                m.reply(format_activity(target_nick[], activity));
+                m.reply(format_activity(target_nick.as_slice(), activity));
             },
             None => return
         }

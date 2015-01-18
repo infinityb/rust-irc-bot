@@ -1,16 +1,16 @@
-#![deny(unused_must_use, unused_variables, unused_mut, unused_imports)]
-#![feature(slicing_syntax, phase, macro_rules)]
+#![deny(unused_must_use)]
+#![feature(slicing_syntax)]
 
-#[phase(plugin, link)] extern crate log;
+// #[use_macro] extern crate log;
 
 extern crate time;
 extern crate "rustc-serialize" as rustc_serialize;
-extern crate "dbus-rs" as dbus;
+
 extern crate url;
 extern crate hyper;
 extern crate toml;
 extern crate irc;
-
+extern crate log;
 
 use std::path::Path;
 use std::io::fs::File;
