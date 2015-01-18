@@ -203,7 +203,8 @@ impl Format {
                 },
             };
         }
-        if remaining != "" {
+
+        if !remaining.bytes().all(|&: x| x == b' ') {
             return Err(ValueParseError::MessageTooLong)
         }
         Ok(CommandPhrase {
@@ -288,6 +289,15 @@ pub mod atom_parser {
             }
         }
 
+        fn finalize_literal(&mut self) {
+            {
+                // These should be fine unless we break parse_atom ...
+                let string = String::from_utf8_lossy(self.cur_atom.as_slice());
+                self.atoms.push(Atom::Rest(string.into_owned()));
+            }
+            self.cur_atom.clear();
+        }
+
         fn push_byte(&mut self, byte: u8) {
             use self::State::{
                 Zero, InLiteral, InVariable, InRestVariable, ForceEnd, Errored, InWhitespace
@@ -338,12 +348,7 @@ pub mod atom_parser {
                 },
 
                 (InRestVariable, b'}') => {
-                    {
-                        // These should be fine unless we break parse_atom ...
-                        let string = String::from_utf8_lossy(self.cur_atom.as_slice());
-                        self.atoms.push(Atom::Rest(string.into_owned()));
-                    }
-                    self.cur_atom.clear();
+                    self.finalize_literal();
                     ForceEnd
                 },
                 (InRestVariable, cur_byte) if is_ascii_alphanumeric(cur_byte) => {
@@ -570,5 +575,17 @@ fn parse_the_basics() {
             Err(FormatParseError::EmptyFormat) => (),
             Err(err) => panic!("wrong error for empty: {:?}", err),
         };
+    }
+    {
+        let cmd_str = "articles ";
+        let fmt_str = "articles";
+
+        let fmt = match Format::from_str(fmt_str) {
+            Ok(fmt) => fmt,
+            Err(err) => panic!("parse failure: {:?}", err)
+        };
+        if let Err(err) = fmt.parse(cmd_str) {
+            panic!("Error processing {:?} with {:?}: {:?}", cmd_str, fmt_str, err);
+        }
     }
 }
