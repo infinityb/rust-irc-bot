@@ -2,7 +2,7 @@ use std::string;
 use std::collections::BTreeMap;
 
 
-#[derive(Show, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum FormatParseError {
     EmptyFormat,
     InvalidAtom(String),
@@ -10,7 +10,7 @@ pub enum FormatParseError {
 }
 pub type FormatResult<T> = Result<T, FormatParseError>;
 
-#[derive(Show, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ValueParseError {
     Mismatch(&'static str),
     MessageTooShort,
@@ -18,14 +18,14 @@ pub enum ValueParseError {
 }
 pub type ValueResult<T> = Result<T, ValueParseError>;
 
-#[derive(Show, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum AtomType {
     Literal,
     String,
     WholeNumeric
 }
 
-#[derive(Show, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum Atom {
     // Literal(value)
     Literal(string::String),
@@ -36,7 +36,7 @@ enum Atom {
     Whitespace,
 }
 
-#[derive(Show, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum Value {
     Literal(string::String),
     String(string::String),
@@ -106,12 +106,12 @@ impl Atom {
     }
 }
 
-#[derive(Show)]
+#[derive(Debug)]
 pub struct Format {
     atoms: Vec<Atom>
 }
 
-#[derive(Show, Clone)]
+#[derive(Debug, Clone)]
 pub struct CommandPhrase {
     pub command: string::String,
     pub original_command: string::String,

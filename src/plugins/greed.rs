@@ -154,7 +154,7 @@ impl Rand for RollResult {
     }
 }
 
-impl fmt::String for RollResult {
+impl fmt::Display for RollResult {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         let RollResult(ref roll) = *self;
         write!(f, "[{}] => [{}] for {} points",
@@ -207,7 +207,7 @@ impl Default for UserStats {
     }
 }
 
-impl fmt::String for UserStats {
+impl fmt::Display for UserStats {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "{} wins over {} games; points: {}",
             self.wins, self.games, self.score_sum - self.opponent_score_sum)

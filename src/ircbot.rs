@@ -1,8 +1,8 @@
 #![deny(unused_must_use)]
-#![feature(slicing_syntax)]
-#![allow(unstable)]
+#![feature(slicing_syntax, rustc_private, collections, io, os, core, std_misc, path, rand)]
 
-// #[use_macro] extern crate log;
+#[macro_use] extern crate log;
+
 
 extern crate time;
 extern crate "rustc-serialize" as rustc_serialize;
@@ -11,7 +11,6 @@ extern crate url;
 extern crate hyper;
 extern crate toml;
 extern crate irc;
-extern crate log;
 
 use std::path::Path;
 use std::old_io::fs::File;

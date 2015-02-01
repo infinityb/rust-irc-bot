@@ -16,7 +16,7 @@ use command_mapper::{
 };
 
 
-#[derive(Show)]
+#[derive(Debug)]
 enum WserverFailure {
     NoServerFound,
     BadUrl(ParseError),
@@ -50,7 +50,6 @@ fn get_wserver_result(urlstr: &str) -> Result<String, WserverFailure> {
         None => Err(WserverFailure::NoServerFound)
     }
 }
-
 
 fn format_wserver_response(resp: String) -> String {
     format!("running: {}", resp)

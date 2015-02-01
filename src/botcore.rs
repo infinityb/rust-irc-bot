@@ -24,7 +24,7 @@ use plugins::{
 };
 
 
-#[derive(RustcDecodable, RustcEncodable, Show)]
+#[derive(RustcDecodable, RustcEncodable, Debug)]
 pub struct BotConfig {
     pub server: String,
     pub command_prefixes: Vec<String>,
@@ -84,10 +84,10 @@ impl BotConnection {
 
         let mut nick = conf.nickname.clone();
         loop {
-            println!("trying nick {}", nick.as_slice());
+            info!("trying nick {}", nick.as_slice());
             match conn.register(nick.as_slice()) {
                 Ok(_) => {
-                    println!("ok, connected as {}", nick.as_slice());
+                    info!("ok, connected as {}", nick.as_slice());
                     break;
                 }
                 Err(err) => {
@@ -101,31 +101,31 @@ impl BotConnection {
         }
 
         for channel in conf.channels.iter() {
-            println!("want join: {}", channel);
+            info!("want join: {}", channel);
         }
 
         for channel in conf.channels.iter() {
-            println!("joining {}...", channel);
+            info!("joining {}...", channel);
             match conn.join(channel.as_slice()) {
                 Ok(res) => {
-                    println!("succeeded in joining {:?}, got {} nicks",
+                    info!("succeeded in joining {:?}, got {} nicks",
                         res.channel.as_slice(), res.nicks.len());
                     match conn.who(channel.as_slice()) {
                         Ok(who_res) => {
-                            println!("succeeded in WHOing {:?}, got {} nicks",
+                            info!("succeeded in WHOing {:?}, got {} nicks",
                                 who_res.channel.as_slice(), who_res.who_records.len());
                         },
                         Err(who_err) => {
-                            println!("failed to WHO {:?}: {:?}", channel, who_err);
+                            info!("failed to WHO {:?}: {:?}", channel, who_err);
                         }
                     }
                 },
                 Err(err) => {
-                    println!("join error: {:?}", err);
+                    info!("join error: {:?}", err);
                     panic!("failed to join channel.. dying");
                 }
             }
-            println!("END joining {:?}...", channel);
+            info!("END joining {:?}...", channel);
         }
 
         let mut state = State::new();

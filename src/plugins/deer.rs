@@ -49,7 +49,7 @@ struct DeerApiResponse {
 }
 
 
-#[derive(Show)]
+#[derive(Debug)]
 enum DeerApiFailure {
     ResponseDecodeError,
     RequestError(HttpError),

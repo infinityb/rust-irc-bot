@@ -35,7 +35,7 @@ struct RadioStreamApiResponse {
 }
 
 
-#[derive(Show)]
+#[derive(Debug)]
 enum RadioApiFailure {
     ResponseDecodeError,
     RequestError(HttpError),
