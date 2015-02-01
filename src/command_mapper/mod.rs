@@ -177,7 +177,14 @@ impl PluginContainer {
             target: target.clone(),
         };
 
-        if let Some(prefix) = get_prefix(privmsg.to_irc_msg(), &self.cmd_prefixes[]) {
+        let nick_cmd = format!("{}: ", state.get_self_nick());
+        let mut prefix = get_prefix(privmsg.to_irc_msg(), &self.cmd_prefixes[]);
+
+        if privmsg.get_body_raw().starts_with(nick_cmd.as_bytes()) {
+            prefix = prefix.or(Some(nick_cmd.as_slice()));
+        }
+        
+        if let Some(prefix) = prefix {
             let mut vec = Vec::new();
             let body_raw = privmsg.get_body_raw();
             vec.push_all(&body_raw[prefix.len()..]);
