@@ -2,70 +2,72 @@
 name = "ircbot"
 version = "0.1.0"
 dependencies = [
- "hyper 0.1.1 (git+https://github.com/hyperium/hyper)",
+ "hyper 0.1.9 (git+https://github.com/hyperium/hyper)",
  "irc 0.2.0 (git+https://github.com/infinityb/rust-irc)",
- "rustc-serialize 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "time 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "toml 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "url 0.2.16 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-serialize 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "time 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "toml 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "url 0.2.17 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "cookie"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "openssl 0.2.16 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc-serialize 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "time 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "url 0.2.16 (registry+https://github.com/rust-lang/crates.io-index)",
+ "openssl 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-serialize 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "time 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "url 0.2.17 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "gcc"
-version = "0.1.4"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "hyper"
-version = "0.1.1"
-source = "git+https://github.com/hyperium/hyper#8bf551b8426d9c2dcc66c2be2c750a839de68e67"
+version = "0.1.9"
+source = "git+https://github.com/hyperium/hyper#3bf4c5e7ae70b40e3d80a76fa1f6f3767fc40388"
 dependencies = [
- "cookie 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "mime 0.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "mucell 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "openssl 0.2.16 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc-serialize 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "time 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "unicase 0.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cookie 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "mime 0.0.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "mucell 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "openssl 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-serialize 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "time 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unicase 0.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsafe-any 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "url 0.2.16 (registry+https://github.com/rust-lang/crates.io-index)",
+ "url 0.2.17 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "irc"
 version = "0.2.0"
-source = "git+https://github.com/infinityb/rust-irc#82eca9af0976e987efdd2e13a62377848e79c852"
+source = "git+https://github.com/infinityb/rust-irc#10b32ae34b5ca2db97d0a336390810e611bb5ae6"
 dependencies = [
- "log 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "libc"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "libressl-pnacl-sys"
 version = "2.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "pnacl-build-helper 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pnacl-build-helper 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "log"
-version = "0.1.9"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "regex 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
-]
 
 [[package]]
 name = "matches"
@@ -74,73 +76,69 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "mime"
-version = "0.0.6"
+version = "0.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "log 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "mucell"
-version = "0.1.10"
+version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "openssl"
-version = "0.2.16"
+version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "openssl-sys 0.2.16 (registry+https://github.com/rust-lang/crates.io-index)",
+ "openssl-sys 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "openssl-sys"
-version = "0.2.16"
+version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libressl-pnacl-sys 2.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "pkg-config 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pkg-config 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "pkg-config"
-version = "0.1.4"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "pnacl-build-helper"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "regex"
-version = "0.1.10"
+version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "rustc-serialize"
-version = "0.2.8"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "time"
-version = "0.1.12"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "gcc 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "gcc 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "toml"
-version = "0.1.12"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "rustc-serialize 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-serialize 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "unicase"
-version = "0.0.2"
+version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -150,10 +148,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "url"
-version = "0.2.16"
+version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "matches 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc-serialize 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-serialize 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

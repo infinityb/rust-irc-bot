@@ -115,15 +115,15 @@ impl CommandMapperDispatch {
 
 
 pub struct PluginContainer {
-    cmd_prefix: String,
+    cmd_prefixes: Vec<String>,
     plugins: Vec<(Box<RustBotPlugin+'static>, Vec<Format>)>,
 }
 
 
 impl PluginContainer {
-    pub fn new(prefix: String) -> PluginContainer {
+    pub fn new(prefixes: Vec<String>) -> PluginContainer {
         PluginContainer {
-            cmd_prefix: prefix,
+            cmd_prefixes: prefixes,
             plugins: Vec::new()
         }
     }
@@ -177,14 +177,14 @@ impl PluginContainer {
             target: target.clone(),
         };
 
-        if is_command_message(privmsg.to_irc_msg(), &self.cmd_prefix[]) {
+        if let Some(prefix) = get_prefix(privmsg.to_irc_msg(), &self.cmd_prefixes[]) {
             let mut vec = Vec::new();
             let body_raw = privmsg.get_body_raw();
-            vec.push_all(&body_raw[self.cmd_prefix.len()..]);
+            vec.push_all(&body_raw[prefix.len()..]);
             let message_body = match String::from_utf8(vec) {
                 Ok(string) => string,
                 Err(_) => return,
-            };            
+            };
             for &mut (ref mut plugin, ref mappers) in self.plugins.iter_mut() {
                 for mapper_format in mappers.iter() {
                     if let Ok(command_phrase) = mapper_format.parse(&message_body[]) {
@@ -197,10 +197,13 @@ impl PluginContainer {
     }
 }
 
-
-fn is_command_message(msg: &IrcMsg, prefix: &str) -> bool {
+fn get_prefix<'a>(msg: &IrcMsg, prefixes: &'a [String]) -> Option<&'a str> {
     if let server::IncomingMsg::Privmsg(ref privmsg) = server::IncomingMsg::from_msg(msg.clone()) {
-        return privmsg.get_body_raw().starts_with(prefix.as_bytes());
+        for prefix in prefixes.iter() {
+            if privmsg.get_body_raw().starts_with(prefix.as_bytes()) {
+                return Some(prefix.as_slice());
+            }
+        }
     }
-    false
+    None
 }

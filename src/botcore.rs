@@ -1,4 +1,4 @@
-use std::io::IoResult;
+use std::old_io::IoResult;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::mpsc::{channel, sync_channel};
@@ -27,7 +27,7 @@ use plugins::{
 #[derive(RustcDecodable, RustcEncodable, Show)]
 pub struct BotConfig {
     pub server: String,
-    pub command_prefix: String,
+    pub command_prefixes: Vec<String>,
     pub nickname: String,
     pub channels: Vec<String>,
     pub enabled_plugins: HashSet<String>,
@@ -130,7 +130,7 @@ impl BotConnection {
 
         let mut state = State::new();
 
-        let mut container = PluginContainer::new(conf.command_prefix.clone());
+        let mut container = PluginContainer::new(conf.command_prefixes.clone());
         if conf.enabled_plugins.contains(PingPlugin::get_plugin_name()) {
             container.register(PingPlugin::new());
         }

@@ -14,7 +14,7 @@ extern crate irc;
 extern crate log;
 
 use std::path::Path;
-use std::io::fs::File;
+use std::old_io::fs::File;
 use std::os::args_as_bytes;
 
 use botcore::{BotConfig, BotConnection};

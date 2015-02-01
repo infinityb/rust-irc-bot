@@ -1,5 +1,5 @@
 use std::error::FromError;
-use std::io::IoError;
+use std::old_io::IoError;
 use std::collections::HashMap;
 use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 

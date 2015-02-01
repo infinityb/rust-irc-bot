@@ -3,7 +3,7 @@ use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 
 use url::{Url, ParseError};
 use hyper::client::request::Request;
-use hyper::header::common::server::Server;
+use hyper::header::Server;
 use hyper::HttpError;
 use hyper::method::Method::Head;
 use irc::parse::IrcMsg;
