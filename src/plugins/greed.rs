@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::collections::hash_map;
 use std::default::Default;
 use std::num::SignedInt;
-use std::rand::distributions::{Sample, Range};
 use std::cmp::Ordering;
 use std::fmt;
-use std::rand::{thread_rng, Rng, Rand};
+
+use ::rand::{thread_rng, Rng, Rand};
+use ::rand::distributions::{Sample, Range};
 
 use irc::{
     ChannelId,

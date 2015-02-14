@@ -143,7 +143,7 @@ impl ValueExtract for string::String {
 impl ValueExtract for u64 {
     fn value_extract(val: &Value) -> Option<u64> {
         match *val {
-            Value::WholeNumeric(ref str_val) => str_val.parse(),
+            Value::WholeNumeric(ref str_val) => str_val.parse().ok(),
             _ => None
         }
     }

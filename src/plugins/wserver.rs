@@ -113,7 +113,7 @@ impl RustBotPlugin for WserverPlugin {
 
     fn start(&mut self) {
         let (tx, rx) = sync_channel(10);
-        ::std::thread::Builder::new().name("plugin-wserver".to_string()).spawn(move |:| {
+        ::std::thread::Builder::new().name("plugin-wserver".to_string()).spawn(move || {
             let mut internal_state = WserverInternalState::new();
             internal_state.start(rx);
         });

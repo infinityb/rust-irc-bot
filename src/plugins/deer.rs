@@ -233,7 +233,7 @@ impl RustBotPlugin for DeerPlugin {
         let (tx, rx) = sync_channel(10);
         self.sender = Some(tx);
 
-        ::std::thread::Builder::new().name("plugin-deer".to_string()).spawn(move |:| {
+        ::std::thread::Builder::new().name("plugin-deer".to_string()).spawn(move || {
             let mut deer_internal_state = DeerInternalState::new();
             deer_internal_state.start(rx);
         });
