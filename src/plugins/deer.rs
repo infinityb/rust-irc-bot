@@ -39,9 +39,24 @@ static DEER: &'static str = concat!(
     "\u{0003}01,01@\u{0003}00,00@\u{0003}01,01@\u{0003}00,00@",
     "\u{0003}01,01@@@@\u{0003}00,00@\u{0003}01,01@\u{0003}00,00@\u{0003}01,01@@");
 
+static DEERMAN: &'static str = concat!(
+    "{0003}00,00@@{0003}01,01@{0003}00,00@@{0003}01,01@{0003}00,00@@\n",
+    "{0003}00,00@@{0003}01,01@{0003}00,00@@{0003}01,01@{0003}00,00@@\n",
+    "{0003}00,00@@@{0003}01,01@@{0003}00,00@@@\n",
+    "{0003}00,00@@{0003}01,01@@@{0003}00,00@@@\n",
+    "{0003}00,00@@@{0003}01,01@@{0003}00,00@@@\n",
+    "{0003}00,00@@{0003}01,01@@@@{0003}00,00@@\n",
+    "{0003}01,01@@@@@@@@\n",
+    "{0003}01,01@{0003}00,00@{0003}01,01@@@@{0003}00,00@{0003}01,01@\n",
+    "{0003}01,01@{0003}00,00@{0003}01,01@@@@{0003}00,00@{0003}01,01@\n",
+    "{0003}00,00@@{0003}01,01@@@@{0003}00,00@@\n",
+    "{0003}00,00@@{0003}01,01@{0003}00,00@@{0003}01,01@{0003}00,00@@\n",
+    "{0003}00,00@@{0003}01,01@{0003}00,00@@{0003}01,01@{0003}00,00@@\n",
+    "{0003}00,00@@{0003}01,01@{0003}00,00@@{0003}01,01@{0003}00,00@@\n");
+
+static NOT_IMPLEMENTED: &'static str = "Not yet implemented";
 
 static BASE_URL: &'static str = "http://deer.satf.se/deerlist.php";
-
 
 #[derive(RustcDecodable, RustcEncodable, Clone)]
 struct DeerApiResponse {
@@ -170,7 +185,7 @@ impl DeerInternalState {
             }
         }
         match *cmd {
-            DeerCommandType::Deer(Some(ref deer_name)) => {
+            DeerCommandType::Deer(ref deer_name) => {
                 match get_deer(self, &deer_name[]) {
                     Ok(deer_data) => {
                         for deer_line in deer_data.irccode[].split('\n') {
@@ -184,8 +199,8 @@ impl DeerInternalState {
                     }
                 } 
             },
-            DeerCommandType::Deer(None) => {
-                for deer_line in DEER.split('\n') {
+            DeerCommandType::StaticDeer(data) => {
+                for deer_line in data.split('\n') {
                     m.reply(String::from_str(deer_line));
                     self.lines_sent += 1;
                 }
@@ -208,14 +223,21 @@ impl DeerInternalState {
 }
 
 enum DeerCommandType {
-    Deer(Option<String>),
+    Deer(String),
+    StaticDeer(&'static str),
     DeerStats
 }
 
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<DeerCommandType> {
     let command_phrase = m.command();
     match &command_phrase.command[] {
-        "deer" => Some(DeerCommandType::Deer(command_phrase.get("deername"))),
+        "deer" => Some(match command_phrase.get("deername") {
+            Some(deername) => DeerCommandType::Deer(deername),
+            None => DeerCommandType::StaticDeer(DEER)
+        }),
+        "reed" => Some(DeerCommandType::StaticDeer(NOT_IMPLEMENTED)),
+        "deerman" => Some(DeerCommandType::StaticDeer(DEERMAN)),
+        "namreed" => Some(DeerCommandType::StaticDeer(NOT_IMPLEMENTED)),
         "deerstats" => Some(DeerCommandType::DeerStats),
         _ => None
     }
@@ -226,6 +248,9 @@ impl RustBotPlugin for DeerPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
         conf.map_format(Format::from_str("deer {*deername}").unwrap());
         conf.map_format(Format::from_str("deer").unwrap());
+        conf.map_format(Format::from_str("reed").unwrap());
+        conf.map_format(Format::from_str("deerman").unwrap());
+        conf.map_format(Format::from_str("namreed").unwrap());
         conf.map_format(Format::from_str("deer-stats").unwrap());
     }
 
