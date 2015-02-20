@@ -238,7 +238,7 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<DeerCommandType> {
         "reed" => Some(DeerCommandType::StaticDeer(NOT_IMPLEMENTED)),
         "deerman" => Some(DeerCommandType::StaticDeer(DEERMAN)),
         "namreed" => Some(DeerCommandType::StaticDeer(NOT_IMPLEMENTED)),
-        "deerstats" => Some(DeerCommandType::DeerStats),
+        "deer-stats" => Some(DeerCommandType::DeerStats),
         _ => None
     }
 }
