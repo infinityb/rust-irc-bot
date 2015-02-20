@@ -99,7 +99,10 @@ impl Atom {
                 Ok((Some(value), ""))
             },
             Atom::Whitespace => {
-                let (_whitespace, rest) = consume_whitespace(input);
+                let (whitespace, rest) = consume_whitespace(input);
+                if whitespace.len() == 0 {
+                    return Err(ValueParseError::Mismatch("Missing whitespace"));
+                }
                 Ok((None, rest))
             }
         }
@@ -587,5 +590,18 @@ fn parse_the_basics() {
         if let Err(err) = fmt.parse(cmd_str) {
             panic!("Error processing {:?} with {:?}: {:?}", cmd_str, fmt_str, err);
         }
+    }
+    {
+        let cmd_str = "articlestest";
+        let fmt_str = "articles {foo}";
+
+        let fmt = match Format::from_str(fmt_str) {
+            Ok(fmt) => fmt,
+            Err(err) => panic!("parse failure: {:?}", err)
+        };
+        match fmt.parse(cmd_str) {
+            Err(ValueParseError::Mismatch(_)) => (),
+            p @ _ => panic!("{:?} should not parse. Got {:?}", cmd_str, p),
+        };
     }
 }
