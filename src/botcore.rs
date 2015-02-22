@@ -13,7 +13,7 @@ use url::{
 
 use irc::{BundlerManager, JoinBundlerTrigger};
 use irc::parse::IrcMsg;
-use irc::message_types::client;
+use irc::message_types::{client, server};
 
 use command_mapper::PluginContainer;
 
@@ -166,7 +166,24 @@ impl BotConnection {
             }
         });
 
+        // {
+        //     let tx = tx.clone();
+        //     let _ = ::std::thread::Builder::new().name("bot-writer".to_string()).spawn(move || {
+        //         use std::old_io::timer::sleep;
+        //         use std::time::duration::Duration;
+
+        //         sleep(Duration::seconds(12));
+        //         tx.send(IrcMsg::new(b"QUIT :lel".to_vec()).ok().unwrap()).ok().unwrap();
+        //     });
+        // }
+
         for msg in event_queue_rxu.iter() {
+            if let server::IncomingMsg::Ping(ping) = server::IncomingMsg::from_msg(msg.clone()) {
+                if let Ok(pong) = ping.get_response() {
+                    tx.send(pong.into_irc_msg()).ok().unwrap();
+                }
+            }
+
             if let Some(join) = state.is_self_join(&msg) {
                 tx.send(client::Who::new(join.get_channel()).into_irc_msg()).ok().expect("send fail");
             }
@@ -176,6 +193,7 @@ impl BotConnection {
             }
             container.dispatch(Arc::new(state.clone_frozen()), &tx, &msg);
         }
+        println!("Finished popping from event_queue_rxu");
 
         Ok(BotConnection { foo: 0 })
     }
