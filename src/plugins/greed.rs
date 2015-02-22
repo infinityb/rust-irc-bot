@@ -26,7 +26,6 @@ use command_mapper::{
     Format,
 };
 
-
 type ScorePrefix = [u8; 6];
 type ScoreRec = (usize, ScorePrefix, i32);
 
@@ -183,7 +182,7 @@ struct GreedPlayResult {
 
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<GreedCommandType> {
     let command_phrase = m.command();
-    match &command_phrase.command[] {
+    match command_phrase.command.as_slice() {
         "greed" => Some(GreedCommandType::Greed),
         "greed-stats" => Some(GreedCommandType::GreedStats),
         _ => None

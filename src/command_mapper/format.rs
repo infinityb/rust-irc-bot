@@ -28,19 +28,19 @@ enum AtomType {
 #[derive(Debug, PartialEq, Eq, Clone)]
 enum Atom {
     // Literal(value)
-    Literal(string::String),
+    Literal(String),
     // Formatted(name, kind)
-    Formatted(string::String, AtomType),
+    Formatted(String, AtomType),
     // Rest(name)
-    Rest(string::String),
+    Rest(String),
     Whitespace,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 enum Value {
-    Literal(string::String),
-    String(string::String),
-    WholeNumeric(string::String)
+    Literal(String),
+    String(String),
+    WholeNumeric(String)
 }
 
 impl Value {
@@ -85,7 +85,7 @@ impl Atom {
     fn consume<'a>(&self, input: &'a str) -> ValueResult<(Option<Value>, &'a str)> {
         match *self {
             Atom::Literal(ref val) => {
-                let (lit, rest) = try!(consume_literal(input, &val[]));
+                let (lit, rest) = try!(consume_literal(input, &val));
                 let value = Value::Literal(lit.to_string());
                 Ok((Some(value), rest))
             },
@@ -116,9 +116,9 @@ pub struct Format {
 
 #[derive(Debug, Clone)]
 pub struct CommandPhrase {
-    pub command: string::String,
-    pub original_command: string::String,
-    args: BTreeMap<string::String, Value>
+    pub command: String,
+    pub original_command: String,
+    args: BTreeMap<String, Value>
 }
 
 impl CommandPhrase {
@@ -134,8 +134,8 @@ trait ValueExtract {
     fn value_extract(val: &Value) -> Option<Self>;
 }
 
-impl ValueExtract for string::String {
-    fn value_extract(val: &Value) -> Option<string::String> {
+impl ValueExtract for String {
+    fn value_extract(val: &Value) -> Option<String> {
         match *val {
             Value::String(ref str_val) => Some(str_val.clone()),
             _ => None
@@ -167,9 +167,9 @@ impl Format {
     }
 
     pub fn parse(&self, input: &str) -> ValueResult<CommandPhrase> {
-        let original_input = &input[];
-        let input = &input[];
-        let mut args_map: BTreeMap<string::String, Value> = BTreeMap::new();
+        let original_input: &str = input;
+        let input: &str = input;
+        let mut args_map: BTreeMap<String, Value> = BTreeMap::new();
 
         let command = match self.atoms[0] {
             Atom::Literal(ref literal) => literal.to_string(),
@@ -318,7 +318,7 @@ pub mod atom_parser {
                     let atom_res = {
                         // These should be fine unless we break parse_atom ...
                         let string = String::from_utf8_lossy(self.cur_atom.as_slice());
-                        parse_var_atom(&string[])
+                        parse_var_atom(&string)
                     };
                     match atom_res {
                         Ok(atom) => {

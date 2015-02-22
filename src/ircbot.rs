@@ -1,5 +1,5 @@
 #![deny(unused_must_use)]
-#![feature(collections, core, env, fs, io, rustc_private, std_misc)]
+#![feature(collections, core, env, fs, io, rustc_private, std_misc, old_io)]
 
 #[macro_use] extern crate log;
 

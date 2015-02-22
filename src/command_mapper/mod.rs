@@ -59,6 +59,13 @@ struct DispatchBuilder {
 
 impl DispatchBuilder {
     fn build(&self, phrase: CommandPhrase) -> CommandMapperDispatch {
+        fn assert_send<T: Send+'static>() {}
+
+        assert_send::<Arc<State>>();
+        assert_send::<SyncSender<IrcMsg>>();
+        assert_send::<String>();
+        assert_send::<MessageEndpoint>();
+
         CommandMapperDispatch {
             state: self.state.clone(),
             command: phrase,
@@ -178,7 +185,7 @@ impl PluginContainer {
         };
 
         let nick_cmd = format!("{}: ", state.get_self_nick());
-        let mut prefix = get_prefix(privmsg.to_irc_msg(), &self.cmd_prefixes[]);
+        let mut prefix = get_prefix(privmsg.to_irc_msg(), &self.cmd_prefixes);
 
         if privmsg.get_body_raw().starts_with(nick_cmd.as_bytes()) {
             prefix = prefix.or(Some(nick_cmd.as_slice()));
@@ -194,7 +201,7 @@ impl PluginContainer {
             };
             for &mut (ref mut plugin, ref mappers) in self.plugins.iter_mut() {
                 for mapper_format in mappers.iter() {
-                    if let Ok(command_phrase) = mapper_format.parse(&message_body[]) {
+                    if let Ok(command_phrase) = mapper_format.parse(&message_body) {
                         let dispatch = builder.build(command_phrase);
                         plugin.dispatch_cmd(&dispatch, privmsg.to_irc_msg());
                     }

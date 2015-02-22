@@ -148,7 +148,7 @@ impl RustBotPlugin for RadioPlugin {
 
     fn start(&mut self) {
         let (tx, rx) = sync_channel(10);
-        ::std::thread::Builder::new().name("plugin-radio".to_string()).spawn(move || {
+        let _ = ::std::thread::Builder::new().name("plugin-radio".to_string()).spawn(move || {
             let mut internal_state = RadioInternalState::new();
             internal_state.start(rx);
         });

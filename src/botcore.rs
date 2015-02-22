@@ -76,7 +76,7 @@ impl BotConnection {
 		(conf.get_host().as_slice(), conf.get_port())));
 
         let (event_queue_txu, event_queue_rxu) = channel();
-        ::std::thread::Builder::new().name("bot-event-sender".to_string()).spawn(move || {
+        let _ = ::std::thread::Builder::new().name("bot-event-sender".to_string()).spawn(move || {
             for event in event_queue.iter() {
                 event_queue_txu.send(event).unwrap();
             }
@@ -157,7 +157,7 @@ impl BotConnection {
         let cmd_queue = conn.get_command_queue();
 
 
-        ::std::thread::Builder::new().name("bot-sender".to_string()).spawn(move || {
+        let _ = ::std::thread::Builder::new().name("bot-sender".to_string()).spawn(move || {
             for message in rx.iter() {
                 cmd_queue.send(IrcConnectionCommand::raw_write(message.into_bytes())).unwrap();
             }

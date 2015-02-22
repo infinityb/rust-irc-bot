@@ -27,7 +27,7 @@ enum WhoAmICommandType {
 }
 
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<WhoAmICommandType> {
-    match &m.command().command[] {
+    match m.command().command.as_slice() {
         "whoami" => Some(WhoAmICommandType::WhoAmI),
         "whereami" => Some(WhoAmICommandType::WhereAmI),
         _ => None

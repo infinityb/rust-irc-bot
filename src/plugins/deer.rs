@@ -106,7 +106,7 @@ fn get_deer_nocache(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> 
         Err(_err) => return Err(DeerApiFailure::ResponseDecodeError)
     };
 
-    Ok(try!(json::decode::<DeerApiResponse>(&body[])))
+    Ok(try!(json::decode::<DeerApiResponse>(&body)))
 }
 
 
@@ -186,9 +186,9 @@ impl DeerInternalState {
         }
         match *cmd {
             DeerCommandType::Deer(ref deer_name) => {
-                match get_deer(self, &deer_name[]) {
+                match get_deer(self, &deer_name) {
                     Ok(deer_data) => {
-                        for deer_line in deer_data.irccode[].split('\n') {
+                        for deer_line in deer_data.irccode.split('\n') {
                             m.reply(String::from_str(deer_line));
                             self.lines_sent += 1;
                         }
@@ -213,6 +213,10 @@ impl DeerInternalState {
     }
 
     fn start(&mut self, rx: Receiver<(CommandMapperDispatch, IrcMsg)>) {
+        fn assert_send<T: Send+'static>() {}
+
+        assert_send::<CommandMapperDispatch>();
+        assert_send::<IrcMsg>();
         for (m, _) in rx.iter() {
             match parse_command(&m) {
                 Some(ref command) => self.handle_command(&m, command),
@@ -222,6 +226,7 @@ impl DeerInternalState {
     }
 }
 
+
 enum DeerCommandType {
     Deer(String),
     StaticDeer(&'static str),
@@ -230,7 +235,7 @@ enum DeerCommandType {
 
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<DeerCommandType> {
     let command_phrase = m.command();
-    match &command_phrase.command[] {
+    match command_phrase.command.as_slice() {
         "deer" => Some(match command_phrase.get("deername") {
             Some(deername) => DeerCommandType::Deer(deername),
             None => DeerCommandType::StaticDeer(DEER)
@@ -258,7 +263,7 @@ impl RustBotPlugin for DeerPlugin {
         let (tx, rx) = sync_channel(10);
         self.sender = Some(tx);
 
-        ::std::thread::Builder::new().name("plugin-deer".to_string()).spawn(move || {
+        let _ = ::std::thread::Builder::new().name("plugin-deer".to_string()).spawn(move || {
             let mut deer_internal_state = DeerInternalState::new();
             deer_internal_state.start(rx);
         });
