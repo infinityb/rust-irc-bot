@@ -20,8 +20,15 @@ use command_mapper::{
     CommandMapperDispatch,
     IrcBotConfigurator,
     Format,
+    Token,
 };
 
+const CMD_DEER_NAMED: Token = Token(0);
+const CMD_DEER: Token = Token(1);
+const CMD_REED: Token = Token(2);
+const CMD_DEERMAN: Token = Token(3);
+const CMD_NAMREED: Token = Token(4);
+const CMD_DEER_STATS: Token = Token(5);
 
 static DEER: &'static str = concat!(
     "\u{0003}01,01@@@@@@@@\u{0003}00,00@\u{0003}01,01@@\u{0003}00,00@\u{0003}01,01@\n",
@@ -89,7 +96,6 @@ impl FromError<DecoderError> for DeerApiFailure {
         DeerApiFailure::ResponseDeserializeError(err)
     }
 }
-
 
 fn get_deer_nocache(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> {
     let mut url = match Url::parse(BASE_URL) {
@@ -231,15 +237,16 @@ enum DeerCommandType {
 
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<DeerCommandType> {
     let command_phrase = m.command();
-    match command_phrase.command.as_slice() {
-        "deer" => Some(match command_phrase.get("deername") {
+    match command_phrase.token {
+        CMD_DEER_NAMED => Some(match command_phrase.get("deername") {
             Some(deername) => DeerCommandType::Deer(deername),
             None => DeerCommandType::StaticDeer(DEER)
         }),
-        "reed" => Some(DeerCommandType::StaticDeer(NOT_IMPLEMENTED)),
-        "deerman" => Some(DeerCommandType::StaticDeer(DEERMAN)),
-        "namreed" => Some(DeerCommandType::StaticDeer(NOT_IMPLEMENTED)),
-        "deer-stats" => Some(DeerCommandType::DeerStats),
+        CMD_DEER => Some(DeerCommandType::StaticDeer(DEER)),
+        CMD_REED => Some(DeerCommandType::StaticDeer(NOT_IMPLEMENTED)),
+        CMD_DEERMAN => Some(DeerCommandType::StaticDeer(DEERMAN)),
+        CMD_NAMREED => Some(DeerCommandType::StaticDeer(NOT_IMPLEMENTED)),
+        CMD_DEER_STATS => Some(DeerCommandType::DeerStats),
         _ => None
     }
 }
@@ -247,12 +254,12 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<DeerCommandType> {
 
 impl RustBotPlugin for DeerPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
-        conf.map_format(Format::from_str("deer {*deername}").unwrap());
-        conf.map_format(Format::from_str("deer").unwrap());
-        conf.map_format(Format::from_str("reed").unwrap());
-        conf.map_format(Format::from_str("deerman").unwrap());
-        conf.map_format(Format::from_str("namreed").unwrap());
-        conf.map_format(Format::from_str("deer-stats").unwrap());
+        conf.map_format(CMD_DEER_NAMED, Format::from_str("deer {*deername}").unwrap());
+        conf.map_format(CMD_DEER, Format::from_str("deer").unwrap());
+        conf.map_format(CMD_REED, Format::from_str("reed").unwrap());
+        conf.map_format(CMD_DEERMAN, Format::from_str("deerman").unwrap());
+        conf.map_format(CMD_NAMREED, Format::from_str("namreed").unwrap());
+        conf.map_format(CMD_DEER_STATS, Format::from_str("deer-stats").unwrap());
     }
 
     fn start(&mut self) {
@@ -269,7 +276,7 @@ impl RustBotPlugin for DeerPlugin {
         match self.sender {
             Some(ref sender) => {
                 if let Err(err) = sender.send((m.clone(), message.clone())) {
-                    m.reply(format!("Service ``wserver'' unavailable: {:?}", err));
+                    m.reply(format!("Service ``deer'' unavailable: {:?}", err));
                 }
             }
             None => ()

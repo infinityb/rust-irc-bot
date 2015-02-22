@@ -15,11 +15,13 @@ use command_mapper::{
     CommandMapperDispatch,
     IrcBotConfigurator,
     Format,
+    Token,
 };
 
 
 static API_URL: &'static str = "https://r-a-d.io/api/";
 
+const CMD_DJ: Token = Token(0);
 
 #[derive(RustcDecodable, RustcEncodable, Clone)]
 struct RadioApiResponse {
@@ -109,8 +111,8 @@ impl RadioInternalState {
         for event in rx.iter() {
             match event {
                 EventType::Dispatch(dispatch) => {
-                    match dispatch.command().command.as_slice() {
-                        "dj" => self.handle_dj(&dispatch),
+                    match dispatch.command().token {
+                        CMD_DJ => self.handle_dj(&dispatch),
                         _ => ()
                     }
                 }
@@ -143,7 +145,7 @@ impl RadioPlugin {
 
 impl RustBotPlugin for RadioPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
-        conf.map_format(Format::from_str("dj").unwrap());
+        conf.map_format(CMD_DJ, Format::from_str("dj").unwrap());
     }
 
     fn start(&mut self) {

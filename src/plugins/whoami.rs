@@ -5,11 +5,14 @@ use command_mapper::{
     CommandMapperDispatch,
     IrcBotConfigurator,
     Format,
+    Token,
 };
 
 
-pub struct WhoAmIPlugin;
+const CMD_WHOAMI: Token = Token(0);
+const CMD_WHEREAMI: Token = Token(1);
 
+pub struct WhoAmIPlugin;
 
 impl WhoAmIPlugin {
     pub fn new() -> WhoAmIPlugin {
@@ -26,10 +29,11 @@ enum WhoAmICommandType {
     WhereAmI
 }
 
+
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<WhoAmICommandType> {
-    match m.command().command.as_slice() {
-        "whoami" => Some(WhoAmICommandType::WhoAmI),
-        "whereami" => Some(WhoAmICommandType::WhereAmI),
+    match m.command().token {
+        CMD_WHOAMI => Some(WhoAmICommandType::WhoAmI),
+        CMD_WHEREAMI => Some(WhoAmICommandType::WhereAmI),
         _ => None
     }
 }
@@ -37,8 +41,8 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<WhoAmICommandType> {
 
 impl RustBotPlugin for WhoAmIPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
-        conf.map_format(Format::from_str("whoami").unwrap());
-        conf.map_format(Format::from_str("whereami").unwrap());
+        conf.map_format(CMD_WHOAMI, Format::from_str("whoami").unwrap());
+        conf.map_format(CMD_WHEREAMI, Format::from_str("whereami").unwrap());
     }
 
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, msg: &IrcMsg) {

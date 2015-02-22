@@ -1,5 +1,6 @@
 use std::string;
 use std::collections::BTreeMap;
+use super::Token;
 
 
 #[derive(Debug, PartialEq, Eq)]
@@ -116,6 +117,7 @@ pub struct Format {
 
 #[derive(Debug, Clone)]
 pub struct CommandPhrase {
+    pub token: Token,
     pub command: String,
     pub original_command: String,
     args: BTreeMap<String, Value>
@@ -166,7 +168,7 @@ impl Format {
         }
     }
 
-    pub fn parse(&self, input: &str) -> ValueResult<CommandPhrase> {
+    pub fn parse(&self, token: Token, input: &str) -> ValueResult<CommandPhrase> {
         let original_input: &str = input;
         let input: &str = input;
         let mut args_map: BTreeMap<String, Value> = BTreeMap::new();
@@ -211,6 +213,7 @@ impl Format {
             return Err(ValueParseError::MessageTooLong)
         }
         Ok(CommandPhrase {
+            token: token,
             command: command.trim_right_matches(' ').to_string(),
             original_command: original_input.to_string(),
             args: args_map,

@@ -11,8 +11,10 @@ use command_mapper::{
     CommandMapperDispatch,
     IrcBotConfigurator,
     Format,
+    Token,
 };
 
+const CMD_SEEN: Token = Token(0);
 
 static MAX_USER_RECORDS_KEPT: usize = 5;
 
@@ -148,7 +150,7 @@ fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
 
 impl RustBotPlugin for SeenPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
-        conf.map_format(Format::from_str("seen {nick:s}").unwrap());
+        conf.map_format(CMD_SEEN, Format::from_str("seen {nick:s}").unwrap());
     }
 
     fn on_message(&mut self, msg: &IrcMsg) {
@@ -183,8 +185,8 @@ impl RustBotPlugin for SeenPlugin {
 
         let command_phrase = m.command();
         
-        let parsed_command = match command_phrase.command.as_slice() {
-            "seen" => match command_phrase.get("nick") {
+        let parsed_command = match command_phrase.token {
+            CMD_SEEN => match command_phrase.get("nick") {
                 Some(nick) => Some(SeenCommandType::Seen(nick)),
                 None => None
             },

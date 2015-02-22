@@ -5,8 +5,10 @@ use command_mapper::{
     CommandMapperDispatch,
     IrcBotConfigurator,
     Format,
+    Token,
 };
 
+const CMD_PING: Token = Token(0);
 
 pub struct PingPlugin;
 
@@ -25,8 +27,8 @@ enum PingCommandType {
 }
 
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<PingCommandType> {
-    match m.command().command.as_slice() {
-        "ping" => Some(PingCommandType::Ping),
+    match m.command().token {
+        CMD_PING => Some(PingCommandType::Ping),
         _ => None
     }
 }
@@ -34,7 +36,7 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<PingCommandType> {
 
 impl RustBotPlugin for PingPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
-        conf.map_format(Format::from_str("ping").ok().unwrap());
+        conf.map_format(CMD_PING, Format::from_str("ping").ok().unwrap());
     }
 
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, _: &IrcMsg) {

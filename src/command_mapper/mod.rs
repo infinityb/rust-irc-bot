@@ -20,6 +20,8 @@ pub use self::format::FormatParseError::EmptyFormat;
 
 mod format;
 
+#[derive(Copy, Clone, Debug)]
+pub struct Token(pub u64);
 
 /// Defines the API a plugin implements
 // TODO: move to `plugin' module
@@ -32,7 +34,7 @@ pub trait RustBotPlugin {
 
 
 pub struct IrcBotConfigurator {
-    mapped: Vec<Format>
+    mapped: Vec<(Token, Format)>
 }
 
 /// Defines the public API the bot exposes to plugins for configuration
@@ -44,8 +46,8 @@ impl IrcBotConfigurator {
         }
     }
 
-    pub fn map_format(&mut self, format: Format) {
-        self.mapped.push(format);
+    pub fn map_format(&mut self, token: Token, format: Format) {
+        self.mapped.push((token, format));
     }
 }
 
@@ -116,7 +118,7 @@ impl CommandMapperDispatch {
 
 pub struct PluginContainer {
     cmd_prefixes: Vec<String>,
-    plugins: Vec<(Box<RustBotPlugin+'static>, Vec<Format>)>,
+    plugins: Vec<(Box<RustBotPlugin+'static>, Vec<(Token, Format)>)>,
 }
 
 
@@ -193,8 +195,8 @@ impl PluginContainer {
                 Err(_) => return,
             };
             for &mut (ref mut plugin, ref mappers) in self.plugins.iter_mut() {
-                for mapper_format in mappers.iter() {
-                    if let Ok(command_phrase) = mapper_format.parse(&message_body) {
+                for &(token, ref mapper_format) in mappers.iter() {
+                    if let Ok(command_phrase) = mapper_format.parse(token, &message_body) {
                         let dispatch = builder.build(command_phrase);
                         plugin.dispatch_cmd(&dispatch, privmsg.to_irc_msg());
                     }

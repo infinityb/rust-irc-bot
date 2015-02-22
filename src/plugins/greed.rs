@@ -24,7 +24,11 @@ use command_mapper::{
     CommandMapperDispatch,
     IrcBotConfigurator,
     Format,
+    Token,
 };
+
+const CMD_GREED: Token = Token(0);
+const CMD_GREED_STATS: Token = Token(1);
 
 type ScorePrefix = [u8; 6];
 type ScoreRec = (usize, ScorePrefix, i32);
@@ -181,10 +185,9 @@ struct GreedPlayResult {
 }
 
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<GreedCommandType> {
-    let command_phrase = m.command();
-    match command_phrase.command.as_slice() {
-        "greed" => Some(GreedCommandType::Greed),
-        "greed-stats" => Some(GreedCommandType::GreedStats),
+    match m.command().token {
+        CMD_GREED => Some(GreedCommandType::Greed),
+        CMD_GREED_STATS => Some(GreedCommandType::GreedStats),
         _ => None
     }
 }
@@ -318,11 +321,10 @@ impl GreedPlugin {
     }
 }
 
-
 impl RustBotPlugin for GreedPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
-        conf.map_format(Format::from_str("greed").unwrap());
-        conf.map_format(Format::from_str("greed-stats").unwrap());
+        conf.map_format(CMD_GREED, Format::from_str("greed").unwrap());
+        conf.map_format(CMD_GREED_STATS, Format::from_str("greed-stats").unwrap());
     }
     
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMsg) {

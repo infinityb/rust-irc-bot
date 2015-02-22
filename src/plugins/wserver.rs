@@ -13,8 +13,10 @@ use command_mapper::{
     CommandMapperDispatch,
     IrcBotConfigurator,
     Format,
+    Token,
 };
 
+const CMD_WSERVER: Token = Token(0);
 
 #[derive(Debug)]
 enum WserverFailure {
@@ -80,9 +82,8 @@ impl WserverInternalState {
 
     fn start(&mut self, rx: Receiver<CommandMapperDispatch>) {
         for m in rx.iter() {
-            let command_phrase = m.command();
-            match command_phrase.command.as_slice() {
-                "wserver" => self.handle_wserver(&m),
+            match m.command().token {
+                CMD_WSERVER => self.handle_wserver(&m),
                 _ => ()
             }
         }
@@ -108,7 +109,7 @@ impl WserverPlugin {
 
 impl RustBotPlugin for WserverPlugin {
     fn configure(&mut self, configurator: &mut IrcBotConfigurator) {
-        configurator.map_format(Format::from_str("wserver {host:s}").unwrap());
+        configurator.map_format(CMD_WSERVER, Format::from_str("wserver {host:s}").unwrap());
     }
 
     fn start(&mut self) {
