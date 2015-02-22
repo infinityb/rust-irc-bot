@@ -8,7 +8,7 @@ use url::{
     ParseResult, UrlParser
 };
 
-use irc::{IrcConnection, IrcEvent, IrcConnectionCommand, State};
+use irc::{IrcConnection, IrcEvent, IrcConnectionCommand, State, BundlerManager};
 use irc::parse::IrcMsg;
 
 use command_mapper::PluginContainer;
@@ -75,10 +75,12 @@ impl BotConnection {
         let (mut conn, event_queue) = try!(IrcConnection::new(
 		(conf.get_host().as_slice(), conf.get_port())));
 
-        let (event_queue_txu, event_queue_rxu) = channel();
+        let (event_queue_txu, event_queue_rxu) = channel::<IrcMsg>();
         let _ = ::std::thread::Builder::new().name("bot-event-sender".to_string()).spawn(move || {
             for event in event_queue.iter() {
-                event_queue_txu.send(event).unwrap();
+                if let IrcEvent::IrcMsg(message) = event {
+                    event_queue_txu.send(message).unwrap();
+                }
             }
         });
 
@@ -163,13 +165,14 @@ impl BotConnection {
             }
         });
 
-        for event in event_queue_rxu.iter() {
-            state.on_event(&event);
-            if let IrcEvent::IrcMsg(ref message) = event {
-                container.dispatch(Arc::new(state.clone()), &tx, message);
+        let mut bundler_man = BundlerManager::with_defaults();
+        for msg in event_queue_rxu.iter() {
+            for event in bundler_man.on_irc_msg(&msg).into_iter() {
+                state.on_event(&event);
             }
+            container.dispatch(Arc::new(state.clone()), &tx, &msg);
         }
 
-        Ok(BotConnection { foo: 0})
+        Ok(BotConnection { foo: 0 })
     }
 }
