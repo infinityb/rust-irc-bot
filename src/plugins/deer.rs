@@ -221,14 +221,17 @@ impl DeerInternalState {
     fn start(&mut self, rx: Receiver<(CommandMapperDispatch, IrcMsg)>) {
         for (m, _) in rx.iter() {
             match parse_command(&m) {
-                Some(ref command) => self.handle_command(&m, command),
+                Some(command) => {
+                    println!("handle_command(..., {:?})", command);
+                    self.handle_command(&m, &command);
+                }
                 None => ()
             }
         }
     }
 }
 
-
+#[derive(Debug)]
 enum DeerCommandType {
     Deer(String),
     StaticDeer(&'static str),
@@ -237,6 +240,7 @@ enum DeerCommandType {
 
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<DeerCommandType> {
     let command_phrase = m.command();
+    println!("deer::parse_command ** token = {:?}", command_phrase.token);
     match command_phrase.token {
         CMD_DEER_NAMED => Some(match command_phrase.get("deername") {
             Some(deername) => DeerCommandType::Deer(deername),

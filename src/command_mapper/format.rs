@@ -1,4 +1,3 @@
-use std::string;
 use std::collections::BTreeMap;
 use super::Token;
 
@@ -183,7 +182,7 @@ impl Format {
             if remaining == "" {
                 return Err(ValueParseError::MessageTooShort)
             }
-            println!("{:?} it consuming on {:?}", atom, remaining);
+            
             let value = match atom.consume(remaining) {
                 Ok((Some(value), tmp)) => {
                     remaining = tmp;
@@ -212,12 +211,14 @@ impl Format {
         if !remaining.bytes().all(|&: x| x == b' ') {
             return Err(ValueParseError::MessageTooLong)
         }
-        Ok(CommandPhrase {
+        let cmd_phrase = CommandPhrase {
             token: token,
             command: command.trim_right_matches(' ').to_string(),
             original_command: original_input.to_string(),
             args: args_map,
-        })
+        };
+        println!("{:?} - {:?} is consuming on {:?}", token, input, cmd_phrase);
+        Ok(cmd_phrase)
     }
 }
 

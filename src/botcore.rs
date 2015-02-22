@@ -1,15 +1,19 @@
-use std::old_io::IoResult;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::mpsc::{channel, sync_channel};
+use std::io::prelude::*;
+use std::io::{self, BufReader};
+use std::net::TcpStream;
+use irc::stream::{IrcConnector, RegisterReqBuilder};
 
 use url::{
     Url, SchemeType, Host,
     ParseResult, UrlParser
 };
 
-use irc::{IrcConnection, IrcEvent, IrcConnectionCommand, State, BundlerManager};
+use irc::{BundlerManager, JoinBundlerTrigger};
 use irc::parse::IrcMsg;
+use irc::message_types::client;
 
 use command_mapper::PluginContainer;
 
@@ -71,67 +75,67 @@ pub struct BotConnection {
 
 
 impl BotConnection {
-    pub fn new(conf: &BotConfig) -> IoResult<BotConnection> {
-        let (mut conn, event_queue) = try!(IrcConnection::new(
-		(conf.get_host().as_slice(), conf.get_port())));
-
+    pub fn new(conf: &BotConfig) -> io::Result<BotConnection> {
+        let (tx, rx) = sync_channel::<IrcMsg>(100);
         let (event_queue_txu, event_queue_rxu) = channel::<IrcMsg>();
-        let _ = ::std::thread::Builder::new().name("bot-event-sender".to_string()).spawn(move || {
-            for event in event_queue.iter() {
-                if let IrcEvent::IrcMsg(message) = event {
-                    event_queue_txu.send(message).unwrap();
+
+        let conn = try!(TcpStream::connect(&(
+            conf.get_host().as_slice(),
+            conf.get_port()
+        )));
+
+        let mut reg_req = RegisterReqBuilder::new()
+            .nick(&conf.nickname)
+            .user("rustirc")
+            .realname("https://github.com/infinityb/rust-irc-bot")
+            .mode_invisible(true)
+            .build().ok().unwrap();
+
+        let mut connector = IrcConnector::from_pair(
+            Box::new(BufReader::new(conn.try_clone().ok().unwrap())),
+            Box::new(conn.try_clone().ok().unwrap()));
+
+        let mut state;
+        loop {
+            match connector.register(&reg_req) {
+                Ok(s) => {
+                    state = s;
+                    break
+                },
+                Err(err) => {
+                    println!("Registration Error: {:?}", err);
+                    reg_req.get_mut_nick().push_str("`");
+                }
+            }
+        }
+        let (mut reader, mut writer) = connector.split();
+
+        let _ = ::std::thread::Builder::new().name("bot-reader".to_string()).spawn(move || {
+            for msg in reader.iter() {
+                let msg = match msg {
+                    Ok(msg) => msg,
+                    Err(err) => panic!("Error parsing message: {:?}", err),
+                };
+                if let Err(err) = event_queue_txu.send(msg) {
+                    panic!("Error sending message: {:?}", err);
                 }
             }
         });
 
-        let mut nick = conf.nickname.clone();
-        loop {
-            info!("trying nick {}", nick.as_slice());
-            match conn.register(nick.as_slice()) {
-                Ok(_) => {
-                    info!("ok, connected as {}", nick.as_slice());
-                    break;
-                }
-                Err(err) => {
-                    if err.should_pick_new_nickname() {
-                        nick.push_str("`");
-                    } else {
-                        panic!("{:?}", err)
-                    }
-                }
-            };
-        }
+        let mut bundler_man = BundlerManager::with_defaults();
+
+        bundler_man.add_bundler_trigger(Box::new(
+            JoinBundlerTrigger::new(state.get_self_nick().as_bytes())));
 
         for channel in conf.channels.iter() {
             info!("want join: {}", channel);
         }
 
         for channel in conf.channels.iter() {
-            info!("joining {}...", channel);
-            match conn.join(channel.as_slice()) {
-                Ok(res) => {
-                    info!("succeeded in joining {:?}, got {} nicks",
-                        res.channel.as_slice(), res.nicks.len());
-                    match conn.who(channel.as_slice()) {
-                        Ok(who_res) => {
-                            info!("succeeded in WHOing {:?}, got {} nicks",
-                                who_res.channel.as_slice(), who_res.who_records.len());
-                        },
-                        Err(who_err) => {
-                            info!("failed to WHO {:?}: {:?}", channel, who_err);
-                        }
-                    }
-                },
-                Err(err) => {
-                    info!("join error: {:?}", err);
-                    panic!("failed to join channel.. dying");
-                }
-            }
-            info!("END joining {:?}...", channel);
+            let join_msg = client::Join::new(channel.as_slice());
+            writer.write_irc_msg(join_msg.to_irc_msg()).ok().unwrap();
         }
-
-        let mut state = State::new();
-
+        
         let mut container = PluginContainer::new(conf.command_prefixes.clone());
         if conf.enabled_plugins.contains(PingPlugin::get_plugin_name()) {
             container.register(PingPlugin::new());
@@ -155,22 +159,22 @@ impl BotConnection {
             container.register(WhoAmIPlugin::new());
         }
 
-        let (tx, rx) = sync_channel::<IrcMsg>(0);
-        let cmd_queue = conn.get_command_queue();
-
-
-        let _ = ::std::thread::Builder::new().name("bot-sender".to_string()).spawn(move || {
-            for message in rx.iter() {
-                cmd_queue.send(IrcConnectionCommand::raw_write(message.into_bytes())).unwrap();
+        let _ = ::std::thread::Builder::new().name("bot-writer".to_string()).spawn(move || {
+            for irc_msg in rx.iter() {
+                println!("bot-sender::irc_msg = {:?}", irc_msg);
+                writer.write_irc_msg(&irc_msg).ok().unwrap();
             }
         });
 
-        let mut bundler_man = BundlerManager::with_defaults();
         for msg in event_queue_rxu.iter() {
+            if let Some(join) = state.is_self_join(&msg) {
+                tx.send(client::Who::new(join.get_channel()).into_irc_msg()).ok().expect("send fail");
+            }
             for event in bundler_man.on_irc_msg(&msg).into_iter() {
                 state.on_event(&event);
+                println!("emit-event {:?} => state = {:?}", event, state);
             }
-            container.dispatch(Arc::new(state.clone()), &tx, &msg);
+            container.dispatch(Arc::new(state.clone_frozen()), &tx, &msg);
         }
 
         Ok(BotConnection { foo: 0 })

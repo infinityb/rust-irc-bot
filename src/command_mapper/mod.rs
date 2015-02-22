@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::mpsc::SyncSender;
 
-use irc::State;
+use irc::FrozenState;
 use irc::parse::IrcMsg;
 use irc::message_types::{client, server};
 use irc::MessageEndpoint::{
@@ -52,7 +52,7 @@ impl IrcBotConfigurator {
 }
 
 struct DispatchBuilder {
-    state: Arc<State>,
+    state: Arc<FrozenState>,
     sender: SyncSender<IrcMsg>,
     reply_target: String,
     source: MessageEndpoint,
@@ -77,7 +77,7 @@ impl DispatchBuilder {
 /// the plugins dispatch_cmd method is called
 #[derive(Clone)]
 pub struct CommandMapperDispatch {
-    state: Arc<State>,
+    state: Arc<FrozenState>,
     command: CommandPhrase,
     sender: SyncSender<IrcMsg>,
     reply_target: String,
@@ -87,7 +87,7 @@ pub struct CommandMapperDispatch {
 
 
 impl CommandMapperDispatch {
-    pub fn get_state(&self) -> Arc<State> {
+    pub fn get_state(&self) -> Arc<FrozenState> {
         self.state.clone()
     }
 
@@ -104,15 +104,16 @@ impl CommandMapperDispatch {
 
     /// Reply with a message to the channel/nick which sent the message being dispatched
     pub fn reply(&self, message: String) {
+        println!("replying with privmsg: {:?}", message);
         let privmsg = client::Privmsg::new(self.reply_target.as_slice(), message.as_bytes());
-        self.sender.send(privmsg.into_irc_msg()).unwrap();
+        self.sender.send(privmsg.into_irc_msg()).ok().expect("Failed to send to IRC socket");
     }
 
-    /// Reply with a message to the channel/nick which sent the message being dispatched
-    pub fn reply_bin(&self, message: Vec<u8>) {
-        let privmsg = client::Privmsg::new(self.reply_target.as_slice(), message.as_slice());
-        self.sender.send(privmsg.into_irc_msg()).unwrap();
-    }
+    // /// Reply with a message to the channel/nick which sent the message being dispatched
+    // pub fn reply_bin(&self, message: Vec<u8>) {
+    //     let privmsg = client::Privmsg::new(self.reply_target.as_slice(), message.as_slice());
+    //     self.sender.send(privmsg.into_irc_msg()).ok().expect("Failed to send to IRC socket");
+    // }
 }
 
 
@@ -141,7 +142,7 @@ impl PluginContainer {
 
     /// Dispatches messages to plugins, if they have expressed interest in the message.
     /// Interest is expressed via calling map during the configuration phase.
-    pub fn dispatch(&mut self, state: Arc<State>, raw_tx: &SyncSender<IrcMsg>, msg: &IrcMsg) {
+    pub fn dispatch(&mut self, state: Arc<FrozenState>, raw_tx: &SyncSender<IrcMsg>, msg: &IrcMsg) {
         for &mut (ref mut plugin, _) in self.plugins.iter_mut() {
             plugin.on_message(msg);
         }

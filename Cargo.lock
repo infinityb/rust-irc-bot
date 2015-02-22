@@ -51,7 +51,7 @@ dependencies = [
 [[package]]
 name = "irc"
 version = "0.2.0"
-source = "git+https://github.com/infinityb/rust-irc#467aabfad29ae6a7a0b2ca9a69549ab716117a04"
+source = "git+https://github.com/infinityb/rust-irc#2fe192171968d5c6e19ef591c15c8014c2d8dc00"
 dependencies = [
  "log 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
