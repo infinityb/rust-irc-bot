@@ -213,10 +213,6 @@ impl DeerInternalState {
     }
 
     fn start(&mut self, rx: Receiver<(CommandMapperDispatch, IrcMsg)>) {
-        fn assert_send<T: Send+'static>() {}
-
-        assert_send::<CommandMapperDispatch>();
-        assert_send::<IrcMsg>();
         for (m, _) in rx.iter() {
             match parse_command(&m) {
                 Some(ref command) => self.handle_command(&m, command),

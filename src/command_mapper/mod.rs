@@ -59,13 +59,6 @@ struct DispatchBuilder {
 
 impl DispatchBuilder {
     fn build(&self, phrase: CommandPhrase) -> CommandMapperDispatch {
-        fn assert_send<T: Send+'static>() {}
-
-        assert_send::<Arc<State>>();
-        assert_send::<SyncSender<IrcMsg>>();
-        assert_send::<String>();
-        assert_send::<MessageEndpoint>();
-
         CommandMapperDispatch {
             state: self.state.clone(),
             command: phrase,
