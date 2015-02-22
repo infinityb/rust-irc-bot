@@ -165,18 +165,7 @@ impl BotConnection {
                 writer.write_irc_msg(&irc_msg).ok().unwrap();
             }
         });
-
-        // {
-        //     let tx = tx.clone();
-        //     let _ = ::std::thread::Builder::new().name("bot-writer".to_string()).spawn(move || {
-        //         use std::old_io::timer::sleep;
-        //         use std::time::duration::Duration;
-
-        //         sleep(Duration::seconds(12));
-        //         tx.send(IrcMsg::new(b"QUIT :lel".to_vec()).ok().unwrap()).ok().unwrap();
-        //     });
-        // }
-
+        
         for msg in event_queue_rxu.iter() {
             if let server::IncomingMsg::Ping(ping) = server::IncomingMsg::from_msg(msg.clone()) {
                 if let Ok(pong) = ping.get_response() {
