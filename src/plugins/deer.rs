@@ -2,6 +2,7 @@ use std::error::FromError;
 use std::old_io::IoError;
 use std::collections::HashMap;
 use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
+use std::io::Read;
 
 use rustc_serialize::json::{self, DecoderError};
 use time::{get_time, Timespec};
@@ -31,37 +32,76 @@ const CMD_NAMREED: Token = Token(4);
 const CMD_DEER_STATS: Token = Token(5);
 
 static DEER: &'static str = concat!(
-    "\u{0003}01,01@@@@@@@@\u{0003}00,00@\u{0003}01,01@@\u{0003}00,00@\u{0003}01,01@\n",
-    "\u{0003}01,01@@@@@@@@\u{0003}00,00@\u{0003}01,01@@\u{0003}00,00@\u{0003}01,01@\n",
-    "\u{0003}01,01@@@@@@@@@\u{0003}00,00@@\u{0003}01,01@@\n",
-    "\u{0003}01,01@@@@@@@@\u{0003}00,00@@@\u{0003}01,01@@\n",
-    "\u{0003}01,01@@@@@@@@@\u{0003}00,00@@\u{0003}01,01@@\n",
-    "\u{0003}01,01@@\u{0003}00,00@@@@@@@@@\u{0003}01,01@@\n",
-    "\u{0003}01,01@\u{0003}00,00@@@@@@@@@@\u{0003}01,01@@\n",
-    "\u{0003}01,01@\u{0003}00,00@@@@@@@@@@\u{0003}01,01@@\n",
-    "\u{0003}01,01@\u{0003}00,00@\u{0003}01,01@\u{0003}00,00@",
-    "\u{0003}01,01@@@@\u{0003}00,00@\u{0003}01,01@\u{0003}00,00@\u{0003}01,01@@\n",
-    "\u{0003}01,01@\u{0003}00,00@\u{0003}01,01@\u{0003}00,00@",
-    "\u{0003}01,01@@@@\u{0003}00,00@\u{0003}01,01@\u{0003}00,00@\u{0003}01,01@@\n",
-    "\u{0003}01,01@\u{0003}00,00@\u{0003}01,01@\u{0003}00,00@",
-    "\u{0003}01,01@@@@\u{0003}00,00@\u{0003}01,01@\u{0003}00,00@\u{0003}01,01@@");
+    "1111111101101\n",
+    "1111111101101\n",
+    "1111111110011\n",
+    "1111111100011\n",
+    "1111111110011\n",
+    "1100000000011\n",
+    "1000000000011\n",
+    "1000000000011\n",
+    "1010111101011\n",
+    "1010111101011\n",
+    "1010111101011");
+
+static REED: &'static str = concat!(
+    "1011011111111\n",
+    "1011011111111\n",
+    "1100111111111\n",
+    "1100011111111\n",
+    "1100111111111\n",
+    "1100000000011\n",
+    "1100000000001\n",
+    "1100000000001\n",
+    "1101011110101\n",
+    "1101011110101\n",
+    "1101011110101");
 
 static DEERMAN: &'static str = concat!(
-    "\u{0003}00,00@@\u{0003}01,01@\u{0003}00,00@@\u{0003}01,01@\u{0003}00,00@@\n",
-    "\u{0003}00,00@@\u{0003}01,01@\u{0003}00,00@@\u{0003}01,01@\u{0003}00,00@@\n",
-    "\u{0003}00,00@@@\u{0003}01,01@@\u{0003}00,00@@@\n",
-    "\u{0003}00,00@@\u{0003}01,01@@@\u{0003}00,00@@@\n",
-    "\u{0003}00,00@@@\u{0003}01,01@@\u{0003}00,00@@@\n",
-    "\u{0003}00,00@@\u{0003}01,01@@@@\u{0003}00,00@@\n",
-    "\u{0003}01,01@@@@@@@@\n",
-    "\u{0003}01,01@\u{0003}00,00@\u{0003}01,01@@@@\u{0003}00,00@\u{0003}01,01@\n",
-    "\u{0003}01,01@\u{0003}00,00@\u{0003}01,01@@@@\u{0003}00,00@\u{0003}01,01@\n",
-    "\u{0003}00,00@@\u{0003}01,01@@@@\u{0003}00,00@@\n",
-    "\u{0003}00,00@@\u{0003}01,01@\u{0003}00,00@@\u{0003}01,01@\u{0003}00,00@@\n",
-    "\u{0003}00,00@@\u{0003}01,01@\u{0003}00,00@@\u{0003}01,01@\u{0003}00,00@@\n",
-    "\u{0003}00,00@@\u{0003}01,01@\u{0003}00,00@@\u{0003}01,01@\u{0003}00,00@@\n");
+    "00100100\n",
+    "00100100\n",
+    "00011000\n",
+    "00111000\n",
+    "00011000\n",
+    "00111100\n",
+    "11111111\n",
+    "10111101\n",
+    "10111101\n",
+    "00111100\n",
+    "00100100\n",
+    "00100100\n",
+    "00100100");
 
-static NOT_IMPLEMENTED: &'static str = "Not yet implemented";
+static NAMREED: &'static str = concat!(
+    "00100100\n",
+    "00100100\n",
+    "00011000\n",
+    "00011100\n",
+    "00011000\n",
+    "00111100\n",
+    "11111111\n",
+    "10111101\n",
+    "10111101\n",
+    "00111100\n",
+    "00100100\n",
+    "00100100\n",
+    "00100100");
+
+fn render_deer(format: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for format_line in format.split('\n') {
+        let mut output_line = String::new();
+        for ch in format_line.chars() {
+            match ch {
+                '0' => output_line.push_str("\u{0003}00,00@"),
+                '1' => output_line.push_str("\u{0003}01,01@"),
+                any => output_line.push(any),
+            }
+        }
+        out.push(output_line);
+    }
+    out
+}
 
 static BASE_URL: &'static str = "http://deer.satf.se/deerlist.php";
 
@@ -105,7 +145,7 @@ fn get_deer_nocache(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> 
     url.query = Some(serialize_owned(&[
         (String::from_str("deer"), String::from_str(deer_name)),
     ]));
-    
+
     let mut resp = try!(try!(try!(Request::new(Get, url)).start()).send());
     let body = match String::from_utf8(try!(resp.read_to_end())) {
         Ok(body) => body,
@@ -206,8 +246,8 @@ impl DeerInternalState {
                 } 
             },
             DeerCommandType::StaticDeer(data) => {
-                for deer_line in data.split('\n') {
-                    m.reply(String::from_str(deer_line));
+                for deer_line in render_deer(data).into_iter() {
+                    m.reply(deer_line);
                     self.lines_sent += 1;
                 }
                 self.throttle_bump(source, m.target.clone());
@@ -247,9 +287,9 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<DeerCommandType> {
             None => DeerCommandType::StaticDeer(DEER)
         }),
         CMD_DEER => Some(DeerCommandType::StaticDeer(DEER)),
-        CMD_REED => Some(DeerCommandType::StaticDeer(NOT_IMPLEMENTED)),
+        CMD_REED => Some(DeerCommandType::StaticDeer(REED)),
         CMD_DEERMAN => Some(DeerCommandType::StaticDeer(DEERMAN)),
-        CMD_NAMREED => Some(DeerCommandType::StaticDeer(NOT_IMPLEMENTED)),
+        CMD_NAMREED => Some(DeerCommandType::StaticDeer(NAMREED)),
         CMD_DEER_STATS => Some(DeerCommandType::DeerStats),
         _ => None
     }
