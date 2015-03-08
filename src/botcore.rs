@@ -170,10 +170,19 @@ impl BotConnection {
             }
         });
         
+        let autojoin_invited: HashSet<String> = conf.channels.iter().cloned().collect();
+
         for msg in event_queue_rxu.iter() {
             if let server::IncomingMsg::Ping(ping) = server::IncomingMsg::from_msg(msg.clone()) {
                 if let Ok(pong) = ping.get_response() {
                     tx.send(pong.into_irc_msg()).ok().unwrap();
+                }
+            }
+
+            if let server::IncomingMsg::Invite(invite) = server::IncomingMsg::from_msg(msg.clone()) {
+                if autojoin_invited.contains(invite.get_target()) {
+                    let join_msg = client::Join::new(invite.get_target());
+                    tx.send(join_msg.into_irc_msg()).ok().unwrap();
                 }
             }
 
