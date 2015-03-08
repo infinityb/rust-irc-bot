@@ -25,6 +25,7 @@ use plugins::{
     PingPlugin,
     WserverPlugin,
     WhoAmIPlugin,
+    LoggerPlugin,
 };
 
 
@@ -157,6 +158,9 @@ impl BotConnection {
         }
         if conf.enabled_plugins.contains(WhoAmIPlugin::get_plugin_name()) {
             container.register(WhoAmIPlugin::new());
+        }
+        if conf.enabled_plugins.contains(LoggerPlugin::get_plugin_name()) {
+            container.register(LoggerPlugin::new());
         }
 
         let _ = ::std::thread::Builder::new().name("bot-writer".to_string()).spawn(move || {
