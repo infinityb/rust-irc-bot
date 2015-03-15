@@ -20,7 +20,6 @@ pub type ValueResult<T> = Result<T, ValueParseError>;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum AtomType {
-    Literal,
     String,
     WholeNumeric
 }
@@ -46,7 +45,6 @@ enum Value {
 impl Value {
     fn parse(kind: AtomType, input: &str) -> ValueResult<Value> {
         match kind {
-            AtomType::Literal => Ok(Value::Literal(input.to_string())),
             AtomType::String => Ok(Value::String(input.to_string())),
             AtomType::WholeNumeric => {
                 // TODO: check if it is a numberish thing
@@ -208,7 +206,7 @@ impl Format {
             };
         }
 
-        if !remaining.bytes().all(|&: x| x == b' ') {
+        if !remaining.bytes().all(|x| x == b' ') {
             return Err(ValueParseError::MessageTooLong)
         }
         let cmd_phrase = CommandPhrase {

@@ -1,8 +1,7 @@
 use std::error::FromError;
-use std::old_io::IoError;
 use std::collections::HashMap;
 use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
-use std::io::Read;
+use std::io::{self, Read};
 
 use rustc_serialize::json::{self, DecoderError};
 use time::{get_time, Timespec};
@@ -113,9 +112,8 @@ struct DeerApiResponse {
 
 #[derive(Debug)]
 enum DeerApiFailure {
-    ResponseDecodeError,
     RequestError(HttpError),
-    ResponseReadError(IoError),
+    ResponseReadError(io::Error),
     ResponseDeserializeError(DecoderError)
 }
 
@@ -125,8 +123,8 @@ impl FromError<HttpError> for DeerApiFailure {
     }
 }
 
-impl FromError<IoError> for DeerApiFailure {
-    fn from_error(err: IoError) -> DeerApiFailure {
+impl FromError<io::Error> for DeerApiFailure {
+    fn from_error(err: io::Error) -> DeerApiFailure {
         DeerApiFailure::ResponseReadError(err)
     }
 }
@@ -147,10 +145,14 @@ fn get_deer_nocache(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> 
     ]));
 
     let mut resp = try!(try!(try!(Request::new(Get, url)).start()).send());
-    let body = match String::from_utf8(try!(resp.read_to_end())) {
-        Ok(body) => body,
-        Err(_err) => return Err(DeerApiFailure::ResponseDecodeError)
-    };
+
+    let mut body = String::new();
+    try!(resp.read_to_string(&mut body));
+
+    // let body = match String::from_utf8() {
+    //     Ok(body) => body,
+    //     Err(_err) => return Err(DeerApiFailure::ResponseDecodeError)
+    // };
 
     Ok(try!(json::decode::<DeerApiResponse>(&body)))
 }

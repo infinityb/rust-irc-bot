@@ -4,7 +4,6 @@ use std::sync::mpsc::{channel, sync_channel};
 use std::io::prelude::*;
 use std::io::{self, BufReader};
 use std::net::TcpStream;
-use irc::stream::{IrcConnector, RegisterReqBuilder};
 
 use url::{
     Url, SchemeType, Host,
@@ -14,6 +13,12 @@ use url::{
 use irc::{BundlerManager, JoinBundlerTrigger};
 use irc::parse::IrcMsg;
 use irc::message_types::{client, server};
+use irc::stream::{
+    IrcReaderIter, IrcReader,
+    IrcWrite, IrcWriter, IrcConnector,
+    RegisterReqBuilder
+};
+
 
 use command_mapper::PluginContainer;
 
@@ -92,9 +97,9 @@ impl BotConnection {
             .mode_invisible(true)
             .build().ok().unwrap();
 
-        let mut connector = IrcConnector::from_pair(
-            Box::new(BufReader::new(conn.try_clone().ok().unwrap())),
-            Box::new(conn.try_clone().ok().unwrap()));
+        let reader = IrcReader::new(BufReader::new(conn.try_clone().ok().unwrap()));
+        let writer = IrcWriter::new(conn.try_clone().ok().unwrap());
+        let mut connector = IrcConnector::from_pair(reader, writer);
 
         let mut state;
         loop {
@@ -112,7 +117,7 @@ impl BotConnection {
         let (mut reader, mut writer) = connector.split();
 
         let _ = ::std::thread::Builder::new().name("bot-reader".to_string()).spawn(move || {
-            for msg in reader.iter() {
+            for msg in IrcReaderIter::new(&mut reader) {
                 let msg = match msg {
                     Ok(msg) => msg,
                     Err(err) => panic!("Error parsing message: {:?}", err),

@@ -292,11 +292,9 @@ impl GreedPlugin {
             let roll = thread_rng().gen::<RollResult>();
             m.reply(format!("{}: {}", source_nick, roll));
 
-            let prev_play_nick = m.get_state().resolve_user(prev_play.user_id).and_then(|&: user: &User| {
-                Some(user.get_nick().to_string())
-            }).unwrap_or_else(|&:| {
-                format!("{} (deceased)", prev_play.user_nick)
-            });
+            let prev_play_nick = m.get_state().resolve_user(prev_play.user_id)
+                .and_then(|user: &User| Some(user.get_nick().to_string()))
+                .unwrap_or_else(|| format!("{} (deceased)", prev_play.user_nick));
             let prev_play_score = prev_play.roll.total_score();
             let cur_play_score = roll.total_score();
             let cmp_result = prev_play_score.cmp(&cur_play_score);

@@ -1,4 +1,4 @@
-use std::old_io::IoError;
+use std::io::{self, Read};
 use std::error::FromError;
 use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 
@@ -39,9 +39,8 @@ struct RadioStreamApiResponse {
 
 #[derive(Debug)]
 enum RadioApiFailure {
-    ResponseDecodeError,
     RequestError(HttpError),
-    ResponseReadError(IoError),
+    ResponseReadError(io::Error),
     ResponseDeserializeError(DecoderError)
 }
 
@@ -52,8 +51,8 @@ impl FromError<HttpError> for RadioApiFailure {
     }
 }
 
-impl FromError<IoError> for RadioApiFailure {
-    fn from_error(err: IoError) -> RadioApiFailure {
+impl FromError<io::Error> for RadioApiFailure {
+    fn from_error(err: io::Error) -> RadioApiFailure {
         RadioApiFailure::ResponseReadError(err)
     }
 }
@@ -68,10 +67,9 @@ impl FromError<DecoderError> for RadioApiFailure {
 fn get_radio_api_result() -> Result<RadioApiResponse, RadioApiFailure> {
     let url = Url::parse(API_URL).ok().expect("Invalid URL :-(");
     let mut resp = try!(try!(try!(Request::new(Get, url)).start()).send());
-    let body = match String::from_utf8(try!(resp.read_to_end())) {
-        Ok(body) => body,
-        Err(_err) => return Err(RadioApiFailure::ResponseDecodeError)
-    };
+
+    let mut body = String::new();
+    try!(resp.read_to_string(&mut body));
     Ok(try!(json::decode::<RadioApiResponse>(body.as_slice())))
 }
 
