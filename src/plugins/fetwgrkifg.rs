@@ -1,23 +1,12 @@
-use std::error::FromError;
-use std::collections::HashMap;
-use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
-use std::io::{self, Read};
+use std::sync::mpsc::SyncSender;
 use std::iter::IteratorExt;
 
 use rand;
 
-use irc::UserId;
 use irc::parse::IrcMsg;
-use irc::MessageEndpoint::{self, KnownUser};
 use irc::message_types::{server, client};
 
-use command_mapper::{
-    RustBotPlugin,
-    CommandMapperDispatch,
-    IrcBotConfigurator,
-    Format,
-    Token,
-};
+use command_mapper::RustBotPlugin;
 
 pub struct FetwgrkifgPlugin;
 
