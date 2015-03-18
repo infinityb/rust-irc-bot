@@ -28,7 +28,7 @@ pub struct Token(pub u64);
 pub trait RustBotPlugin {
     fn configure(&mut self, _: &mut IrcBotConfigurator) {}
     fn start(&mut self) {}
-    fn on_message(&mut self, _: &IrcMsg) {}
+    fn on_message(&mut self, _: &SyncSender<IrcMsg>, _: &IrcMsg) {}
     fn dispatch_cmd(&mut self, _: &CommandMapperDispatch, _: &IrcMsg) {}
 }
 
@@ -144,7 +144,7 @@ impl PluginContainer {
     /// Interest is expressed via calling map during the configuration phase.
     pub fn dispatch(&mut self, state: Arc<FrozenState>, raw_tx: &SyncSender<IrcMsg>, msg: &IrcMsg) {
         for &mut (ref mut plugin, _) in self.plugins.iter_mut() {
-            plugin.on_message(msg);
+            plugin.on_message(raw_tx, msg);
         }
         
         let privmsg = match server::IncomingMsg::from_msg(msg.clone()) {

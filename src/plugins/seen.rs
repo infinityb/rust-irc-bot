@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
+use std::sync::mpsc::SyncSender;
 
 use time::{get_time, Timespec};
 use irc::parse::IrcMsg;
@@ -153,7 +154,7 @@ impl RustBotPlugin for SeenPlugin {
         conf.map_format(CMD_SEEN, Format::from_str("seen {nick:s}").unwrap());
     }
 
-    fn on_message(&mut self, msg: &IrcMsg) {
+    fn on_message(&mut self, _: &SyncSender<IrcMsg>, msg: &IrcMsg) {
         let privmsg = match server::IncomingMsg::from_msg(msg.clone()) {
             server::IncomingMsg::Privmsg(privmsg) => privmsg,
             _ => return

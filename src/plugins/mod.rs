@@ -6,6 +6,7 @@ pub use self::ping::PingPlugin;
 pub use self::wserver::WserverPlugin;
 pub use self::whoami::WhoAmIPlugin;
 pub use self::logger::LoggerPlugin;
+pub use self::fetwgrkifg::FetwgrkifgPlugin;
 
 mod deer;
 mod greed;
@@ -15,3 +16,4 @@ mod ping;
 mod wserver;
 mod whoami;
 mod logger;
+mod fetwgrkifg;

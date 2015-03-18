@@ -31,6 +31,7 @@ use plugins::{
     WserverPlugin,
     WhoAmIPlugin,
     LoggerPlugin,
+    FetwgrkifgPlugin,
 };
 
 
@@ -166,6 +167,9 @@ impl BotConnection {
         }
         if conf.enabled_plugins.contains(LoggerPlugin::get_plugin_name()) {
             container.register(LoggerPlugin::new());
+        }
+        if conf.enabled_plugins.contains(FetwgrkifgPlugin::get_plugin_name()) {
+            container.register(FetwgrkifgPlugin::new());
         }
 
         let _ = ::std::thread::Builder::new().name("bot-writer".to_string()).spawn(move || {

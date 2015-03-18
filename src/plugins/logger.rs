@@ -46,7 +46,7 @@ impl RustBotPlugin for LoggerPlugin {
         self.sender = Some(tx);
     }
 
-    fn on_message(&mut self, msg: &IrcMsg) {
+    fn on_message(&mut self, _: &SyncSender<IrcMsg>, msg: &IrcMsg) {
         let mut disable_self = false;
         if let Some(ref sender) = self.sender {
             if let Err(err) = sender.send(msg.clone()) {
