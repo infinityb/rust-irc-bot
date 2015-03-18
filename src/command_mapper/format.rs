@@ -532,7 +532,7 @@ fn cons_the_basics() {
             Ok(fmt) => fmt,
             Err(err) => panic!("parse failure: {:?}", err)
         };
-        let cmdlet = match fmt.parse("articles bar test article argument") {
+        let cmdlet = match fmt.parse(Token(0), "articles bar test article argument") {
             Ok(cmdlet) => cmdlet,
             Err(err) => panic!("parse failure: {:?}", err)
         };
@@ -558,8 +558,8 @@ fn parse_the_basics() {
             Err(err) => panic!("parse failure: {:?}", err)
         };
 
-        assert!(fmt.parse("articles").is_err());
-        let cmdlet = match fmt.parse(cmd_str) {
+        assert!(fmt.parse(Token(0), "articles").is_err());
+        let cmdlet = match fmt.parse(Token(0), cmd_str) {
             Ok(cmdlet) => cmdlet,
             Err(err) => panic!("parse failure: {:?}", err)
         };
@@ -589,7 +589,7 @@ fn parse_the_basics() {
             Ok(fmt) => fmt,
             Err(err) => panic!("parse failure: {:?}", err)
         };
-        if let Err(err) = fmt.parse(cmd_str) {
+        if let Err(err) = fmt.parse(Token(0), cmd_str) {
             panic!("Error processing {:?} with {:?}: {:?}", cmd_str, fmt_str, err);
         }
     }
@@ -601,7 +601,7 @@ fn parse_the_basics() {
             Ok(fmt) => fmt,
             Err(err) => panic!("parse failure: {:?}", err)
         };
-        match fmt.parse(cmd_str) {
+        match fmt.parse(Token(0), cmd_str) {
             Err(ValueParseError::Mismatch(_)) => (),
             p @ _ => panic!("{:?} should not parse. Got {:?}", cmd_str, p),
         };
