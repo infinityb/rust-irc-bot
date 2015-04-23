@@ -25,7 +25,8 @@ enum AtomType {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-enum Atom {
+// TODO: remove pub
+pub enum Atom {
     // Literal(value)
     Literal(String),
     // Formatted(name, kind)
@@ -264,7 +265,7 @@ pub mod atom_parser {
         Ok(Atom::Formatted(name.to_string(), format_kind))
     }
 
-    #[derive(Copy)]
+    #[derive(Clone, Copy)]
     enum State {
         Zero,
         InLiteral,

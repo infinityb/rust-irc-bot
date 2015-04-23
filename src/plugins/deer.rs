@@ -1,4 +1,4 @@
-use std::error::FromError;
+use std::convert::From;
 use std::collections::HashMap;
 use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 use std::io::{self, Read};
@@ -117,20 +117,20 @@ enum DeerApiFailure {
     ResponseDeserializeError(DecoderError)
 }
 
-impl FromError<HttpError> for DeerApiFailure {
-    fn from_error(err: HttpError) -> DeerApiFailure {
+impl From<HttpError> for DeerApiFailure {
+    fn from(err: HttpError) -> DeerApiFailure {
         DeerApiFailure::RequestError(err)
     }
 }
 
-impl FromError<io::Error> for DeerApiFailure {
-    fn from_error(err: io::Error) -> DeerApiFailure {
+impl From<io::Error> for DeerApiFailure {
+    fn from(err: io::Error) -> DeerApiFailure {
         DeerApiFailure::ResponseReadError(err)
     }
 }
 
-impl FromError<DecoderError> for DeerApiFailure {
-    fn from_error(err: DecoderError) -> DeerApiFailure {
+impl From<DecoderError> for DeerApiFailure {
+    fn from(err: DecoderError) -> DeerApiFailure {
         DeerApiFailure::ResponseDeserializeError(err)
     }
 }

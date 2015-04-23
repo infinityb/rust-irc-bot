@@ -105,7 +105,7 @@ impl CommandMapperDispatch {
     /// Reply with a message to the channel/nick which sent the message being dispatched
     pub fn reply(&self, message: String) {
         println!("replying with privmsg: {:?}", message);
-        let privmsg = client::Privmsg::new(self.reply_target.as_slice(), message.as_bytes());
+        let privmsg = client::Privmsg::new(&self.reply_target, message.as_bytes());
         self.sender.send(privmsg.into_irc_msg()).ok().expect("Failed to send to IRC socket");
     }
 
@@ -184,7 +184,7 @@ impl PluginContainer {
         let mut prefix = get_prefix(privmsg.to_irc_msg(), &self.cmd_prefixes);
 
         if privmsg.get_body_raw().starts_with(nick_cmd.as_bytes()) {
-            prefix = prefix.or(Some(nick_cmd.as_slice()));
+            prefix = prefix.or(Some(&nick_cmd));
         }
         
         if let Some(prefix) = prefix {
@@ -211,7 +211,7 @@ fn get_prefix<'a>(msg: &IrcMsg, prefixes: &'a [String]) -> Option<&'a str> {
     if let server::IncomingMsg::Privmsg(ref privmsg) = server::IncomingMsg::from_msg(msg.clone()) {
         for prefix in prefixes.iter() {
             if privmsg.get_body_raw().starts_with(prefix.as_bytes()) {
-                return Some(prefix.as_slice());
+                return Some(&prefix);
             }
         }
     }

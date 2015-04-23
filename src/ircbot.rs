@@ -1,10 +1,10 @@
 #![deny(unused_must_use)]
-#![feature(collections, core, net, rustc_private, std_misc)]
+#![feature(collections, rustc_private, slice_patterns, convert)]
 
 #[macro_use] extern crate log;
 
 
-extern crate "rustc-serialize" as rustc_serialize;
+extern crate rustc_serialize;
 
 extern crate hyper;
 extern crate irc;
@@ -12,6 +12,7 @@ extern crate rand;
 extern crate time;
 extern crate toml;
 extern crate url;
+extern crate mio;
 
 use std::io::Read;
 use std::fs::File;
@@ -42,7 +43,7 @@ fn parse_appconfig() -> Option<BotConfig> {
         panic!("Error reading file {:?}: {}", filename, err);
     }
 
-    let mut parser = toml::Parser::new(buf.as_slice());
+    let mut parser = toml::Parser::new(&buf);
     let table = match parser.parse() {
         Some(table) => {
             let core_key = String::from_str("core");

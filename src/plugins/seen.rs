@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
-use std::time::Duration;
 use std::sync::mpsc::SyncSender;
 
 use time::{get_time, Timespec};
+use time::Duration;
+
 use irc::parse::IrcMsg;
 use irc::message_types::server;
 
@@ -78,16 +79,16 @@ fn duration_to_string(dur: Duration) -> String {
 
     let mut string = String::new();
     if days > 0 {
-        string.push_str(format!("{}d", days).as_slice());
+        string.push_str(&format!("{}d", days));
     }
     if hours > 0 {
-        string.push_str(format!("{}h", hours).as_slice());
+        string.push_str(&format!("{}h", hours));
     }
     if minutes > 0 {
-        string.push_str(format!("{}m", minutes).as_slice());
+        string.push_str(&format!("{}m", minutes));
     }
     if string.len() == 0 || seconds > 0 {
-        string.push_str(format!("{}s", seconds).as_slice());
+        string.push_str(&format!("{}s", seconds));
     }
     string
 }
@@ -195,24 +196,24 @@ impl RustBotPlugin for SeenPlugin {
         };
 
         match parsed_command {
-            Some(SeenCommandType::Seen(target_nick)) => {
-                if source_nick == target_nick.as_slice() {
+            Some(SeenCommandType::Seen(ref target_nick)) => {
+                if source_nick == target_nick {
                     m.reply(format!("Looking for yourself, {}?", source_nick));
                     return;
                 }
 
-                if m.current_nick() == target_nick.as_slice() {
+                if m.current_nick() == target_nick {
                     m.reply(format!("You found me, {}!", source_nick));
                     return;
                 }
-                let activity = match self.map.get(&target_nick) {
+                let activity = match self.map.get(target_nick) {
                     Some(val) => val,
                     None => {
                         m.reply(format!("{} is unknown", target_nick));
                         return
                     }
                 };
-                m.reply(format_activity(target_nick.as_slice(), activity));
+                m.reply(format_activity(target_nick, activity));
             },
             None => return
         }

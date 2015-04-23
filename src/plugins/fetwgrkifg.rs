@@ -1,5 +1,4 @@
 use std::sync::mpsc::SyncSender;
-use std::iter::IteratorExt;
 
 use rand;
 
@@ -23,7 +22,7 @@ impl FetwgrkifgPlugin {
 fn apply_bitflips(input: &mut [u8]) {
     let and_mask = [0xFF, 0xFF, 0xFF, 0xF7];
     let and_cycle = and_mask.iter().cloned().cycle();
-    for (flip, input_byte) in IteratorExt::zip(and_cycle, input.iter_mut()) {
+    for (flip, input_byte) in Iterator::zip(and_cycle, input.iter_mut()) {
         *input_byte &= flip;
     }
 }
@@ -55,6 +54,3 @@ mod tests {
         assert_eq!(networking, b"   fetwgrkifg");
     }
 }
-
-
-

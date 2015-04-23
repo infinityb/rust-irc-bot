@@ -57,7 +57,7 @@ impl BotConfig {
     fn get_url(&self) -> ParseResult<Url> {
         let mut parser = UrlParser::new();
         parser.scheme_type_mapper(irc_scheme_type_mapper);
-        parser.parse(self.server.as_slice())
+        parser.parse(&self.server)
     }
 
     fn get_host(&self) -> String {
@@ -86,10 +86,8 @@ impl BotConnection {
         let (tx, rx) = sync_channel::<IrcMsg>(100);
         let (event_queue_txu, event_queue_rxu) = channel::<IrcMsg>();
 
-        let conn = try!(TcpStream::connect(&(
-            conf.get_host().as_slice(),
-            conf.get_port()
-        )));
+        let socket_addr: (&str, u16) = (&conf.get_host(), conf.get_port());
+        let conn = try!(TcpStream::connect(socket_addr));
 
         let mut reg_req = RegisterReqBuilder::new()
             .nick(&conf.nickname)
@@ -139,7 +137,7 @@ impl BotConnection {
         }
 
         for channel in conf.channels.iter() {
-            let join_msg = client::Join::new(channel.as_slice());
+            let join_msg = client::Join::new(&channel);
             writer.write_irc_msg(join_msg.to_irc_msg()).ok().unwrap();
         }
         
@@ -198,10 +196,12 @@ impl BotConnection {
             if let Some(join) = state.is_self_join(&msg) {
                 tx.send(client::Who::new(join.get_channel()).into_irc_msg()).ok().expect("send fail");
             }
+
             for event in bundler_man.on_irc_msg(&msg).into_iter() {
                 state.on_event(&event);
                 println!("emit-event {:?} => state = {:?}", event, state);
             }
+            
             container.dispatch(Arc::new(state.clone_frozen()), &tx, &msg);
         }
         println!("Finished popping from event_queue_rxu");

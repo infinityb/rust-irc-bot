@@ -1,4 +1,4 @@
-use std::error::FromError;
+use std::convert::From;
 use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 
 use url::{Url, ParseError};
@@ -25,14 +25,14 @@ enum WserverFailure {
     RequestError(HttpError)
 }
 
-impl FromError<ParseError> for WserverFailure {
-    fn from_error(err: ParseError) -> WserverFailure {
+impl From<ParseError> for WserverFailure {
+    fn from(err: ParseError) -> WserverFailure {
         WserverFailure::BadUrl(err)
     }
 }
 
-impl FromError<HttpError> for WserverFailure {
-    fn from_error(err: HttpError) -> WserverFailure {
+impl From<HttpError> for WserverFailure {
+    fn from(err: HttpError) -> WserverFailure {
         WserverFailure::RequestError(err)
     }
 }
@@ -42,7 +42,7 @@ fn get_wserver_result(urlstr: &str) -> Result<String, WserverFailure> {
         Ok(url) => url,
         Err(_) => {
             let http_url = format!("http://{}", urlstr);
-            try!(Url::parse(http_url.as_slice()))
+            try!(Url::parse(&http_url))
         }
     };
     let resp = try!(try!(try!(Request::new(Head, url)).start()).send());
@@ -70,7 +70,7 @@ impl WserverInternalState {
             Some(host) => host,
             None => return
         };
-        match get_wserver_result(host.as_slice()) {
+        match get_wserver_result(&host) {
             Ok(res) => {
                 m.reply(format_wserver_response(res));
             }

@@ -1,5 +1,5 @@
 use std::io::{self, Read};
-use std::error::FromError;
+use std::convert::From;
 use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 
 use rustc_serialize::json::{self, DecoderError};
@@ -45,20 +45,20 @@ enum RadioApiFailure {
 }
 
 
-impl FromError<HttpError> for RadioApiFailure {
-    fn from_error(err: HttpError) -> RadioApiFailure {
+impl From<HttpError> for RadioApiFailure {
+    fn from(err: HttpError) -> RadioApiFailure {
         RadioApiFailure::RequestError(err)
     }
 }
 
-impl FromError<io::Error> for RadioApiFailure {
-    fn from_error(err: io::Error) -> RadioApiFailure {
+impl From<io::Error> for RadioApiFailure {
+    fn from(err: io::Error) -> RadioApiFailure {
         RadioApiFailure::ResponseReadError(err)
     }
 }
 
-impl FromError<DecoderError> for RadioApiFailure {
-    fn from_error(err: DecoderError) -> RadioApiFailure {
+impl From<DecoderError> for RadioApiFailure {
+    fn from(err: DecoderError) -> RadioApiFailure {
         RadioApiFailure::ResponseDeserializeError(err)
     }
 }
@@ -70,12 +70,12 @@ fn get_radio_api_result() -> Result<RadioApiResponse, RadioApiFailure> {
 
     let mut body = String::new();
     try!(resp.read_to_string(&mut body));
-    Ok(try!(json::decode::<RadioApiResponse>(body.as_slice())))
+    Ok(try!(json::decode::<RadioApiResponse>(&body)))
 }
 
 
 fn format_radio_stream_response(resp: RadioStreamApiResponse) -> String {
-    format!("{} \u{2014} np: {}", resp.djname.as_slice(), resp.np.as_slice())
+    format!("{} \u{2014} np: {}", resp.djname, resp.np)
 }
 
 struct RadioInternalState {
@@ -155,6 +155,7 @@ impl RustBotPlugin for RadioPlugin {
 
         self.sender = Some(tx);
     }
+    
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, _message: &IrcMsg) {
         match self.sender {
             Some(ref sender) => {

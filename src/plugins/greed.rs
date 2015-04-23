@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::collections::hash_map;
 use std::default::Default;
-use std::num::SignedInt;
 use std::cmp::Ordering;
 use std::fmt;
 
@@ -33,7 +32,7 @@ const CMD_GREED_STATS: Token = Token(1);
 type ScorePrefix = [u8; 6];
 type ScoreRec = (usize, ScorePrefix, i32);
 
-pub static SCORING_TABLE: [ScoreRec; 28] = [
+static SCORING_TABLE: [ScoreRec; 28] = [
     (6, [1, 2, 3, 4, 5, 6], 1200),
     (6, [2, 2, 3, 3, 4, 4],  800),
     (6, [1, 1, 1, 1, 1, 1], 8000),
@@ -75,7 +74,7 @@ fn is_prefix(rec: &ScoreRec, roll_res: &RollResult, start_idx: usize) -> bool {
     if roll_data.len() < start_idx + prefix_len {
         return false;
     }
-    for idx in range(0, prefix_len) {
+    for idx in 0..prefix_len {
         if roll_data[idx + start_idx] != roll_target[idx] {
             return false;
         }
@@ -118,10 +117,10 @@ impl RollResult {
             if *value == 0 {
                 break
             }
-            rolls.push_str(format!("{}, ", value).as_slice());
+            rolls.push_str(&format!("{}, ", value));
         }
         rolls.pop(); rolls.pop();
-        format!("{}", rolls.as_slice())
+        format!("{}", rolls)
     }
 
 
@@ -135,11 +134,8 @@ impl RollResult {
         let mut output = String::new();
         for tuple in score_components.iter() {
             let (_, _, score) = **tuple;
-            output.push_str(format!(
-                "[{} => {}], ",
-                RollResult::format_score_component(*tuple).as_slice(),
-                score
-            ).as_slice());
+            let roll_res = RollResult::format_score_component(*tuple);
+            output.push_str(&format!("[{} => {}], ", roll_res, score));
         }
         output.pop(); output.pop();
         output
