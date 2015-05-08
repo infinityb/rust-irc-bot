@@ -6,7 +6,7 @@ use std::io::{self, Read};
 use rustc_serialize::json::{self, DecoderError};
 use time::{get_time, Timespec};
 use url::Url;
-use url::form_urlencoded::serialize_owned;
+use url::form_urlencoded;
 use hyper::client::request::Request;
 use hyper::HttpError;
 use hyper::method::Method::Get;
@@ -140,9 +140,7 @@ fn get_deer_nocache(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> 
         Ok(url) => url,
         Err(_err) => unreachable!()
     };
-    url.query = Some(serialize_owned(&[
-        (String::from_str("deer"), String::from_str(deer_name)),
-    ]));
+    url.query = Some(form_urlencoded::serialize(&[("deer", deer_name)]));
 
     let mut resp = try!(try!(try!(Request::new(Get, url)).start()).send());
 
