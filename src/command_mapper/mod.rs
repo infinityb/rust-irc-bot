@@ -29,9 +29,13 @@ pub struct Replier(Sender<IrcMsg>);
 
 impl Replier {
     pub fn reply(&mut self, msg: IrcMsg) -> Result<(), ()> {
+        println!("Replier::reply EMITTING: {:?}", ::botcore::MaybeString::new(msg.as_bytes()));
         match self.0.send(msg) {
             Ok(_) => Ok(()),
-            Err(_) => Err(()),
+            Err(err) => {
+                panic!("Error during send: {:?}", err);
+                Err(())
+            }
         }
     }
 }
@@ -42,6 +46,7 @@ pub trait RustBotPlugin {
     fn configure(&mut self, _: &mut IrcBotConfigurator) {}
     fn start(&mut self) {}
     fn on_message(&mut self, _: &mut Replier, _: &IrcMsg) {}
+    // fn on_timer(&mut self, _: &mut Replier, _: TimerToken) {}
     fn dispatch_cmd(&mut self, _: &CommandMapperDispatch, _: &IrcMsg) {}
 }
 
@@ -117,9 +122,9 @@ impl CommandMapperDispatch {
 
     /// Reply with a message to the channel/nick which sent the message being dispatched
     pub fn reply(&self, message: String) {
-        println!("replying with privmsg: {:?}", message);
-        let privmsg = client::Privmsg::new(&self.reply_target, message.as_bytes());
-        self.sender.send(privmsg.into_irc_msg()).ok().expect("Failed to send to IRC socket");
+        let privmsg = client::Privmsg::new(&self.reply_target, message.as_bytes()).into_irc_msg();
+        println!("CommandMapperDispatch::reply EMITTING: {:?}", ::botcore::MaybeString::new(privmsg.as_bytes()));
+        self.sender.send(privmsg).ok().expect("Failed to send to IRC socket");
     }
 
     // /// Reply with a message to the channel/nick which sent the message being dispatched

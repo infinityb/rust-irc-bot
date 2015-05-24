@@ -1,5 +1,3 @@
-use std::sync::mpsc::SyncSender;
-
 use rand;
 
 use irc::parse::IrcMsg;

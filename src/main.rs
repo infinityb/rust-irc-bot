@@ -1,6 +1,5 @@
 #![deny(unused_must_use)]
 #![feature(collections, core, rustc_private, slice_patterns, convert)]
-#![feature(duration)]
 
 #[macro_use] extern crate log;
 
@@ -14,6 +13,7 @@ extern crate time;
 extern crate toml;
 extern crate url;
 extern crate mio;
+extern crate bytes;
 
 use std::io::Read;
 use std::fs::File;
@@ -24,7 +24,7 @@ use botcore::BotConfig;
 mod botcore;
 mod plugins;
 mod command_mapper;
-
+mod ringbuf;
 
 fn parse_appconfig() -> Option<BotConfig> {
     let args = args_os().collect::<Vec<_>>();

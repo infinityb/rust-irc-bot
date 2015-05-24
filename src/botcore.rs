@@ -1,26 +1,23 @@
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::sync::mpsc::{channel, sync_channel, Receiver, SyncSender};
-use std::io::prelude::*;
-use std::io::{self, BufReader};
+use std::io::{self, Write};
 use std::net::TcpStream;
-use time::{Duration, SteadyTime};
+use std::sync::mpsc::{channel, Sender, Receiver};
 
 use url::{
     Url, SchemeType, Host,
     ParseResult, UrlParser
 };
-use mio::{NonBlock, ReadHint, EventLoop, EventLoopConfig, Token, tcp};
+use mio::{NonBlock, ReadHint, EventLoop, EventLoopConfig, Token, IntoNonBlock};
 use mio::buf::RingBuf;
 
 use irc::recv::{self, IrcMsgBuffer};
-use irc::stream::{IrcReader, IrcWriter, IrcWrite, IrcReaderIter, IrcConnector, RegisterReqBuilder};
 use irc::{BundlerManager, JoinBundlerTrigger};
 use irc::parse::IrcMsg;
 use irc::message_types::{client, server};
 use irc::State;
 
-
+use ringbuf::{IrcMsgReceiver, IrcMsgSender};
 use command_mapper::PluginContainer;
 
 use plugins::{
@@ -75,15 +72,7 @@ impl BotConfig {
     }
 }
 
-const TIMEOUT: Token = Token(0);
 const CLIENT: Token = Token(1);
-
-#[derive(PartialEq, Eq)]
-enum RegistrationStatus {
-    Initial,
-    Pending,
-    Finished,
-}
 
 mod ping {
     use time::{Duration, SteadyTime};
@@ -118,8 +107,8 @@ mod ping {
         pub fn new() -> PingManager {
             let now = SteadyTime::now();
             PingManager {
-                interval: Duration::minutes(2),
-                max_lag: Duration::minutes(5),
+                interval: Duration::seconds(30),
+                max_lag: Duration::seconds(30),
                 state: PingState::Good(now),
             }
         }
@@ -143,7 +132,7 @@ mod ping {
                     info!("got PONG with {} lag", now - st);
                     self.state = PingState::Good(now);
                 },
-                PingState::Good(st) => {
+                PingState::Good(_) => {
                     warn!("ping-state already in good condition; unsolicited PONG?");
                 }
             }
@@ -164,69 +153,89 @@ mod ping {
     }
 }
 
-// struct BotSession {
-//     plugins: PluginContainer,
-//     connection: NonBlock<TcpStream>,
-//     autojoin_on_invite: HashSet<String>,
-//     ping_man: ping::PingManager,
-
-//     // connection impl details
-//     read_buffer: IrcMsgRingBuf,
-//     write_buffer: IrcMsgRingBuf,
-// }
-
-pub fn write_irc_msg(rb: &mut RingBuf, msg: &IrcMsg) -> io::Result<()> {
-    try!(rb.write_all(msg.as_bytes()));
-    try!(rb.write_all(b"\n"));
-    Ok(())
-}
-
-struct BotHandler {
-    connection: Option<NonBlock<TcpStream>>,
+struct BotSession {
     plugins: PluginContainer,
-    autojoin_on_invite: HashSet<String>, // TODO: move to config?
-    autojoin: Vec<String>,
-    ping_status: ping::PingManager,
+    connection: NonBlock<TcpStream>,
+    autojoin_on_connect: Vec<String>,
+    autojoin_on_invite: HashSet<String>,
+    ping_man: ping::PingManager,
 
-    reg: RegistrationStatus,
+    // Post-registration things
     state_builder: StatePlugin,
     state: Option<State>,
     bundler_man: Option<BundlerManager>,
 
-    rx_buf: RingBuf,
-    rx_msg: IrcMsgBuffer,
-    tx_buf: RingBuf,
+    // connection impl details
+    read_buffer: IrcMsgReceiver,
+    write_buffer: IrcMsgSender,
 }
 
-impl BotHandler {
-    fn new(plugins: PluginContainer, autojoin_on_invite: HashSet<String>, autojoin: Vec<String>, conn: NonBlock<TcpStream>) -> BotHandler {
-        BotHandler {
-            connection: Some(conn),
-            plugins: plugins,
-            autojoin_on_invite: autojoin_on_invite,
-            autojoin: autojoin,
-            ping_status: ping::PingManager::new(),
+impl BotSession {
+    pub fn configured(connection: NonBlock<TcpStream>, conf: &BotConfig) -> BotSession {
+        let mut plugins = PluginContainer::new(conf.command_prefixes.clone());
+        if conf.enabled_plugins.contains(PingPlugin::get_plugin_name()) {
+            plugins.register(PingPlugin::new());
+        }
+        if conf.enabled_plugins.contains(GreedPlugin::get_plugin_name()) {
+            plugins.register(GreedPlugin::new());
+        }
+        if conf.enabled_plugins.contains(SeenPlugin::get_plugin_name()) {
+            plugins.register(SeenPlugin::new());
+        }
+        if conf.enabled_plugins.contains(DeerPlugin::get_plugin_name()) {
+            plugins.register(DeerPlugin::new());
+        }
+        if conf.enabled_plugins.contains(RadioPlugin::get_plugin_name()) {
+            plugins.register(RadioPlugin::new());
+        }
+        if conf.enabled_plugins.contains(WserverPlugin::get_plugin_name()) {
+            plugins.register(WserverPlugin::new());
+        }
+        if conf.enabled_plugins.contains(WhoAmIPlugin::get_plugin_name()) {
+            plugins.register(WhoAmIPlugin::new());
+        }
+        if conf.enabled_plugins.contains(LoggerPlugin::get_plugin_name()) {
+            plugins.register(LoggerPlugin::new());
+        }
+        if conf.enabled_plugins.contains(FetwgrkifgPlugin::get_plugin_name()) {
+            plugins.register(FetwgrkifgPlugin::new());
+        }
+        
+        let autojoin_on_invite: HashSet<String> = conf.channels.iter().cloned().collect();
+        let autojoin_on_connect: Vec<String> = conf.channels.iter().cloned().collect();
 
-            reg: RegistrationStatus::Initial,
+        BotSession {
+            plugins: plugins,
+            connection: connection,
+            autojoin_on_invite: autojoin_on_invite,
+            autojoin_on_connect: autojoin_on_connect,
+            ping_man: ping::PingManager::new(),
+
             state_builder: StatePlugin::new(),
             state: None,
             bundler_man: None,
 
-            rx_buf: RingBuf::new(1 << 16),
-            rx_msg: IrcMsgBuffer::new(1 << 16),
-            tx_buf: RingBuf::new(1 << 16),
+            read_buffer: IrcMsgReceiver::new(1 << 16),
+            write_buffer: IrcMsgSender::new(1 << 16),
         }
     }
 
-    fn client_read_dispatch(&mut self, eloop: &mut EventLoop<BotHandler>) -> bool {
-        let msg = match self.rx_msg.recv() {
+    pub fn dispatch_msg(&mut self, eloop: &mut EventLoop<BotHandler>) -> Result<bool, ()> {
+        use ::ringbuf;
+
+        let msg = match self.read_buffer.pop_msg() {
             Ok(msg) => msg,
-            Err(recv::RecvError::MoreData) => {
-                return false;
+            Err(ringbuf::PopError::MoreData) => {
+                return Ok(false);
             },
-            Err(recv::RecvError::Parse(err)) => {
+            Err(ringbuf::PopError::ProtocolError(err)) => {
+                warn!("protocol error: {:?}", err);
+                eloop.shutdown();
+                return Err(());
+            }
+            Err(ringbuf::PopError::Parse(err)) => {
                 warn!("dropping invalid irc message!: {:?}", err);
-                return false;
+                return Ok(false);
             }
         };
 
@@ -237,117 +246,140 @@ impl BotHandler {
             self.bundler_man = Some(bundler_man);
             self.state = Some(state);
 
-            for channel_name in self.autojoin.iter() {
+            for channel_name in self.autojoin_on_connect.iter() {
                 let join_msg = client::Join::new(&channel_name).into_irc_msg();
-                write_irc_msg(&mut self.tx_buf, &join_msg).unwrap();
+                self.write_buffer.push_msg(&join_msg).ok().unwrap();
             }
         }
 
         if let server::IncomingMsg::Ping(ping) = server::IncomingMsg::from_msg(msg.clone()) {
             if let Ok(pong) = ping.get_response() {
                 let pong_msg = pong.into_irc_msg();
-                write_irc_msg(&mut self.tx_buf, &pong_msg).unwrap();
+                self.write_buffer.push_msg(&pong_msg).ok().unwrap();
             }
         }
 
-        if let server::IncomingMsg::Pong(pong) = server::IncomingMsg::from_msg(msg.clone()) {
-            self.ping_status.pong_received();
+        if let server::IncomingMsg::Pong(_) = server::IncomingMsg::from_msg(msg.clone()) {
+            self.ping_man.pong_received();
         }
 
         if let server::IncomingMsg::Invite(invite) = server::IncomingMsg::from_msg(msg.clone()) {
             if self.autojoin_on_invite.contains(invite.get_target()) {
                 let join_msg = client::Join::new(invite.get_target()).into_irc_msg();
-                write_irc_msg(&mut self.tx_buf, &join_msg).unwrap();
+                self.write_buffer.push_msg(&join_msg).ok().unwrap();
             }
         }
         
         if let Some(ref mut state) = self.state {
             if let Some(join) = state.is_self_join(&msg) {
                 let who = client::Who::new(join.get_channel()).into_irc_msg();
-                write_irc_msg(&mut self.tx_buf, &who).unwrap();
+                self.write_buffer.push_msg(&who).ok().unwrap();
             }
             for event in self.bundler_man.as_mut().unwrap().on_irc_msg(&msg).into_iter() {
                 state.on_event(&event);
             }
-
-            let message_channel = eloop.channel();
-            self.plugins.dispatch(Arc::new(state.clone_frozen()), &message_channel, &msg);
+            self.plugins.dispatch(Arc::new(state.clone_frozen()), &eloop.channel(), &msg);
         }
 
-        true
+        self.dispatch_write(eloop).ok().unwrap();
+        Ok(true)
     }
 
-    fn client_write_helper(&mut self, _: &mut EventLoop<BotHandler>) {
-        use ::mio::TryWrite;
+    pub fn dispatch_read(&mut self, eloop: &mut EventLoop<BotHandler>) -> Result<bool, ()> {
+        use ::mio::TryRead;
 
-        if let Some(ref mut connection) = self.connection {
-            if !self.tx_buf.is_empty() {
-                match TryWrite::write(connection, &mut self.tx_buf) {
-                    Ok(Some(0)) => (),
-                    r @ Ok(Some(_)) => println!("irc_conn.write(...) -> {:?}", r),
-                    r @ Ok(None) => println!("irc_conn.write(...) -> {:?}", r),
-                    err @ Err(_) => panic!("irc_conn.write(...) -> {:?}", err),
-                };
+        let mut clear_connection = false;
+
+        match TryRead::read(&mut self.connection, &mut self.read_buffer) {
+            Ok(Some(0)) => clear_connection = true,
+            Ok(Some(_)) => (),
+            Ok(None) => return Ok(false),
+            Err(err) => warn!("CLIENT: read error: {:?}", err),
+        }
+        if clear_connection {
+            warn!("connection invalid!");
+            return Err(());
+        }
+
+        while let Ok(should_continue) = self.dispatch_msg(eloop) {
+            if !should_continue {
+                break;
             }
         }
+
+        self.dispatch_write(eloop).ok().unwrap();
+        Ok(true)
+    }
+
+    pub fn dispatch_write(&mut self, eloop: &mut EventLoop<BotHandler>) -> Result<(), ()> {
+        use std::sync::mpsc::TryRecvError;
+        use ::mio::TryWrite;
+
+        if !self.write_buffer.is_empty() {
+            match TryWrite::write(&mut self.connection, &mut self.write_buffer) {
+                Ok(Some(0)) => (),
+                r @ Ok(Some(_)) => println!("irc_conn.write(...) -> {:?}", r),
+                r @ Ok(None) => println!("irc_conn.write(...) -> {:?}", r),
+                err @ Err(_) => panic!("irc_conn.write(...) -> {:?}", err),
+            };
+        }
+        Ok(())
+    }
+
+    pub fn dispatch_timeout(&mut self, eloop: &mut EventLoop<BotHandler>) -> Result<(), ()> {
+        println!("timeout");
+        if self.ping_man.should_terminate() {
+            let quit = client::Quit::new("Server not responding to PING").into_irc_msg();
+            self.write_buffer.push_msg(&quit).ok().unwrap();
+            return Err(());
+        }
+
+        if self.ping_man.next_ping().is_now() {
+            let ping = client::Ping::new("swagever").into_irc_msg();
+            self.write_buffer.push_msg(&ping).ok().unwrap();
+            self.ping_man.ping_sent();
+        }
+
+        if let Err(err) = self.dispatch_write(eloop) {
+            println!("error in dispatch_write: {:?}", err);
+            return Err(());
+        }
+        Ok(())
+    }
+}
+
+
+struct BotHandler {
+    session: BotSession,
+}
+
+impl BotHandler {
+    fn new(session: BotSession) -> BotHandler {
+        BotHandler { session: session }
     }
 
     fn client_read(&mut self, eloop: &mut EventLoop<BotHandler>) {
-        use ::mio::TryRead;
-        use std::io::{Write, stdout};
-        use std::sync::mpsc::TryRecvError;
-
-        let mut clear_connection = false;
-        if let Some(ref mut connection) = self.connection {
-            match TryRead::read(connection, &mut self.rx_buf) {
-                Ok(Some(0)) => {
-                    clear_connection = true;
-                    eloop.deregister(connection).unwrap();
-                }
-                Ok(Some(n)) => {
-                    let mut data = Vec::new();
-                    io::copy(&mut self.rx_buf, &mut data).unwrap();
-                    println!("CLIENT: read {:?} bytes from socket: {:?}", n, MaybeString::new(&data));
-                    self.rx_msg.push(&data[..]).ok().unwrap();
-                }
-                Ok(None) => println!("CLIENT: read none?"),
-                Err(err) => println!("CLIENT: read error: {:?}", err),
-
+        while let Ok(continue_reading) = self.session.dispatch_read(eloop) {
+            if !continue_reading {
+                break;
             }
         }
-        if clear_connection {
-            self.connection = None;
-        }
-
-        while self.client_read_dispatch(eloop) {}
     }
 
-    fn client_timeout(&mut self, eloop: &mut EventLoop<BotHandler>) {
-        use ::mio::TryWrite;
-        
+    fn client_timeout(&mut self, eloop: &mut EventLoop<BotHandler>) {       
+        println!("BotHandler::client_timeout(...) called");
         eloop.timeout_ms(CLIENT, 2500).unwrap();
-
-        if let Some(ref mut connection) = self.connection {
-            if self.ping_status.should_terminate() {
-                let quit = client::Quit::new("Server not responding to PING").into_irc_msg();
-                write_irc_msg(&mut self.tx_buf, &quit).unwrap();
-                eloop.shutdown();
-                return;
-            }
-
-            if self.ping_status.next_ping().is_now() {
-                let ping = client::Ping::new("swagever").into_irc_msg();
-                write_irc_msg(&mut self.tx_buf, &ping).unwrap();
-                self.ping_status.ping_sent();
-            }
-        } else {
+        if let Err(err) = self.session.dispatch_timeout(eloop) {
+            println!("error in dispatch_timeout: {:?}", err);
             eloop.shutdown();
         }
-
-        self.client_write_helper(eloop);
     }
 
     fn client_write(&mut self, eloop: &mut EventLoop<BotHandler>) {
+        if let Err(err) = self.session.dispatch_write(eloop) {
+            println!("error in dispatch_write: {:?}", err);
+            eloop.shutdown();
+        }
     }
 }
 
@@ -362,13 +394,15 @@ impl ::mio::Handler for BotHandler {
         }
     }
 
-    fn notify(&mut self, event_loop: &mut EventLoop<Self>, msg: IrcMsg) {
-        write_irc_msg(&mut self.tx_buf, &msg).unwrap();
-        self.client_write_helper(event_loop);
+    fn notify(&mut self, eloop: &mut EventLoop<BotHandler>, msg: IrcMsg) {
+        self.session.write_buffer.push_msg(&msg).ok().unwrap();
+        if let Err(err) = self.session.dispatch_write(eloop) {
+            panic!("--!!-- error pushing: {:?}", err);
+        }
     }
 
     fn timeout(&mut self, eloop: &mut EventLoop<BotHandler>, token: Token) {
-        use ::mio::TryWrite;
+        println!("BotHandler::timeout(..., token={:?}", token);
         match token {
             CLIENT => self.client_timeout(eloop),
             _ => panic!("unexpected token"),
@@ -385,64 +419,32 @@ impl ::mio::Handler for BotHandler {
 
 
 pub fn run_loop(conf: &BotConfig) -> Result<(), ()> {
-    use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
-
-    let mut plugins = PluginContainer::new(conf.command_prefixes.clone());
-    if conf.enabled_plugins.contains(PingPlugin::get_plugin_name()) {
-        plugins.register(PingPlugin::new());
-    }
-    if conf.enabled_plugins.contains(GreedPlugin::get_plugin_name()) {
-        plugins.register(GreedPlugin::new());
-    }
-    if conf.enabled_plugins.contains(SeenPlugin::get_plugin_name()) {
-        plugins.register(SeenPlugin::new());
-    }
-    if conf.enabled_plugins.contains(DeerPlugin::get_plugin_name()) {
-        plugins.register(DeerPlugin::new());
-    }
-    if conf.enabled_plugins.contains(RadioPlugin::get_plugin_name()) {
-        plugins.register(RadioPlugin::new());
-    }
-    if conf.enabled_plugins.contains(WserverPlugin::get_plugin_name()) {
-        plugins.register(WserverPlugin::new());
-    }
-    if conf.enabled_plugins.contains(WhoAmIPlugin::get_plugin_name()) {
-        plugins.register(WhoAmIPlugin::new());
-    }
-    if conf.enabled_plugins.contains(LoggerPlugin::get_plugin_name()) {
-        plugins.register(LoggerPlugin::new());
-    }
-    if conf.enabled_plugins.contains(FetwgrkifgPlugin::get_plugin_name()) {
-        plugins.register(FetwgrkifgPlugin::new());
-    }
-
-    let mut incoming = IrcMsgBuffer::new(1 << 16);
-
-    let mut eloop_config = EventLoopConfig {
+   
+    let mut event_loop = EventLoop::configured(EventLoopConfig {
         io_poll_timeout_ms: 60000,
         timer_tick_ms: 10000,
         .. EventLoopConfig::default()
-    };
+    }).unwrap();
 
-    let mut event_loop = EventLoop::configured(eloop_config).unwrap();
-
-    let autojoin_invited: HashSet<String> = conf.channels.iter().cloned().collect();
-    let autojoin: Vec<String> = conf.channels.iter().cloned().collect();
     let mut sock = ::std::net::TcpStream::connect(&(&conf.get_host() as &str, conf.get_port())).unwrap();
     info!("  -> {:?}", sock);
 
     println!("{:?}", sock.write_all(
         client::User::new("rustirc", "8", "*", "https://github.com/infinityb/rust-irc-bot")
         .into_irc_msg().as_bytes()).unwrap());
-    println!("{:?}", sock.write_all(b"\n").unwrap());
+    println!("{:?}", sock.write_all(b"\r\n").unwrap());
     println!("{:?}", sock.write_all(
         client::Nick::new(&conf.nickname)
         .into_irc_msg().as_bytes()).unwrap());
-    println!("{:?}", sock.write_all(b"\n").unwrap());
+    println!("{:?}", sock.write_all(b"\r\n").unwrap());
 
     event_loop.register(&sock, CLIENT).unwrap();
     event_loop.timeout_ms(CLIENT, 2500).unwrap();
-    event_loop.run(&mut BotHandler::new(plugins, autojoin_invited, autojoin, NonBlock::new(sock))).unwrap();
+
+    let sock = sock.into_non_block().ok().unwrap();
+
+    let session = BotSession::configured(sock, conf);
+    event_loop.run(&mut BotHandler::new(session)).unwrap();
 
     Ok(())
 }
@@ -497,13 +499,13 @@ impl StatePlugin {
 }
 
 #[derive(Debug)]
-enum MaybeString<'a> {
+pub enum MaybeString<'a> {
     String(&'a str),
     Bytes(&'a [u8]),
 }
 
 impl<'a> MaybeString<'a> {
-    fn new(buf: &'a [u8]) -> MaybeString<'a> {
+    pub fn new(buf: &'a [u8]) -> MaybeString<'a> {
         match ::std::str::from_utf8(buf) {
             Ok(s) => MaybeString::String(s),
             Err(_) => MaybeString::Bytes(buf),

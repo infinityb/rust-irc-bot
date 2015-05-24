@@ -16,6 +16,7 @@ rustc-serialize = "0.3"
 rand = "0.3"
 hyper = "0.3"
 mio = "0.3"
+bytes = "*"
 
 [dependencies.irc]
 git = "https://github.com/infinityb/rust-irc"
