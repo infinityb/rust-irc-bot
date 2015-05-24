@@ -46,10 +46,10 @@ impl RustBotPlugin for LoggerPlugin {
         self.sender = Some(tx);
     }
 
-    fn on_message(&mut self, replier: &mut Replier, msg: &IrcMsg) {
+    fn on_message(&mut self, _: &mut Replier, msg: &IrcMsg) {
         let mut disable_self = false;
         if let Some(ref sender) = self.sender {
-            if let Err(err) = replier.reply(msg.clone()) {
+            if let Err(err) = sender.send(msg.clone()) {
                 info!("Logger service gone: {:?}", err);
                 disable_self = true;
             }
