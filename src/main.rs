@@ -1,5 +1,5 @@
 #![deny(unused_must_use)]
-#![feature(collections, rustc_private, slice_patterns, convert)]
+#![feature(collections, core, rustc_private, slice_patterns, convert)]
 #![feature(duration)]
 
 #[macro_use] extern crate log;

@@ -537,12 +537,12 @@ fn cons_the_basics() {
             Ok(cmdlet) => cmdlet,
             Err(err) => panic!("parse failure: {:?}", err)
         };
-        assert_eq!(cmdlet.command.as_slice(), "articles");
+        assert_eq!(&cmdlet.command, "articles");
         assert_eq!(
-            cmdlet.args["foo".to_string()],
+            cmdlet.args["foo"],
             Value::String("bar".to_string()));
         assert_eq!(
-            cmdlet.args["rest".to_string()],
+            cmdlet.args["rest"],
             Value::String("test article argument".to_string()));
     }
     
@@ -564,7 +564,7 @@ fn parse_the_basics() {
             Ok(cmdlet) => cmdlet,
             Err(err) => panic!("parse failure: {:?}", err)
         };
-        assert_eq!(cmdlet.command.as_slice(), "articles");
+        assert_eq!(&cmdlet.command, "articles");
         assert_eq!(
             cmdlet.get::<String>("foo"),
             Some("my_bar".to_string()));

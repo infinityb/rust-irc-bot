@@ -49,8 +49,8 @@ mod tests {
     #[test]
     fn test_bitflip() {
         let mut networking = [0; 13];
-        copy_memory(&mut networking, b"   networking");
+        copy_memory(b"   networking", &mut networking);
         apply_bitflips(&mut networking);
-        assert_eq!(networking, b"   fetwgrkifg");
+        assert_eq!(&networking, b"   fetwgrkifg");
     }
 }
