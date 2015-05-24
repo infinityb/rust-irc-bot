@@ -5,7 +5,7 @@ use rand;
 use irc::parse::IrcMsg;
 use irc::message_types::{server, client};
 
-use command_mapper::RustBotPlugin;
+use command_mapper::{Replier, RustBotPlugin};
 
 pub struct FetwgrkifgPlugin;
 
@@ -28,13 +28,13 @@ fn apply_bitflips(input: &mut [u8]) {
 }
 
 impl RustBotPlugin for FetwgrkifgPlugin {
-    fn on_message(&mut self, sender: &SyncSender<IrcMsg>, msg: &IrcMsg) {
+    fn on_message(&mut self, replier: &mut Replier, msg: &IrcMsg) {
         if let server::IncomingMsg::Privmsg(ref privmsg) = server::IncomingMsg::from_msg(msg.clone()) {
             if privmsg.get_target().starts_with("#") && rand::random::<f64>() < 0.006 {
                 let mut out = privmsg.get_body_raw().to_vec();
                 apply_bitflips(&mut out[..]);
                 if privmsg.get_body_raw() != &out[..] {
-                    let _ = sender.send(client::Privmsg::new(privmsg.get_target(), &out[..]).into_irc_msg());
+                    let _ = replier.reply(client::Privmsg::new(privmsg.get_target(), &out[..]).into_irc_msg());
                 }
             }
         }

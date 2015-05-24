@@ -14,6 +14,7 @@ use command_mapper::{
     IrcBotConfigurator,
     Format,
     Token,
+    Replier,
 };
 
 const CMD_SEEN: Token = Token(0);
@@ -155,7 +156,7 @@ impl RustBotPlugin for SeenPlugin {
         conf.map_format(CMD_SEEN, Format::from_str("seen {nick:s}").unwrap());
     }
 
-    fn on_message(&mut self, _: &SyncSender<IrcMsg>, msg: &IrcMsg) {
+    fn on_message(&mut self, _: &mut Replier, msg: &IrcMsg) {
         let privmsg = match server::IncomingMsg::from_msg(msg.clone()) {
             server::IncomingMsg::Privmsg(privmsg) => privmsg,
             _ => return

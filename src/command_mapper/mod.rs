@@ -1,9 +1,8 @@
 use std::sync::Arc;
-use std::sync::mpsc::SyncSender;
 
+use mio::Sender;
 use irc::parse::IrcMsg;
 use irc::message_types::{client, server};
-
 use irc::FrozenState;
 use irc::MessageEndpoint::{
     self,
@@ -11,6 +10,7 @@ use irc::MessageEndpoint::{
     KnownChannel,
     AnonymousUser,
 };
+
 
 pub use self::format::{
     Format,
@@ -24,12 +24,24 @@ mod format;
 #[derive(Copy, Clone, Debug)]
 pub struct Token(pub u64);
 
+
+pub struct Replier(Sender<IrcMsg>);
+
+impl Replier {
+    pub fn reply(&mut self, msg: IrcMsg) -> Result<(), ()> {
+        match self.0.send(msg) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(()),
+        }
+    }
+}
+
 /// Defines the API a plugin implements
 // TODO: move to `plugin' module
 pub trait RustBotPlugin {
     fn configure(&mut self, _: &mut IrcBotConfigurator) {}
     fn start(&mut self) {}
-    fn on_message(&mut self, _: &SyncSender<IrcMsg>, _: &IrcMsg) {}
+    fn on_message(&mut self, _: &mut Replier, _: &IrcMsg) {}
     fn dispatch_cmd(&mut self, _: &CommandMapperDispatch, _: &IrcMsg) {}
 }
 
@@ -54,7 +66,7 @@ impl IrcBotConfigurator {
 
 struct DispatchBuilder {
     state: Arc<FrozenState>,
-    sender: SyncSender<IrcMsg>,
+    sender: Sender<IrcMsg>,
     reply_target: String,
     source: MessageEndpoint,
     target: MessageEndpoint,
@@ -80,7 +92,7 @@ impl DispatchBuilder {
 pub struct CommandMapperDispatch {
     state: Arc<FrozenState>,
     command: CommandPhrase,
-    sender: SyncSender<IrcMsg>,
+    sender: Sender<IrcMsg>,
     reply_target: String,
     pub source: MessageEndpoint,
     pub target: MessageEndpoint,
@@ -143,9 +155,10 @@ impl PluginContainer {
 
     /// Dispatches messages to plugins, if they have expressed interest in the message.
     /// Interest is expressed via calling map during the configuration phase.
-    pub fn dispatch(&mut self, state: Arc<FrozenState>, raw_tx: &SyncSender<IrcMsg>, msg: &IrcMsg) {
+    pub fn dispatch(&mut self, state: Arc<FrozenState>, raw_tx: &Sender<IrcMsg>, msg: &IrcMsg) {
+        let mut replier = Replier(raw_tx.clone());
         for &mut (ref mut plugin, _) in self.plugins.iter_mut() {
-            plugin.on_message(raw_tx, msg);
+            plugin.on_message(&mut replier, msg);
         }
         
         let privmsg = match server::IncomingMsg::from_msg(msg.clone()) {

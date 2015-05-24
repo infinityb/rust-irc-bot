@@ -10,7 +10,7 @@ use url::{
     Url, SchemeType, Host,
     ParseResult, UrlParser
 };
-use mio::{NonBlock, ReadHint, EventLoop, Token, tcp};
+use mio::{NonBlock, ReadHint, EventLoop, EventLoopConfig, Token, tcp};
 use mio::buf::RingBuf;
 
 use irc::recv::{self, IrcMsgBuffer};
@@ -182,8 +182,6 @@ pub fn write_irc_msg(rb: &mut RingBuf, msg: &IrcMsg) -> io::Result<()> {
 }
 
 struct BotHandler {
-    msg_rx: Receiver<IrcMsg>,
-    msg_tx: SyncSender<IrcMsg>,
     connection: Option<NonBlock<TcpStream>>,
     plugins: PluginContainer,
     autojoin_on_invite: HashSet<String>, // TODO: move to config?
@@ -202,10 +200,7 @@ struct BotHandler {
 
 impl BotHandler {
     fn new(plugins: PluginContainer, autojoin_on_invite: HashSet<String>, autojoin: Vec<String>, conn: NonBlock<TcpStream>) -> BotHandler {
-        let (tx, rx) = ::std::sync::mpsc::sync_channel(1000);
         BotHandler {
-            msg_rx: rx,
-            msg_tx: tx,
             connection: Some(conn),
             plugins: plugins,
             autojoin_on_invite: autojoin_on_invite,
@@ -223,7 +218,7 @@ impl BotHandler {
         }
     }
 
-    fn client_read_dispatch(&mut self) -> bool {
+    fn client_read_dispatch(&mut self, eloop: &mut EventLoop<BotHandler>) -> bool {
         let msg = match self.rx_msg.recv() {
             Ok(msg) => msg,
             Err(recv::RecvError::MoreData) => {
@@ -274,27 +269,27 @@ impl BotHandler {
             for event in self.bundler_man.as_mut().unwrap().on_irc_msg(&msg).into_iter() {
                 state.on_event(&event);
             }
-            self.plugins.dispatch(Arc::new(state.clone_frozen()), &self.msg_tx, &msg);
+
+            let message_channel = eloop.channel();
+            self.plugins.dispatch(Arc::new(state.clone_frozen()), &message_channel, &msg);
         }
 
         true
     }
 
-    fn client_write_helper(&mut self, eloop: &mut EventLoop<BotHandler>) {
-        use std::sync::mpsc::TryRecvError;
+    fn client_write_helper(&mut self, _: &mut EventLoop<BotHandler>) {
+        use ::mio::TryWrite;
 
-        loop {
-            match self.msg_rx.try_recv() {
-                Ok(msg) => write_irc_msg(&mut self.tx_buf, &msg).unwrap(),
-                Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => {
-                    eloop.shutdown();
-                    return;
-                }
+        if let Some(ref mut connection) = self.connection {
+            if !self.tx_buf.is_empty() {
+                match TryWrite::write(connection, &mut self.tx_buf) {
+                    Ok(Some(0)) => (),
+                    r @ Ok(Some(_)) => println!("irc_conn.write(...) -> {:?}", r),
+                    r @ Ok(None) => println!("irc_conn.write(...) -> {:?}", r),
+                    err @ Err(_) => panic!("irc_conn.write(...) -> {:?}", err),
+                };
             }
         }
-
-        while self.client_read_dispatch() {}
     }
 
     fn client_read(&mut self, eloop: &mut EventLoop<BotHandler>) {
@@ -302,8 +297,6 @@ impl BotHandler {
         use std::io::{Write, stdout};
         use std::sync::mpsc::TryRecvError;
 
-        self.client_write_helper(eloop);
-        
         let mut clear_connection = false;
         if let Some(ref mut connection) = self.connection {
             match TryRead::read(connection, &mut self.rx_buf) {
@@ -326,12 +319,12 @@ impl BotHandler {
             self.connection = None;
         }
 
-        self.client_write_helper(eloop);
+        while self.client_read_dispatch(eloop) {}
     }
 
     fn client_timeout(&mut self, eloop: &mut EventLoop<BotHandler>) {
         use ::mio::TryWrite;
-        self.client_write_helper(eloop);
+        
         eloop.timeout_ms(CLIENT, 2500).unwrap();
 
         if let Some(ref mut connection) = self.connection {
@@ -347,16 +340,11 @@ impl BotHandler {
                 write_irc_msg(&mut self.tx_buf, &ping).unwrap();
                 self.ping_status.ping_sent();
             }
-
-            match TryWrite::write(connection, &mut self.tx_buf) {
-                Ok(Some(0)) => (),
-                r @ Ok(Some(_)) => println!("irc_conn.write(...) -> {:?}", r),
-                r @ Ok(None) => println!("irc_conn.write(...) -> {:?}", r),
-                err @ Err(_) => panic!("irc_conn.write(...) -> {:?}", err),
-            };
         } else {
             eloop.shutdown();
         }
+
+        self.client_write_helper(eloop);
     }
 
     fn client_write(&mut self, eloop: &mut EventLoop<BotHandler>) {
@@ -365,13 +353,18 @@ impl BotHandler {
 
 impl ::mio::Handler for BotHandler {
     type Timeout = Token;
-    type Message = ();
+    type Message = IrcMsg;
 
     fn readable(&mut self, eloop: &mut EventLoop<BotHandler>, token: Token, _: ReadHint) {
         match token {
             CLIENT => self.client_read(eloop),
             _ => panic!("unexpected token"),
         }
+    }
+
+    fn notify(&mut self, event_loop: &mut EventLoop<Self>, msg: IrcMsg) {
+        write_irc_msg(&mut self.tx_buf, &msg).unwrap();
+        self.client_write_helper(event_loop);
     }
 
     fn timeout(&mut self, eloop: &mut EventLoop<BotHandler>, token: Token) {
@@ -424,7 +417,14 @@ pub fn run_loop(conf: &BotConfig) -> Result<(), ()> {
     }
 
     let mut incoming = IrcMsgBuffer::new(1 << 16);
-    let mut event_loop = EventLoop::new().unwrap();
+
+    let mut eloop_config = EventLoopConfig {
+        io_poll_timeout_ms: 60000,
+        timer_tick_ms: 10000,
+        .. EventLoopConfig::default()
+    };
+
+    let mut event_loop = EventLoop::configured(eloop_config).unwrap();
 
     let autojoin_invited: HashSet<String> = conf.channels.iter().cloned().collect();
     let autojoin: Vec<String> = conf.channels.iter().cloned().collect();

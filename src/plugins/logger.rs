@@ -5,7 +5,7 @@ use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 use time::{get_time, now_utc};
 use irc::parse::IrcMsg;
 
-use command_mapper::RustBotPlugin;
+use command_mapper::{Replier, RustBotPlugin};
 
 fn logger_loop(rx: Receiver<IrcMsg>) -> Result<(), io::Error> {
     let logfile = format!("logs/{}.irclog", now_utc().rfc3339());
@@ -46,10 +46,10 @@ impl RustBotPlugin for LoggerPlugin {
         self.sender = Some(tx);
     }
 
-    fn on_message(&mut self, _: &SyncSender<IrcMsg>, msg: &IrcMsg) {
+    fn on_message(&mut self, replier: &mut Replier, msg: &IrcMsg) {
         let mut disable_self = false;
         if let Some(ref sender) = self.sender {
-            if let Err(err) = sender.send(msg.clone()) {
+            if let Err(err) = replier.reply(msg.clone()) {
                 info!("Logger service gone: {:?}", err);
                 disable_self = true;
             }
