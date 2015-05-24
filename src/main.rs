@@ -1,5 +1,6 @@
 #![deny(unused_must_use)]
 #![feature(collections, rustc_private, slice_patterns, convert)]
+#![feature(duration)]
 
 #[macro_use] extern crate log;
 
@@ -18,7 +19,7 @@ use std::io::Read;
 use std::fs::File;
 use std::env::args_os;
 
-use botcore::{BotConfig, BotConnection};
+use botcore::BotConfig;
 
 mod botcore;
 mod plugins;
@@ -64,10 +65,5 @@ fn main() {
         None => panic!("bad config")
     };
 
-    let conn = BotConnection::new(&appconfig);
-    let conn = match conn {
-        Ok(stream) => stream,
-        Err(err) => panic!("{}", err)
-    };
-    drop(conn);
+    botcore::run_loop(&appconfig).ok().expect("main loop failed");
 }

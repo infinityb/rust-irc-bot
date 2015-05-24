@@ -6,7 +6,6 @@ authors = [ "Stacey Ell <stacey.ell@gmail.com>" ]
 
 [[bin]]
 name = "ircbot"
-path = "src/ircbot.rs"
 
 
 [dependencies]
@@ -16,9 +15,12 @@ url = "0.2"
 rustc-serialize = "0.3"
 rand = "0.3"
 hyper = "0.3"
+mio = "0.3"
 
 [dependencies.irc]
 git = "https://github.com/infinityb/rust-irc"
+branch = "0.4.x"
 
-[dependencies.mio]
-git = "https://github.com/carllerche/mio"
+#[dependencies.irc_state]
+#git = "https://github.com/infinityb/rust-irc-state"
+#git = "file:///home/sell/dev/rust-irc-state"

@@ -1,9 +1,10 @@
 use std::sync::Arc;
 use std::sync::mpsc::SyncSender;
 
-use irc::FrozenState;
 use irc::parse::IrcMsg;
 use irc::message_types::{client, server};
+
+use irc::FrozenState;
 use irc::MessageEndpoint::{
     self,
     KnownUser,
