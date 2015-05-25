@@ -12,7 +12,10 @@ fn logger_loop(rx: Receiver<IrcMsg>) -> Result<(), io::Error> {
     let mut log = try!(File::create(&logfile));
     for msg in rx.iter() {
         let timespec = get_time();
-        let timefmt = format!("{}:{} ", timespec.sec, timespec.nsec);
+        let mut ms_time = 0;
+        ms_time += 1000 * timespec.sec as u64;
+        ms_time += timespec.nsec as u64 / 1_000_000;
+        let timefmt = format!("{} ", ms_time);
         try!(log.write_all(timefmt.as_bytes()));
         try!(log.write_all(msg.as_bytes()));
         try!(log.write_all(b"\r\n"));
