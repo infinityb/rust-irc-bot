@@ -107,8 +107,8 @@ mod ping {
         pub fn new() -> PingManager {
             let now = SteadyTime::now();
             PingManager {
-                interval: Duration::seconds(30),
-                max_lag: Duration::seconds(30),
+                interval: Duration::minutes(2),
+                max_lag: Duration::minutes(5),
                 state: PingState::Good(now),
             }
         }
@@ -311,27 +311,26 @@ impl BotSession {
         Ok(true)
     }
 
-    pub fn dispatch_write(&mut self, eloop: &mut EventLoop<BotHandler>) -> Result<(), ()> {
+    pub fn dispatch_write(&mut self, eloop: &mut EventLoop<BotHandler>) -> Result<bool, ()> {
         use std::sync::mpsc::TryRecvError;
         use ::mio::TryWrite;
 
         if !self.write_buffer.is_empty() {
             match TryWrite::write(&mut self.connection, &mut self.write_buffer) {
                 Ok(Some(0)) => (),
-                r @ Ok(Some(_)) => println!("irc_conn.write(...) -> {:?}", r),
-                r @ Ok(None) => println!("irc_conn.write(...) -> {:?}", r),
+                r @ Ok(Some(_)) => warn!("irc_conn.write(...) -> {:?}", r),
+                r @ Ok(None) => warn!("irc_conn.write(...) -> {:?}", r),
                 err @ Err(_) => panic!("irc_conn.write(...) -> {:?}", err),
             };
         }
-        Ok(())
+        Ok(!self.write_buffer.is_empty())
     }
 
-    pub fn dispatch_timeout(&mut self, eloop: &mut EventLoop<BotHandler>) -> Result<(), ()> {
-        println!("timeout");
+    pub fn dispatch_timeout(&mut self, eloop: &mut EventLoop<BotHandler>) -> Result<bool, ()> {
         if self.ping_man.should_terminate() {
             let quit = client::Quit::new("Server not responding to PING").into_irc_msg();
             self.write_buffer.push_msg(&quit).ok().unwrap();
-            return Err(());
+            return Ok(false);
         }
 
         if self.ping_man.next_ping().is_now() {
@@ -341,10 +340,10 @@ impl BotSession {
         }
 
         if let Err(err) = self.dispatch_write(eloop) {
-            println!("error in dispatch_write: {:?}", err);
+            warn!("error in dispatch_write: {:?}", err);
             return Err(());
         }
-        Ok(())
+        Ok(false)
     }
 }
 
@@ -359,26 +358,45 @@ impl BotHandler {
     }
 
     fn client_read(&mut self, eloop: &mut EventLoop<BotHandler>) {
-        while let Ok(continue_reading) = self.session.dispatch_read(eloop) {
-            if !continue_reading {
-                break;
+        loop {
+            match self.session.dispatch_read(eloop) {
+                Ok(true) => (),
+                Ok(false) => break,
+                Err(err) => {
+                    warn!("error in dispatch_read: {:?}", err);
+                    eloop.shutdown();
+                    return;
+                }
             }
         }
     }
 
     fn client_timeout(&mut self, eloop: &mut EventLoop<BotHandler>) {       
-        println!("BotHandler::client_timeout(...) called");
         eloop.timeout_ms(CLIENT, 2500).unwrap();
-        if let Err(err) = self.session.dispatch_timeout(eloop) {
-            println!("error in dispatch_timeout: {:?}", err);
-            eloop.shutdown();
+        loop {
+            match self.session.dispatch_timeout(eloop) {
+                Ok(true) => (),
+                Ok(false) => break,
+                Err(err) => {
+                    warn!("error in dispatch_timeout: {:?}", err);
+                    eloop.shutdown();
+                    return;
+                }
+            }
         }
     }
 
     fn client_write(&mut self, eloop: &mut EventLoop<BotHandler>) {
-        if let Err(err) = self.session.dispatch_write(eloop) {
-            println!("error in dispatch_write: {:?}", err);
-            eloop.shutdown();
+        loop {
+            match self.session.dispatch_write(eloop) {
+                Ok(true) => (),
+                Ok(false) => break,
+                Err(err) => {
+                    warn!("error in dispatch_write: {:?}", err);
+                    eloop.shutdown();
+                    return;
+                }
+            }
         }
     }
 }
@@ -402,7 +420,6 @@ impl ::mio::Handler for BotHandler {
     }
 
     fn timeout(&mut self, eloop: &mut EventLoop<BotHandler>, token: Token) {
-        println!("BotHandler::timeout(..., token={:?}", token);
         match token {
             CLIENT => self.client_timeout(eloop),
             _ => panic!("unexpected token"),
@@ -429,14 +446,15 @@ pub fn run_loop(conf: &BotConfig) -> Result<(), ()> {
     let mut sock = ::std::net::TcpStream::connect(&(&conf.get_host() as &str, conf.get_port())).unwrap();
     info!("  -> {:?}", sock);
 
-    println!("{:?}", sock.write_all(
+    sock.write_all(
         client::User::new("rustirc", "8", "*", "https://github.com/infinityb/rust-irc-bot")
-        .into_irc_msg().as_bytes()).unwrap());
-    println!("{:?}", sock.write_all(b"\r\n").unwrap());
-    println!("{:?}", sock.write_all(
+        .into_irc_msg().as_bytes()).unwrap();
+    sock.write_all(b"\r\n").unwrap();
+
+    sock.write_all(
         client::Nick::new(&conf.nickname)
-        .into_irc_msg().as_bytes()).unwrap());
-    println!("{:?}", sock.write_all(b"\r\n").unwrap());
+        .into_irc_msg().as_bytes()).unwrap();
+    sock.write_all(b"\r\n").unwrap();
 
     event_loop.register(&sock, CLIENT).unwrap();
     event_loop.timeout_ms(CLIENT, 2500).unwrap();

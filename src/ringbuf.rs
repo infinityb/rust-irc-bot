@@ -70,7 +70,6 @@ impl IrcMsgReceiver {
             }
         }
 
-        println!("IrcMsgSender::pop_msg: {:?}", ::botcore::MaybeString::new(&output));
         Ok(try!(IrcMsg::new(output)))
     }
 }
@@ -99,7 +98,6 @@ impl IrcMsgSender {
     }
 
     pub fn push_msg(&mut self, msg: &IrcMsg) -> Result<usize, PushError> {
-        println!("IrcMsgSender::push_msg: {:?}", ::botcore::MaybeString::new(msg.as_bytes()));
         let msg_bytes = msg.as_bytes();
         if MutBuf::remaining(&self.0) < 2 + msg_bytes.len() {
             return Err(PushError::Full);
