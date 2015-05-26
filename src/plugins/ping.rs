@@ -41,7 +41,7 @@ impl RustBotPlugin for PingPlugin {
 
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, _: &IrcMsg) {
         match parse_command(m) {
-            Some(PingCommandType::Ping) => m.reply(format!("pong")),
+            Some(PingCommandType::Ping) => m.reply("pong"),
             None => return
         }
     }

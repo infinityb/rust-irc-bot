@@ -198,22 +198,22 @@ impl RustBotPlugin for SeenPlugin {
         match parsed_command {
             Some(SeenCommandType::Seen(ref target_nick)) => {
                 if source_nick == target_nick {
-                    m.reply(format!("Looking for yourself, {}?", source_nick));
+                    m.reply(&format!("Looking for yourself, {}?", source_nick));
                     return;
                 }
 
                 if m.current_nick() == target_nick {
-                    m.reply(format!("You found me, {}!", source_nick));
+                    m.reply(&format!("You found me, {}!", source_nick));
                     return;
                 }
                 let activity = match self.map.get(target_nick) {
                     Some(val) => val,
                     None => {
-                        m.reply(format!("{} is unknown", target_nick));
+                        m.reply(&format!("{} is unknown", target_nick));
                         return
                     }
                 };
-                m.reply(format_activity(target_nick, activity));
+                m.reply(&format_activity(target_nick, activity));
             },
             None => return
         }

@@ -121,7 +121,7 @@ impl CommandMapperDispatch {
     }
 
     /// Reply with a message to the channel/nick which sent the message being dispatched
-    pub fn reply(&self, message: String) {
+    pub fn reply(&self, message: &str) {
         let privmsg = client::Privmsg::new(&self.reply_target, message.as_bytes()).into_irc_msg();
         println!("CommandMapperDispatch::reply EMITTING: {:?}", ::botcore::MaybeString::new(privmsg.as_bytes()));
         self.sender.send(privmsg).ok().expect("Failed to send to IRC socket");

@@ -239,7 +239,7 @@ impl GreedPlugin {
         m.reply(match self.userstats.get(&user_id) {
             Some(stats) => format!("{}: {}", source_nick, stats),
             None => format!("{}: You haven't played any games yet", source_nick)
-        })
+        }.as_ref());
     }
 
     fn add_userstats_roll(&mut self, uid: UserId, win: bool, self_score: i32, opp_score: i32) {
@@ -267,7 +267,7 @@ impl GreedPlugin {
         let prev_play_opt: Option<GreedPlayResult> = match self.games.entry(channel_id) {
             hash_map::Entry::Vacant(entry) => {
                 let roll = thread_rng().gen::<RollResult>();
-                m.reply(format!("{}: {}", source_nick, roll));
+                m.reply(&format!("{}: {}", source_nick, roll));
                 entry.insert(GreedPlayResult {
                     user_id: user_id,
                     user_nick: source_nick.to_string(),
@@ -277,7 +277,7 @@ impl GreedPlugin {
             },
             hash_map::Entry::Occupied(entry) => {
                 if entry.get().user_id == user_id {
-                    m.reply(format!("You can't go twice in a row, {}", source_nick));
+                    m.reply(&format!("You can't go twice in a row, {}", source_nick));
                     None
                 } else {
                     Some(entry.remove())
@@ -286,7 +286,7 @@ impl GreedPlugin {
         };
         if let Some(prev_play) = prev_play_opt {
             let roll = thread_rng().gen::<RollResult>();
-            m.reply(format!("{}: {}", source_nick, roll));
+            m.reply(&format!("{}: {}", source_nick, roll));
 
             let prev_play_nick = m.get_state().resolve_user(prev_play.user_id)
                 .and_then(|user: &User| Some(user.get_nick().to_string()))
@@ -300,13 +300,14 @@ impl GreedPlugin {
                 Ordering::Greater => (true, false)
             };
             let score_diff = (prev_play_score - cur_play_score).abs();
-            m.reply(match cmp_result {
+            let response = match cmp_result {
                  Ordering::Less => format!("{} wins {} points from {}!",
                     source_nick, score_diff, prev_play_nick),
                  Ordering::Equal => format!("{} and {} tie.", source_nick, prev_play_nick),
                  Ordering::Greater => format!("{} wins {} points from {}!",
                     prev_play_nick, score_diff, source_nick),
-            });
+            };
+            m.reply(&response);
             self.add_userstats_roll(user_id, cur_user_wins,
                 cur_play_score, prev_play_score);
             self.add_userstats_roll(prev_play.user_id, prev_user_wins,

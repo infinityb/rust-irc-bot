@@ -97,11 +97,11 @@ impl RadioInternalState {
 
         match get_radio_api_result() {
             Ok(res) => {
-                m.reply(format_radio_stream_response(res.main));
+                m.reply(&format_radio_stream_response(res.main));
             }
             Err(err) => {
                 self.requests_failed += 1;
-                m.reply(format!("Error: {:?}", err));
+                m.reply(&format!("Error: {:?}", err));
             }
         }
     }
@@ -160,7 +160,7 @@ impl RustBotPlugin for RadioPlugin {
         match self.sender {
             Some(ref sender) => {
                 if let Err(err) = sender.send(EventType::Dispatch(m.clone())) {
-                    m.reply(format!("Service ``r-a-dio'' unavailable: {:?}", err));
+                    m.reply(&format!("Service ``r-a-dio'' unavailable: {:?}", err));
                 }
             },
             None => ()

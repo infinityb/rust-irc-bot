@@ -226,7 +226,7 @@ impl DeerInternalState {
 
         if let DeerCommandType::Deer(_) = *cmd {
             if !self.throttle_ok(source, m.target.clone()) {
-                m.reply(String::from_str("2deer4plus"));
+                m.reply("2deer4plus");
                 return;
             }
         }
@@ -235,25 +235,25 @@ impl DeerInternalState {
                 match get_deer(self, &deer_name) {
                     Ok(deer_data) => {
                         for deer_line in deer_data.irccode.split('\n') {
-                            m.reply(String::from_str(deer_line));
+                            m.reply(deer_line);
                             self.lines_sent += 1;
                         }
                         self.throttle_bump(source, m.target.clone());
                     },
                     Err(err) => {
-                        m.reply(format!("error: {:?}", err));
+                        m.reply(&format!("error: {:?}", err));
                     }
                 } 
             },
             DeerCommandType::StaticDeer(data) => {
                 for deer_line in render_deer(data).into_iter() {
-                    m.reply(deer_line);
+                    m.reply(&deer_line);
                     self.lines_sent += 1;
                 }
                 self.throttle_bump(source, m.target.clone());
             },
             DeerCommandType::DeerStats => {
-                m.reply(format!("lines sent: {}", self.lines_sent));
+                m.reply(&format!("lines sent: {}", self.lines_sent));
             }
         };
     }
@@ -320,7 +320,7 @@ impl RustBotPlugin for DeerPlugin {
         match self.sender {
             Some(ref sender) => {
                 if let Err(err) = sender.send((m.clone(), message.clone())) {
-                    m.reply(format!("Service ``deer'' unavailable: {:?}", err));
+                    m.reply(&format!("Service ``deer'' unavailable: {:?}", err));
                 }
             }
             None => ()

@@ -72,10 +72,10 @@ impl WserverInternalState {
         };
         match get_wserver_result(&host) {
             Ok(res) => {
-                m.reply(format_wserver_response(res));
+                m.reply(&format_wserver_response(res));
             }
             Err(err) => {
-                m.reply(format!("Error: {:?}", err));
+                m.reply(&format!("Error: {:?}", err));
             }
         }
     }
@@ -125,7 +125,7 @@ impl RustBotPlugin for WserverPlugin {
         match self.sender {
             Some(ref sender) => {
                 if let Err(err) = sender.send(m.clone()) {
-                    m.reply(format!("Service ``wserver'' unavailable: {:?}", err));
+                    m.reply(&format!("Service ``wserver'' unavailable: {:?}", err));
                 }
             }
             None => ()

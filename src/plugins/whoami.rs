@@ -50,13 +50,13 @@ impl RustBotPlugin for WhoAmIPlugin {
         match parse_command(m) {
             Some(WhoAmICommandType::WhoAmI) => match (msg.get_prefix().nick(), &m.source) {
                 (Some(ref source_nick), uid) => {
-                    m.reply(format!("{}: you are {:?}", source_nick, uid));
+                    m.reply(&format!("{}: you are {:?}", source_nick, uid));
                 },
                 (_, _) => ()
             },
             Some(WhoAmICommandType::WhereAmI) => match (msg.get_prefix().nick(), &m.target) {
                 (Some(ref source_nick), cid) => {
-                    m.reply(format!("{}: you are in {:?}", source_nick, cid));
+                    m.reply(&format!("{}: you are in {:?}", source_nick, cid));
                 },
                 (_, _) => ()
             },
