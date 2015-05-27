@@ -28,7 +28,7 @@ fn apply_bitflips(input: &mut [u8]) {
 impl RustBotPlugin for FetwgrkifgPlugin {
     fn on_message(&mut self, replier: &mut Replier, msg: &IrcMsg) {
         if let server::IncomingMsg::Privmsg(ref privmsg) = server::IncomingMsg::from_msg(msg.clone()) {
-            if privmsg.get_target().starts_with("#") && rand::random::<f64>() < 0.006 {
+            if privmsg.get_target().starts_with("#") && rand::random::<f64>() < 0.0003 {
                 let mut out = privmsg.get_body_raw().to_vec();
                 apply_bitflips(&mut out[..]);
                 if privmsg.get_body_raw() != &out[..] {
