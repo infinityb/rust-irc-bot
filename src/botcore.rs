@@ -30,6 +30,7 @@ use plugins::{
     WhoAmIPlugin,
     LoggerPlugin,
     FetwgrkifgPlugin,
+    AsciiArtPlugin,
 };
 
 
@@ -199,6 +200,9 @@ impl BotSession {
         }
         if conf.enabled_plugins.contains(FetwgrkifgPlugin::get_plugin_name()) {
             plugins.register(FetwgrkifgPlugin::new());
+        }
+        if conf.enabled_plugins.contains(AsciiArtPlugin::get_plugin_name()) {
+            plugins.register(AsciiArtPlugin::new());
         }
         
         let autojoin_on_invite: HashSet<String> = conf.channels.iter().cloned().collect();

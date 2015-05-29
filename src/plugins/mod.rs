@@ -7,6 +7,7 @@ pub use self::wserver::WserverPlugin;
 pub use self::whoami::WhoAmIPlugin;
 pub use self::logger::LoggerPlugin;
 pub use self::fetwgrkifg::FetwgrkifgPlugin;
+pub use self::asciiart::AsciiArtPlugin;
 
 mod deer;
 mod greed;
@@ -17,3 +18,4 @@ mod wserver;
 mod whoami;
 mod logger;
 mod fetwgrkifg;
+mod asciiart;
