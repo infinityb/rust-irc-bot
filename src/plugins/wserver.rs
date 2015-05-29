@@ -2,9 +2,9 @@ use std::convert::From;
 use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 
 use url::{Url, ParseError};
+use hyper;
 use hyper::client::request::Request;
 use hyper::header::Server;
-use hyper::HttpError;
 use hyper::method::Method::Head;
 use irc::parse::IrcMsg;
 
@@ -22,7 +22,7 @@ const CMD_WSERVER: Token = Token(0);
 enum WserverFailure {
     NoServerFound,
     BadUrl(ParseError),
-    RequestError(HttpError)
+    RequestError(hyper::Error)
 }
 
 impl From<ParseError> for WserverFailure {
@@ -31,8 +31,8 @@ impl From<ParseError> for WserverFailure {
     }
 }
 
-impl From<HttpError> for WserverFailure {
-    fn from(err: HttpError) -> WserverFailure {
+impl From<hyper::Error> for WserverFailure {
+    fn from(err: hyper::Error) -> WserverFailure {
         WserverFailure::RequestError(err)
     }
 }

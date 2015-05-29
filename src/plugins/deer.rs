@@ -7,8 +7,8 @@ use rustc_serialize::json::{self, DecoderError};
 use time::{get_time, Timespec};
 use url::Url;
 use url::form_urlencoded;
+use hyper;
 use hyper::client::request::Request;
-use hyper::HttpError;
 use hyper::method::Method::Get;
 
 use irc::parse::IrcMsg;
@@ -112,13 +112,13 @@ struct DeerApiResponse {
 
 #[derive(Debug)]
 enum DeerApiFailure {
-    RequestError(HttpError),
+    RequestError(hyper::Error),
     ResponseReadError(io::Error),
     ResponseDeserializeError(DecoderError)
 }
 
-impl From<HttpError> for DeerApiFailure {
-    fn from(err: HttpError) -> DeerApiFailure {
+impl From<hyper::Error> for DeerApiFailure {
+    fn from(err: hyper::Error) -> DeerApiFailure {
         DeerApiFailure::RequestError(err)
     }
 }

@@ -4,8 +4,8 @@ use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 
 use rustc_serialize::json::{self, DecoderError};
 use url::Url;
+use hyper;
 use hyper::client::request::Request;
-use hyper::HttpError;
 use hyper::method::Method::Get;
 
 use irc::parse::IrcMsg;
@@ -39,14 +39,14 @@ struct RadioStreamApiResponse {
 
 #[derive(Debug)]
 enum RadioApiFailure {
-    RequestError(HttpError),
+    RequestError(hyper::Error),
     ResponseReadError(io::Error),
     ResponseDeserializeError(DecoderError)
 }
 
 
-impl From<HttpError> for RadioApiFailure {
-    fn from(err: HttpError) -> RadioApiFailure {
+impl From<hyper::Error> for RadioApiFailure {
+    fn from(err: hyper::Error) -> RadioApiFailure {
         RadioApiFailure::RequestError(err)
     }
 }
