@@ -190,7 +190,8 @@ impl AniCalInternal {
                 let now = get_time();
                 let found_records = records.iter()
                     .filter(|r| lower_contains(&r.title_name, search))
-                    .filter(|r| r.start_time() > now);
+                    .filter(|r| r.start_time() > now)
+                    .take(5);
                 for record in found_records {
                     m.reply(&format!("{}", record));
                 }
@@ -208,7 +209,7 @@ impl AniCalInternal {
                     Some(ref search) => self.handle_upcoming(&m, search),
                     None => (),
                 },
-                _ => ()
+                _ => () 
             }
         }
     }
