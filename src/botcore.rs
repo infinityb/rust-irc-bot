@@ -31,6 +31,7 @@ use plugins::{
     LoggerPlugin,
     FetwgrkifgPlugin,
     AsciiArtPlugin,
+    AnimeCalendarPlugin,
 };
 
 
@@ -203,6 +204,10 @@ impl BotSession {
         }
         if conf.enabled_plugins.contains(AsciiArtPlugin::get_plugin_name()) {
             plugins.register(AsciiArtPlugin::new());
+        }
+        if conf.enabled_plugins.contains(AnimeCalendarPlugin::get_plugin_name()) {
+            info!("attached {}", AnimeCalendarPlugin::get_plugin_name());
+            plugins.register(AnimeCalendarPlugin::new());
         }
         
         let autojoin_on_invite: HashSet<String> = conf.channels.iter().cloned().collect();

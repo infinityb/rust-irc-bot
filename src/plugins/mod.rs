@@ -8,6 +8,7 @@ pub use self::whoami::WhoAmIPlugin;
 pub use self::logger::LoggerPlugin;
 pub use self::fetwgrkifg::FetwgrkifgPlugin;
 pub use self::asciiart::AsciiArtPlugin;
+pub use self::animecalendar::AnimeCalendarPlugin;
 
 mod deer;
 mod greed;
@@ -19,3 +20,4 @@ mod whoami;
 mod logger;
 mod fetwgrkifg;
 mod asciiart;
+mod animecalendar;
