@@ -157,7 +157,7 @@ fn get_deer_nocache(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> 
 
 
 fn get_deer(state: &mut DeerInternalState, deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> {
-    let deer_name_alloc = String::from_str(deer_name);
+    let deer_name_alloc = deer_name.to_string();
 
     match state.cache.get(&deer_name_alloc) {
         Some(result) => return Ok(result.clone()),
@@ -167,7 +167,7 @@ fn get_deer(state: &mut DeerInternalState, deer_name: &str) -> Result<DeerApiRes
     match get_deer_nocache(deer_name) {
         Ok(response) => {
             state.cache.insert(
-                String::from_str(deer_name),
+                deer_name.to_string(),
                 response.clone());
             Ok(response)
         },

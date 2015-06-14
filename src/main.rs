@@ -1,11 +1,9 @@
 #![deny(unused_must_use)]
-#![feature(collections, core, rustc_private, slice_patterns, convert)]
+#![feature(collections, rustc_private, slice_patterns, convert)]
 
 #[macro_use] extern crate log;
 
-
 extern crate rustc_serialize;
-
 extern crate hyper;
 extern crate irc;
 extern crate rand;
@@ -14,6 +12,7 @@ extern crate toml;
 extern crate url;
 extern crate mio;
 extern crate bytes;
+extern crate irc_mio;
 
 use std::io::Read;
 use std::fs::File;
@@ -24,7 +23,6 @@ use botcore::BotConfig;
 mod botcore;
 mod plugins;
 mod command_mapper;
-mod ringbuf;
 
 fn parse_appconfig() -> Option<BotConfig> {
     let args = args_os().collect::<Vec<_>>();
@@ -47,7 +45,7 @@ fn parse_appconfig() -> Option<BotConfig> {
     let mut parser = toml::Parser::new(&buf);
     let table = match parser.parse() {
         Some(table) => {
-            let core_key = String::from_str("core");
+            let core_key = "core".to_string();
             match table.get(&core_key) {
                 Some(value) => value.clone(),
                 None => panic!("failed to parse in some way.")

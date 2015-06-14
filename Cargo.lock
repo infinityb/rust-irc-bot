@@ -4,7 +4,8 @@ version = "0.1.0"
 dependencies = [
  "bytes 0.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "irc 0.4.0 (git+https://github.com/infinityb/rust-irc?branch=0.4.x)",
+ "irc 0.4.0 (git+https://github.com/infinityb/rust-irc)",
+ "irc_mio 0.1.0 (git+https://github.com/infinityb/rust-irc-mio)",
  "mio 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-serialize 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -66,9 +67,18 @@ dependencies = [
 [[package]]
 name = "irc"
 version = "0.4.0"
-source = "git+https://github.com/infinityb/rust-irc?branch=0.4.x#24e88e83bb0673a840f46370dcb769105ef7e206"
+source = "git+https://github.com/infinityb/rust-irc#5c5d0e1f41bd7bdc21d8605a82905e0e3e3dce32"
 dependencies = [
  "log 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "irc_mio"
+version = "0.1.0"
+source = "git+https://github.com/infinityb/rust-irc-mio#c2a95930bd9b23a21c1e3e76608de25751a7ccf0"
+dependencies = [
+ "irc 0.4.0 (git+https://github.com/infinityb/rust-irc)",
+ "mio 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
