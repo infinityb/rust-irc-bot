@@ -32,10 +32,7 @@ impl Replier {
         println!("Replier::reply EMITTING: {:?}", ::botcore::MaybeString::new(msg.as_bytes()));
         match self.0.send(msg) {
             Ok(_) => Ok(()),
-            Err(err) => {
-                panic!("Error during send: {:?}", err);
-                Err(())
-            }
+            Err(_) => Err(()),
         }
     }
 }

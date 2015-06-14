@@ -1,23 +1,20 @@
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::io::{self, Write};
+use std::io::Write;
 use std::net::TcpStream;
-use std::sync::mpsc::{channel, Sender, Receiver};
 
 use url::{
     Url, SchemeType, Host,
     ParseResult, UrlParser
 };
 use mio::{NonBlock, ReadHint, EventLoop, EventLoopConfig, Token, IntoNonBlock};
-use mio::buf::RingBuf;
 
-use irc::recv::{self, IrcMsgBuffer};
 use irc::{BundlerManager, JoinBundlerTrigger};
 use irc::parse::IrcMsg;
 use irc::message_types::{client, server};
 use irc::State;
 
-use ringbuf::{IrcMsgReceiver, IrcMsgSender};
+use irc_mio::IrcMsgRingBuf;
 use command_mapper::PluginContainer;
 
 use plugins::{
@@ -130,10 +127,7 @@ mod ping {
         pub fn pong_received(&mut self) {
             let now = SteadyTime::now();
             match self.state {
-                PingState::Pending(st) => {
-                    info!("got PONG with {} lag", now - st);
-                    self.state = PingState::Good(now);
-                },
+                PingState::Pending(_) => self.state = PingState::Good(now),
                 PingState::Good(_) => {
                     warn!("ping-state already in good condition; unsolicited PONG?");
                 }
@@ -168,8 +162,8 @@ struct BotSession {
     bundler_man: Option<BundlerManager>,
 
     // connection impl details
-    read_buffer: IrcMsgReceiver,
-    write_buffer: IrcMsgSender,
+    read_buffer: IrcMsgRingBuf,
+    write_buffer: IrcMsgRingBuf,
 }
 
 impl BotSession {
@@ -224,13 +218,13 @@ impl BotSession {
             state: None,
             bundler_man: None,
 
-            read_buffer: IrcMsgReceiver::new(1 << 16),
-            write_buffer: IrcMsgSender::new(1 << 16),
+            read_buffer: IrcMsgRingBuf::new(1 << 16),
+            write_buffer: IrcMsgRingBuf::new(1 << 16),
         }
     }
 
     pub fn dispatch_msg(&mut self, eloop: &mut EventLoop<BotHandler>) -> Result<bool, ()> {
-        use ::ringbuf;
+        use ::irc_mio as ringbuf;
 
         let msg = match self.read_buffer.pop_msg() {
             Ok(msg) => msg,
@@ -320,8 +314,7 @@ impl BotSession {
         Ok(true)
     }
 
-    pub fn dispatch_write(&mut self, eloop: &mut EventLoop<BotHandler>) -> Result<bool, ()> {
-        use std::sync::mpsc::TryRecvError;
+    pub fn dispatch_write(&mut self, _eloop: &mut EventLoop<BotHandler>) -> Result<bool, ()> {
         use ::mio::TryWrite;
 
         if !self.write_buffer.is_empty() {
@@ -343,6 +336,8 @@ impl BotSession {
         }
 
         if self.ping_man.next_ping().is_now() {
+            let now = ::time::get_time();
+            warn!("emitting ping: {:?}", now);
             let ping = client::Ping::new("swagever").into_irc_msg();
             self.write_buffer.push_msg(&ping).ok().unwrap();
             self.ping_man.ping_sent();
@@ -501,7 +496,7 @@ impl StatePlugin {
         let args = msg.get_args();
 
         if msg.get_command() == "001" {
-            self.initial_nick = String::from_str(::std::str::from_utf8(args[0]).unwrap());
+            self.initial_nick = ::std::str::from_utf8(args[0]).unwrap().to_string();
         }
         if msg.get_command() == "005" {
             self.in_isupport = true;
