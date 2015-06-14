@@ -22,8 +22,8 @@ bytes = "*"
 git = "https://github.com/infinityb/rust-irc"
 
 [dependencies.irc_mio]
-# git = "https://github.com/infinityb/rust-irc-mio"
-git = "file:///home/sell/dev/rust-irc-mio"
+git = "https://github.com/infinityb/rust-irc-mio"
+# git = "file:///home/sell/dev/rust-irc-mio"
 
 # [dependencies.irc_state]
 # # git = "https://github.com/infinityb/rust-irc-state"
