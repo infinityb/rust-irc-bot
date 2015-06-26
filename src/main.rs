@@ -1,5 +1,7 @@
 #![deny(unused_must_use)]
-#![feature(collections, rustc_private, slice_patterns, convert)]
+#![feature(rustc_private, slice_patterns, convert, vec_push_all)]
+#![cfg_attr(test, feature(slice_bytes))]
+
 
 #[macro_use] extern crate log;
 
