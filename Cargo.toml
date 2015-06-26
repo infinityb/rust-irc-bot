@@ -14,7 +14,7 @@ time = "0.1"
 url = "0.2"
 rustc-serialize = "0.3"
 rand = "0.3"
-hyper = "0.5"
+hyper = "0.6"
 mio = "0.3"
 bytes = "*"
 
@@ -23,9 +23,3 @@ git = "https://github.com/infinityb/rust-irc"
 
 [dependencies.irc_mio]
 git = "https://github.com/infinityb/rust-irc-mio"
-# git = "file:///home/sell/dev/rust-irc-mio"
-
-# [dependencies.irc_state]
-# # git = "https://github.com/infinityb/rust-irc-state"
-# git = "file:///home/sell/dev/rust-irc-state"
-# 
