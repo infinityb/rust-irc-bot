@@ -43,6 +43,10 @@ impl Upcoming {
         Timespec::new(self.start_time, 0)
     }
 
+    pub fn end_time(&self) -> Timespec {
+        Timespec::new(self.end_time, 0)
+    }
+
     pub fn start_offset(&self) -> Duration {
         Duration::seconds(self.start_offset)
     }
@@ -177,6 +181,18 @@ fn lower_contains(haystack: &str, needle: &str) -> bool {
     haystack.contains(&needle)
 }
 
+fn maybe_lower_contains(haystack: &str, needle: Option<&str>) -> Option<bool> {
+    needle.map(|n| lower_contains(haystack, n))
+}
+
+// THere must be a better way to do this.
+fn maybe_str_ref<'a>(opt: &'a Option<String>) -> Option<&'a str> {
+    match opt.as_ref() {
+        Some(val) => Some(val.as_ref()),
+        None => None
+    }
+}
+
 impl AniCalInternal {
     fn new() -> AniCalInternal {
         AniCalInternal {
@@ -184,18 +200,23 @@ impl AniCalInternal {
         }
     }
 
-    fn handle_upcoming(&mut self, m: &CommandMapperDispatch, search: &str) {
+    fn handle_upcoming(&mut self, m: &CommandMapperDispatch, search: Option<&str>) {
         match *self.cache.get_or_else(get_upcoming) {
             Ok(ref records) => {
                 let now = get_time();
                 let found_records = records.iter()
-                    .filter(|r| lower_contains(&r.title_name, search))
-                    .filter(|r| r.start_time() > now)
+                    .filter(|r| maybe_lower_contains(&r.title_name, search).unwrap_or(true))
+                    .filter(|r| r.end_time() > now)
                     .take(5);
+
+                let mut found = false;
                 for record in found_records {
+                    found = true;
                     m.reply(&format!("{}", record));
                 }
-                
+                if !found {
+                    m.reply("No results found");
+                }
             }
             Err(ref err) => m.reply(&format!("err: {:?}", err)),
         }
@@ -205,10 +226,10 @@ impl AniCalInternal {
         for (m, _) in rx.iter() {
             let command_phrase = m.command();
             match command_phrase.token {
-                CMD_UPCOMING => match command_phrase.get::<String>(&"search") {
-                    Some(ref search) => self.handle_upcoming(&m, search),
-                    None => (),
-                },
+                CMD_UPCOMING => {
+                    let search = command_phrase.get::<String>(&"search");
+                    self.handle_upcoming(&m, maybe_str_ref(&search))
+                }
                 _ => () 
             }
         }
@@ -217,6 +238,7 @@ impl AniCalInternal {
 
 impl RustBotPlugin for AnimeCalendarPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
+        conf.map_format(CMD_UPCOMING, Format::from_str("upcoming").unwrap());
         conf.map_format(CMD_UPCOMING, Format::from_str("upcoming {*search}").unwrap());
     }
 
@@ -243,5 +265,3 @@ impl RustBotPlugin for AnimeCalendarPlugin {
         };
     }
 }
-
-
