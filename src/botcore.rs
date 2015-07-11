@@ -251,7 +251,7 @@ impl Bot2Session {
         Ok(())
     }
 
-    pub fn dispatch_write(&mut self, eloop: &mut EventLoop<BotHandler>) -> Result<bool, ()> {
+    pub fn dispatch_write(&mut self, _eloop: &mut EventLoop<BotHandler>) -> Result<bool, ()> {
         self.write_flush()
     }
 
@@ -404,7 +404,7 @@ impl BotConnector {
         Ok(true)
     }
 
-    pub fn dispatch_timeout(&mut self, eloop: &mut EventLoop<BotHandler>) -> Result<bool, ()> {
+    pub fn dispatch_timeout(&mut self, _eloop: &mut EventLoop<BotHandler>) -> Result<bool, ()> {
         Ok(false)
     }
 }
@@ -473,7 +473,7 @@ impl BotSession {
         Ok(true)
     }
 
-    pub fn dispatch_timeout(&mut self, eloop: &mut EventLoop<BotHandler>) -> Result<bool, ()> {
+    pub fn dispatch_timeout(&mut self, _eloop: &mut EventLoop<BotHandler>) -> Result<bool, ()> {
         if self.ping_man.should_terminate() {
             let quit = client::Quit::new("Server not responding to PING").into_irc_msg();
             self.write_buffer.push_msg(&quit).ok().unwrap();
@@ -558,6 +558,7 @@ impl ::mio::Handler for BotHandler {
             _ => panic!("unexpected token"),
         }
     }
+
 
     fn writable(&mut self, eloop: &mut EventLoop<BotHandler>, token: Token) {
         match token {
