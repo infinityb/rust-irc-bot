@@ -1,4 +1,4 @@
-#![deny(unused_must_use)]
+// #![deny(warnings)]
 #![feature(rustc_private, slice_patterns, convert, vec_push_all)]
 #![cfg_attr(test, feature(slice_bytes))]
 

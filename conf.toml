@@ -1,6 +1,8 @@
 [core]
 server = "irc://127.0.0.1"
 nickname = "rustbot"
+username = "rustbot"
+realname = "https://github.com/infinityb/rust-irc-bot"
 channels = ["#sample"]
 command_prefixes = ["!!"]
 enabled_plugins = ["ping", "nanowrimo", "logger"]
