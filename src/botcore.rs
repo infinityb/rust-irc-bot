@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::io::{self, Write};
+use std::io::Write;
 use std::net::TcpStream;
 
 use url::{
@@ -127,7 +127,7 @@ mod ping {
         pub fn pong_received(&mut self) {
             let now = SteadyTime::now();
             match self.state {
-                PingState::Pending(st) => {
+                PingState::Pending(_st) => {
                     self.state = PingState::Good(now);
                 },
                 PingState::Good(_) => {
@@ -316,8 +316,7 @@ impl BotSession {
         Ok(true)
     }
 
-    pub fn dispatch_write(&mut self, eloop: &mut EventLoop<BotHandler>) -> Result<bool, ()> {
-        use std::sync::mpsc::TryRecvError;
+    pub fn dispatch_write(&mut self, _eloop: &mut EventLoop<BotHandler>) -> Result<bool, ()> {
         use ::mio::TryWrite;
 
         if !self.write_buffer.is_empty() {
