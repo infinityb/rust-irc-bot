@@ -9,6 +9,7 @@ pub use self::logger::LoggerPlugin;
 pub use self::fetwgrkifg::FetwgrkifgPlugin;
 pub use self::asciiart::AsciiArtPlugin;
 pub use self::animecalendar::AnimeCalendarPlugin;
+pub use self::unicode_names::UnicodeNamePlugin;
 
 mod deer;
 mod greed;
@@ -21,3 +22,4 @@ mod logger;
 mod fetwgrkifg;
 mod asciiart;
 mod animecalendar;
+mod unicode_names;

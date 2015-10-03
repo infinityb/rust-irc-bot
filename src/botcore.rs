@@ -30,6 +30,7 @@ use plugins::{
     FetwgrkifgPlugin,
     AsciiArtPlugin,
     AnimeCalendarPlugin,
+    UnicodeNamePlugin,
 };
 
 
@@ -290,7 +291,7 @@ impl Bot2Session {
         }
 
         if let Err(err) = self.dispatch_read(eloop) {
-            warn!("ready/is_readable: error in dispatch_read: {:?}", err);
+            warn!("ready/is_readable: error in dispatch_read");
             eloop.shutdown();
             return;
         }
@@ -355,6 +356,9 @@ impl BotConnector {
         }
         if conf.enabled_plugins.contains(AsciiArtPlugin::get_plugin_name()) {
             plugins.register(AsciiArtPlugin::new());
+        }
+        if conf.enabled_plugins.contains(UnicodeNamePlugin::get_plugin_name()) {
+            plugins.register(UnicodeNamePlugin);
         }
         if conf.enabled_plugins.contains(AnimeCalendarPlugin::get_plugin_name()) {
             info!("attached {}", AnimeCalendarPlugin::get_plugin_name());

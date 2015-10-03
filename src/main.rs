@@ -1,7 +1,9 @@
 // #![deny(warnings)]
-#![feature(rustc_private, slice_patterns, convert, vec_push_all)]
+#![feature(rustc_private, slice_patterns, convert, vec_push_all, slice_concat_ext)]
 #![cfg_attr(test, feature(slice_bytes))]
 
+#![feature(plugin)]
+#![plugin(phf_macros)]
 
 #[macro_use] extern crate log;
 
@@ -15,6 +17,7 @@ extern crate url;
 extern crate mio;
 extern crate bytes;
 extern crate irc_mio;
+extern crate phf;
 
 use std::io::Read;
 use std::fs::File;
