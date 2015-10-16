@@ -31,60 +31,60 @@ const CMD_NAMREED: Token = Token(4);
 const CMD_DEER_STATS: Token = Token(5);
 
 static DEER: &'static str = concat!(
-    "1111111101101\n",
-    "1111111101101\n",
-    "1111111110011\n",
-    "1111111100011\n",
-    "1111111110011\n",
-    "1100000000011\n",
-    "1000000000011\n",
-    "1000000000011\n",
-    "1010111101011\n",
-    "1010111101011\n",
-    "1010111101011");
+    "        #  # \n",
+    "        #  # \n",
+    "         ##  \n",
+    "        ###  \n",
+    "         ##  \n",
+    "  #########  \n",
+    " ##########  \n",
+    " ##########  \n",
+    " # #    # #  \n",
+    " # #    # #  \n",
+    " # #    # #  ");
 
 static REED: &'static str = concat!(
-    "1011011111111\n",
-    "1011011111111\n",
-    "1100111111111\n",
-    "1100011111111\n",
-    "1100111111111\n",
-    "1100000000011\n",
-    "1100000000001\n",
-    "1100000000001\n",
-    "1101011110101\n",
-    "1101011110101\n",
-    "1101011110101");
+    " #  #        \n",
+    " #  #        \n",
+    "  ##         \n",
+    "  ###        \n",
+    "  ##         \n",
+    "  #########  \n",
+    "  ########## \n",
+    "  ########## \n",
+    "  # #    # # \n",
+    "  # #    # # \n",
+    "  # #    # # ");
 
 static DEERMAN: &'static str = concat!(
-    "00100100\n",
-    "00100100\n",
-    "00011000\n",
-    "00111000\n",
-    "00011000\n",
-    "00111100\n",
-    "11111111\n",
-    "10111101\n",
-    "10111101\n",
-    "00111100\n",
-    "00100100\n",
-    "00100100\n",
-    "00100100");
+    "  #  #  \n",
+    "  #  #  \n",
+    "   ##   \n",
+    "  ###   \n",
+    "   ##   \n",
+    "  ####  \n",
+    "########\n",
+    "# #### #\n",
+    "# #### #\n",
+    "  ####  \n",
+    "  #  #  \n",
+    "  #  #  \n",
+    "  #  #  ");
 
 static NAMREED: &'static str = concat!(
-    "00100100\n",
-    "00100100\n",
-    "00011000\n",
-    "00011100\n",
-    "00011000\n",
-    "00111100\n",
-    "11111111\n",
-    "10111101\n",
-    "10111101\n",
-    "00111100\n",
-    "00100100\n",
-    "00100100\n",
-    "00100100");
+    "  #  #  \n",
+    "  #  #  \n",
+    "   ##   \n",
+    "   ###  \n",
+    "   ##   \n",
+    "  ####  \n",
+    "########\n",
+    "# #### #\n",
+    "# #### #\n",
+    "  ####  \n",
+    "  #  #  \n",
+    "  #  #  \n",
+    "  #  #  ");
 
 fn render_deer(format: &str) -> Vec<String> {
     let mut out = Vec::new();
@@ -92,8 +92,8 @@ fn render_deer(format: &str) -> Vec<String> {
         let mut output_line = String::new();
         for ch in format_line.chars() {
             match ch {
-                '0' => output_line.push_str("\u{0003}00,00@"),
-                '1' => output_line.push_str("\u{0003}01,01@"),
+                '#' => output_line.push_str("\u{0003}00,00@"),
+                ' ' => output_line.push_str("\u{0003}01,01@"),
                 any => output_line.push(any),
             }
         }
@@ -155,7 +155,6 @@ fn get_deer_nocache(deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> 
     Ok(try!(json::decode::<DeerApiResponse>(&body)))
 }
 
-
 fn get_deer(state: &mut DeerInternalState, deer_name: &str) -> Result<DeerApiResponse, DeerApiFailure> {
     let deer_name_alloc = deer_name.to_string();
 
@@ -175,11 +174,9 @@ fn get_deer(state: &mut DeerInternalState, deer_name: &str) -> Result<DeerApiRes
     }
 }
 
-
 pub struct DeerPlugin {
     sender: Option<SyncSender<(CommandMapperDispatch, IrcMsg)>>
 }
-
 
 impl DeerPlugin {
     pub fn new() -> DeerPlugin {
@@ -295,7 +292,6 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<DeerCommandType> {
     }
 }
 
-
 impl RustBotPlugin for DeerPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
         conf.map_format(CMD_DEER_NAMED, Format::from_str("deer {*deername}").unwrap());
@@ -327,5 +323,3 @@ impl RustBotPlugin for DeerPlugin {
         };
     }
 }
-
-
