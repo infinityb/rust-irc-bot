@@ -16,7 +16,6 @@ extern crate toml;
 extern crate url;
 extern crate mio;
 extern crate bytes;
-extern crate irc_mio;
 extern crate phf;
 
 use std::io::Read;
@@ -28,6 +27,7 @@ use botcore::BotConfig;
 mod botcore;
 mod plugins;
 mod command_mapper;
+mod irc_mio;
 
 fn parse_appconfig() -> Option<BotConfig> {
     let args = args_os().collect::<Vec<_>>();
@@ -42,7 +42,7 @@ fn parse_appconfig() -> Option<BotConfig> {
     let mut buf = String::new();
     let read_result = File::open(filename)
         .and_then(|mut f| f.read_to_string(&mut buf));
-    
+
     if let Err(err) = read_result {
         panic!("Error reading file {:?}: {}", filename, err);
     }

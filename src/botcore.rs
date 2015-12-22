@@ -50,7 +50,7 @@ pub fn irc_scheme_type_mapper(scheme: &str) -> SchemeType {
         "irc" => SchemeType::Relative(6667),
         "ircs" => SchemeType::Relative(6697),
         _ => SchemeType::NonRelative,
-    }    
+    }
 }
 
 impl BotConfig {
@@ -201,7 +201,7 @@ impl Bot2Session {
             Connected(ref mut conn) => conn.dispatch_msg(eloop),
         }
     }
-    
+
     fn dispatch_read(&mut self, eloop: &mut EventLoop<BotHandler>) -> Result<(), IrcRingPopError> {
         use self::Bot2Session::Connecting;
 
@@ -231,7 +231,7 @@ impl Bot2Session {
 
     fn client_try_io(&mut self, eset: EventSet) -> io::Result<EventSet> {
         use ::mio::{TryRead, TryWrite};
-        
+
         let (conn, read_buffer, write_buffer) = self.operate();
         let mut event_set = EventSet::none();
 
@@ -364,7 +364,7 @@ impl BotConnector {
             info!("attached {}", AnimeCalendarPlugin::get_plugin_name());
             plugins.register(AnimeCalendarPlugin::new());
         }
-        
+
         let autojoin_on_invite: HashSet<String> = conf.channels.iter().cloned().collect();
         let autojoin_on_connect: Vec<String> = conf.channels.iter().cloned().collect();
 
@@ -418,7 +418,7 @@ impl BotConnector {
 
             state: state,
             bundler_man: bundler_man,
-            
+
             read_buffer: self.read_buffer,
             write_buffer: self.write_buffer,
         }
@@ -503,7 +503,7 @@ impl BotSession {
                 self.write_buffer.push_msg(&join_msg).ok().unwrap();
             }
         }
-        
+
         if let Some(join) = self.state.is_self_join(&msg) {
             let who = client::Who::new(join.get_channel()).into_irc_msg();
             self.write_buffer.push_msg(&who).ok().unwrap();
@@ -577,18 +577,16 @@ impl ::mio::Handler for BotHandler {
 
 
 pub fn run_loop(conf: &BotConfig) -> Result<(), ()> {
-    let mut event_loop = EventLoop::configured(EventLoopConfig {
-        io_poll_timeout_ms: 60000,
-        timer_tick_ms: 10000,
-        .. EventLoopConfig::default()
-    }).unwrap();
+    let mut config = EventLoopConfig::default();
+    let mut event_loop = EventLoop::configured(config).unwrap();
 
-    let addr: ::std::net::SocketAddr = 
+    let addr: ::std::net::SocketAddr =
         format!("{}:{}", conf.get_host(), conf.get_port()).parse().unwrap();
     let conn = TcpStream::connect(&addr).unwrap();
     let connector = BotConnector::configured(conn, conf);
 
-    event_loop.register(&connector.connection, CLIENT).unwrap();
+    event_loop.register(&connector.connection, CLIENT,
+        EventSet::readable() | EventSet::writable(), PollOpt::edge()).unwrap();
     event_loop.timeout_ms(CLIENT, 2500).unwrap();
     event_loop.run(&mut BotHandler::new(connector)).unwrap();
 

@@ -130,7 +130,7 @@ impl CommandPhrase {
     }
 }
 
-trait ValueExtract {
+trait ValueExtract: Sized {
     fn value_extract(val: &Value) -> Option<Self>;
 }
 
@@ -181,7 +181,7 @@ impl Format {
             if remaining == "" {
                 return Err(ValueParseError::MessageTooShort)
             }
-            
+
             let value = match atom.consume(remaining) {
                 Ok((Some(value), tmp)) => {
                     remaining = tmp;
@@ -402,7 +402,7 @@ pub mod atom_parser {
                     self.cur_atom.push(cur_byte);
                     InLiteral
                 },
-                
+
                 (Errored, _) => Errored,
                 (ForceEnd, _) => {
                     self.error = Some(FormatParseError::BrokenFormat);
@@ -515,18 +515,18 @@ fn cons_the_basics() {
             fmt.atoms[6],
             Atom::Formatted("id".to_string(), AtomType::WholeNumeric));
     }
-    
+
     match Format::from_str("") {
         Ok(_) => panic!("empty string must not succeed"),
         Err(FormatParseError::EmptyFormat) => (),
         Err(err) => panic!("wrong error for empty: {:?}", err),
     };
-    
+
     match Format::from_str("{category:s} articles") {
         Ok(_) => panic!("first atom must be literal"),
         Err(_) => ()
     };
-    
+
     {
         let fmt_str = "articles {foo} {*rest}";
         let fmt = match Format::from_str(fmt_str) {
@@ -545,7 +545,7 @@ fn cons_the_basics() {
             cmdlet.args["rest"],
             Value::String("test article argument".to_string()));
     }
-    
+
 }
 
 #[test]
