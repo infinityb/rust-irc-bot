@@ -10,6 +10,7 @@ pub use self::fetwgrkifg::FetwgrkifgPlugin;
 pub use self::asciiart::AsciiArtPlugin;
 pub use self::animecalendar::AnimeCalendarPlugin;
 pub use self::unicode_names::UnicodeNamePlugin;
+pub use self::eightball::EightBallPlugin;
 
 mod deer;
 mod greed;
@@ -23,3 +24,4 @@ mod fetwgrkifg;
 mod asciiart;
 mod animecalendar;
 mod unicode_names;
+mod eightball;

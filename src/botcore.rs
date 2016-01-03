@@ -31,6 +31,7 @@ use plugins::{
     AsciiArtPlugin,
     AnimeCalendarPlugin,
     UnicodeNamePlugin,
+    EightBallPlugin,
 };
 
 
@@ -361,8 +362,10 @@ impl BotConnector {
             plugins.register(UnicodeNamePlugin);
         }
         if conf.enabled_plugins.contains(AnimeCalendarPlugin::get_plugin_name()) {
-            info!("attached {}", AnimeCalendarPlugin::get_plugin_name());
             plugins.register(AnimeCalendarPlugin::new());
+        }
+        if conf.enabled_plugins.contains(EightBallPlugin::get_plugin_name()) {
+            plugins.register(EightBallPlugin::new());
         }
 
         let autojoin_on_invite: HashSet<String> = conf.channels.iter().cloned().collect();
