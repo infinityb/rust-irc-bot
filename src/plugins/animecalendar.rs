@@ -242,6 +242,8 @@ impl RustBotPlugin for AnimeCalendarPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
         conf.map_format(CMD_UPCOMING, Format::from_str("upcoming").unwrap());
         conf.map_format(CMD_UPCOMING, Format::from_str("upcoming {*search}").unwrap());
+        conf.map_format(CMD_UPCOMING, Format::from_str("showtime").unwrap());
+        conf.map_format(CMD_UPCOMING, Format::from_str("showtime {*search}").unwrap());
     }
 
     fn start(&mut self) {
