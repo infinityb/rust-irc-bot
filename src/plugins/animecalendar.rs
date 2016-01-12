@@ -12,6 +12,7 @@ use time::{Timespec, get_time, Duration, SteadyTime};
 
 use irc::parse::IrcMsg;
 
+use utils::formatting::duration_to_string;
 use command_mapper::{
     RustBotPlugin,
     CommandMapperDispatch,
@@ -54,10 +55,11 @@ impl Upcoming {
 
 impl fmt::Display for Upcoming {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let now = get_time();
+        let air_time_relative = self.start_time() - get_time();
+
         write!(f, "{} episode {} airs in {} on {}",
             self.title_name, self.count,
-            self.start_time() - now,
+            duration_to_string(air_time_relative),
             self.channel_name)
     }
 }
@@ -173,7 +175,7 @@ struct AniCalInternal {
     cache: Cache<Vec<Upcoming>, ApiFailure>,
 }
 
-// This could be made allocation-free 
+// This could be made allocation-free
 fn lower_contains(haystack: &str, needle: &str) -> bool {
     let haystack = haystack.to_lowercase();
     let needle = needle.to_lowercase();
@@ -230,7 +232,7 @@ impl AniCalInternal {
                     let search = command_phrase.get::<String>(&"search");
                     self.handle_upcoming(&m, maybe_str_ref(&search))
                 }
-                _ => () 
+                _ => ()
             }
         }
     }

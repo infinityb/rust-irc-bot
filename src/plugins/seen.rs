@@ -6,7 +6,7 @@ use time::Duration;
 use irc::parse::IrcMsg;
 use irc::message_types::server;
 
-
+use utils::formatting::duration_to_string;
 use command_mapper::{
     RustBotPlugin,
     CommandMapperDispatch,
@@ -69,30 +69,6 @@ fn trim_vec<T>(vec: Vec<T>) -> Vec<T> {
 enum SeenCommandType {
     Seen(String)
 }
-
-
-fn duration_to_string(dur: Duration) -> String {
-    let days = dur.num_days();
-    let hours = dur.num_hours() % 24;
-    let minutes = dur.num_minutes() % 60;
-    let seconds = dur.num_seconds() % 60;
-
-    let mut string = String::new();
-    if days > 0 {
-        string.push_str(&format!("{}d", days));
-    }
-    if hours > 0 {
-        string.push_str(&format!("{}h", hours));
-    }
-    if minutes > 0 {
-        string.push_str(&format!("{}m", minutes));
-    }
-    if string.len() == 0 || seconds > 0 {
-        string.push_str(&format!("{}s", seconds));
-    }
-    string
-}
-
 
 fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
     let mut user_has_quit: Option<Timespec> = None;
@@ -186,7 +162,7 @@ impl RustBotPlugin for SeenPlugin {
         let source_nick = privmsg.get_nick();
 
         let command_phrase = m.command();
-        
+
         let parsed_command = match command_phrase.token {
             CMD_SEEN => match command_phrase.get("nick") {
                 Some(nick) => Some(SeenCommandType::Seen(nick)),

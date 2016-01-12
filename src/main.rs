@@ -28,6 +28,7 @@ mod botcore;
 mod plugins;
 mod command_mapper;
 mod irc_mio;
+mod utils;
 
 fn parse_appconfig() -> Option<BotConfig> {
     let args = args_os().collect::<Vec<_>>();
