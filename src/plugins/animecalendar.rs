@@ -57,7 +57,7 @@ impl fmt::Display for Upcoming {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let air_time_relative = self.start_time() - get_time();
 
-        write!(f, "{} episode {} airs in {} on {}",
+        write!(f, "\x02{}\x02 episode \x02{}\x02 airs in \x02{}\x02 on \x02{}\x02",
             self.title_name, self.count,
             duration_to_string(air_time_relative),
             self.channel_name)
