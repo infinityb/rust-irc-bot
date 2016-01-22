@@ -208,12 +208,15 @@ impl PluginContainer {
         
         if let Some(prefix) = prefix {
             let mut vec = Vec::new();
+
             let body_raw = privmsg.get_body_raw();
             vec.push_all(&body_raw[prefix.len()..]);
+
             let message_body = match String::from_utf8(vec) {
                 Ok(string) => string,
                 Err(_) => return,
             };
+
             for &mut (ref mut plugin, ref mappers) in self.plugins.iter_mut() {
                 for &(token, ref mapper_format) in mappers.iter() {
                     if let Ok(command_phrase) = mapper_format.parse(token, &message_body) {

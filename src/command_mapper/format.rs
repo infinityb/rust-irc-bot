@@ -63,7 +63,8 @@ fn consume_token<'a>(from: &'a str) -> ValueResult<(&'a str, &'a str)> {
 }
 
 fn consume_literal<'a>(from: &'a str, literal: &str) -> ValueResult<(&'a str, &'a str)> {
-    if from.starts_with(literal) {
+    let from_s = from.to_lowercase();
+    if from_s.starts_with(literal) {
         let length = literal.len();
         Ok((&from[..length], &from[length..]))
     } else {
@@ -212,7 +213,7 @@ impl Format {
         }
         let cmd_phrase = CommandPhrase {
             token: token,
-            command: command.trim_right_matches(' ').to_string(),
+            command: command.trim_right_matches(' ').to_lowercase(),
             original_command: original_input.to_string(),
             args: args_map,
         };
