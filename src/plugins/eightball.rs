@@ -9,7 +9,6 @@ use command_mapper::{
     Token,
 };
 
-const CMD_8BALL_QUERY: Token = Token(0);
 const CMD_8BALL: Token = Token(1);
 
 const ANSWERS: &'static [&'static str] = &[
@@ -53,7 +52,6 @@ enum EightBallCommandType {
 
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<EightBallCommandType> {
     match m.command().token {
-        CMD_8BALL_QUERY => Some(EightBallCommandType::EightBall),
         CMD_8BALL => Some(EightBallCommandType::EightBall),
         _ => None
     }
@@ -62,8 +60,10 @@ fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<EightBallCommandType> 
 
 impl RustBotPlugin for EightBallPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
-        conf.map_format(CMD_8BALL_QUERY, Format::from_str("8ball {*query}").ok().unwrap());
+        conf.map_format(CMD_8BALL, Format::from_str("8ball {*query}").ok().unwrap());
         conf.map_format(CMD_8BALL, Format::from_str("8ball").ok().unwrap());
+        conf.map_format(CMD_8BALL, Format::from_str("\u{1f3b1} {*query}").ok().unwrap());
+        conf.map_format(CMD_8BALL, Format::from_str("\u{1f3b1}").ok().unwrap());
     }
 
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, msg: &IrcMsg) {
