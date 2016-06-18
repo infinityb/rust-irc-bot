@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use time::{get_time, Timespec};
 use time::Duration;
 
-use irc::parse::IrcMsg;
-use irc::message_types::server;
+use irc::{IrcMsg, IrcMsgBuf, server};
+use irc::legacy::IrcMsg as IrcMsgLegacy;
 
 use utils::formatting::duration_to_string;
 use command_mapper::{
@@ -22,12 +22,12 @@ static MAX_USER_RECORDS_KEPT: usize = 5;
 
 pub struct SeenRecord {
     when: Timespec,
-    message: IrcMsg
+    message: IrcMsgBuf,
 }
 
 
 impl SeenRecord {
-    fn new(when: Timespec, message: IrcMsg) -> SeenRecord {
+    fn new(when: Timespec, message: IrcMsgBuf) -> SeenRecord {
         SeenRecord {
             when: when,
             message: message
@@ -132,31 +132,33 @@ impl RustBotPlugin for SeenPlugin {
     }
 
     fn on_message(&mut self, _: &mut Replier, msg: &IrcMsg) {
-        let privmsg = match server::IncomingMsg::from_msg(msg.clone()) {
-            server::IncomingMsg::Privmsg(privmsg) => privmsg,
-            _ => return
-        };
+        let privmsg;
+        match msg.as_tymsg::<&server::Privmsg>() {
+            Ok(p) => privmsg = p,
+            Err(_) => return,
+        }
 
-        match self.map.remove(&privmsg.get_nick().to_string()) {
+        match self.map.remove(&privmsg.source_nick().to_string()) {
             Some(mut records) => {
-                records.push(SeenRecord::with_now(privmsg.to_irc_msg().clone()));
+                records.push(SeenRecord::with_now(privmsg.to_irc_msg().to_owned()));
                 self.map.insert(privmsg.get_nick().to_string(), trim_vec(records));
             },
             None => {
-                let records = vec![SeenRecord::with_now(privmsg.to_irc_msg().clone())];
+                let records = vec![SeenRecord::with_now(privmsg.to_irc_msg().to_owned())];
                 self.map.insert(privmsg.get_nick().to_string(), records);
             }
         }
     }
 
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, msg: &IrcMsg) {
-        let privmsg = match server::IncomingMsg::from_msg(msg.clone()) {
-            server::IncomingMsg::Privmsg(privmsg) => privmsg,
-            _ => return
-        };
+        let privmsg;
+        match msg.as_tymsg::<&server::Privmsg>() {
+            Ok(p) => privmsg = p,
+            Err(_) => return,
+        }
 
         // Hacky is-channel
-        if !privmsg.get_target().starts_with("#") {
+        if !privmsg.get_target().starts_with(b"#") {
             return
         }
         let source_nick = privmsg.get_nick();

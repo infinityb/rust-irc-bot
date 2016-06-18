@@ -1,4 +1,4 @@
-use irc::parse::IrcMsg;
+use irc::{IrcMsg, server};
 use rand::{thread_rng, Rng};
 
 use command_mapper::{
@@ -69,17 +69,10 @@ impl RustBotPlugin for EightBallPlugin {
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, msg: &IrcMsg) {
         match parse_command(m) {
             Some(EightBallCommandType::EightBall) => {
-                let prefix = msg.get_prefix();
-                let nick = match prefix.nick() {
-                    Some(nick) => nick,
-                    None => return,
-                };
-                let answer = match thread_rng().choose(ANSWERS) {
-                    Some(answer) => answer,
-                    None => return,
-                };
-                let msg = format!("{}: {}", nick, answer);
-                m.reply(&msg);
+                if let Ok(privmsg) = msg.as_tymsg::<&server::Privmsg>() {
+                     let answer = thread_rng().choose(ANSWERS).unwrap();
+                     m.reply(&format!("{}: {}", msg.source_nick(), answer));          
+                }
             },
             None => return
         }

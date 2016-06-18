@@ -1,6 +1,7 @@
 use std::convert::From;
 use bytes::{RingBuf, MutBuf, Buf};
-use irc::parse::{IrcMsg, ParseError};
+use irc::legacy::{IrcMsg as LegacyIrcMsg};
+use irc::{IrcMsg, IrcMsgBuf, ParseError};
 
 pub enum PushError {
     Full,
@@ -64,7 +65,7 @@ impl IrcMsgRingBuf {
         self.0.bytes()
     }
 
-    pub fn pop_msg(&mut self) -> Result<IrcMsg, PopError> {
+    pub fn pop_msg(&mut self) -> Result<IrcMsgBuf, PopError> {
         // Preallocation counting phase
         let mut newline_idx = 0;
         let mut found_newline = false;
@@ -94,7 +95,7 @@ impl IrcMsgRingBuf {
                     break;
                 }
             }
-            Ok(try!(IrcMsg::new(output)))
+            Ok(try!(IrcMsgBuf::new(output)))
         } else {
             Err(PopError::MoreData)
         }

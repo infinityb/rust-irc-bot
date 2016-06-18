@@ -11,9 +11,9 @@ use hyper;
 use hyper::client::request::Request;
 use hyper::method::Method::Get;
 
-use irc::parse::IrcMsg;
-use irc::MessageEndpoint::{self, KnownUser};
-use irc::UserId;
+use irc::{IrcMsg, IrcMsgBuf, server};
+use irc::legacy::{IrcMsg as IrcMsgLegacy, UserId};
+use irc::legacy::MessageEndpoint::{self, KnownUser};
 
 use command_mapper::{
     RustBotPlugin,
@@ -175,7 +175,7 @@ fn get_deer(state: &mut DeerInternalState, deer_name: &str) -> Result<DeerApiRes
 }
 
 pub struct DeerPlugin {
-    sender: Option<SyncSender<(CommandMapperDispatch, IrcMsg)>>
+    sender: Option<SyncSender<(CommandMapperDispatch, IrcMsgBuf)>>
 }
 
 impl DeerPlugin {
@@ -255,7 +255,7 @@ impl DeerInternalState {
         };
     }
 
-    fn start(&mut self, rx: Receiver<(CommandMapperDispatch, IrcMsg)>) {
+    fn start(&mut self, rx: Receiver<(CommandMapperDispatch, IrcMsgBuf)>) {
         for (m, _) in rx.iter() {
             match parse_command(&m) {
                 Some(command) => {
@@ -315,7 +315,7 @@ impl RustBotPlugin for DeerPlugin {
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMsg) {
         match self.sender {
             Some(ref sender) => {
-                if let Err(err) = sender.send((m.clone(), message.clone())) {
+                if let Err(err) = sender.send((m.clone(), message.to_owned())) {
                     m.reply(&format!("Service ``deer'' unavailable: {:?}", err));
                 }
             }

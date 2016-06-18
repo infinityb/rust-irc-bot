@@ -1,4 +1,4 @@
-use irc::parse::IrcMsg;
+use irc::IrcMsg;
 
 use command_mapper::{
     RustBotPlugin,
@@ -45,7 +45,7 @@ impl RustBotPlugin for WhoAmIPlugin {
         conf.map_format(CMD_WHEREAMI, Format::from_str("whereami").unwrap());
     }
 
-    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, msg: &IrcMsg) {
+    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, _msg: &IrcMsg) {
 
         match parse_command(m) {
             Some(WhoAmICommandType::WhoAmI) => match (msg.get_prefix().nick(), &m.source) {

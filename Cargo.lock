@@ -89,9 +89,10 @@ dependencies = [
 [[package]]
 name = "irc"
 version = "0.5.0"
-source = "git+https://github.com/infinityb/rust-irc#dbf0513865f3e00c62c3547bbf0a382e945593ef"
+source = "git+https://github.com/infinityb/rust-irc#b2dcb61ffe4aed1d2fc3159c1176b1105bffe176"
 dependencies = [
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unicase 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

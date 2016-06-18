@@ -4,8 +4,7 @@ use std::slice::SliceConcatExt;
 use time::{get_time, Timespec};
 use time::Duration;
 
-use irc::parse::IrcMsg;
-use irc::message_types::server;
+use irc::{IrcMsg, server};
 
 mod data;
 
@@ -47,10 +46,10 @@ impl RustBotPlugin for UnicodeNamePlugin {
     }
 
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, msg: &IrcMsg) {
-        let privmsg = match server::IncomingMsg::from_msg(msg.clone()) {
-            server::IncomingMsg::Privmsg(privmsg) => privmsg,
-            _ => return
-        };
+        if msg.as_tymsg::<&server::Privmsg>().is_err() {
+            // only PRIVMSG
+            return;
+        }
         
         let command_phrase = m.command();
         let parsed_command = match command_phrase.token {

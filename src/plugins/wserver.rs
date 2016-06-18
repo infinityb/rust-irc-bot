@@ -6,7 +6,7 @@ use hyper;
 use hyper::client::request::Request;
 use hyper::header::Server;
 use hyper::method::Method::Head;
-use irc::parse::IrcMsg;
+use irc::IrcMsg;
 
 use command_mapper::{
     RustBotPlugin,

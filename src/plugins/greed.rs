@@ -7,13 +7,15 @@ use std::fmt;
 use ::rand::{thread_rng, Rng, Rand};
 use ::rand::distributions::{Sample, Range};
 
-use irc::{
+use irc::legacy::{
     ChannelId,
     User,
     UserId,
 };
-use irc::parse::IrcMsg;
-use irc::MessageEndpoint::{
+
+use irc::{IrcMsg, IrcMsgBuf, server};
+use irc::legacy::IrcMsg as IrcMsgLegacy;
+use irc::legacy::MessageEndpoint::{
     KnownChannel,
     KnownUser,
 };

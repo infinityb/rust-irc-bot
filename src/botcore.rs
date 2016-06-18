@@ -9,10 +9,12 @@ use url::{
 use mio::{EventLoop, EventLoopConfig, Token, EventSet, PollOpt};
 use mio::tcp::TcpStream;
 
-use irc::{BundlerManager, JoinBundlerTrigger};
-use irc::parse::IrcMsg;
-use irc::message_types::{client, server};
-use irc::State;
+use irc::IrcMsgBuf;
+use irc::{client as cli2, server as ser2};
+use irc::legacy::{BundlerManager, JoinBundlerTrigger};
+use irc::legacy::IrcMsg;
+use irc::legacy::message_types::{client, server};
+use irc::legacy::State;
 
 use irc_mio::IrcMsgRingBuf;
 use irc_mio::PopError as IrcRingPopError;
@@ -377,12 +379,12 @@ impl BotConnector {
 
         let mut wbuf = IrcMsgRingBuf::new(1 << 16);
 
-        wbuf
-            .push_msg(&client::User::new(&conf.username, "8", "*", &conf.realname).into_irc_msg())
-            .ok().unwrap();
-        wbuf
-            .push_msg(&client::Nick::new(&conf.nickname).into_irc_msg())
-            .ok().unwrap();
+        // FIXME: legacy
+        let user_msg = client::User::new(&conf.username, "8", "*", &conf.realname).into_irc_msg();
+        wbuf.push_msg(&IrcMsgBuf::from_legacy(user_msg)).ok().unwrap();
+
+        let nick_msg = cli2::NickBuf::new(conf.nickname.as_bytes()).unwrap();
+        wbuf.push_msg(&nick_msg).ok().unwrap();
 
         BotConnector {
             plugins: plugins,
@@ -412,9 +414,9 @@ impl BotConnector {
                 JoinBundlerTrigger::new(state.get_self_nick().as_bytes())));
 
         for channel_name in self.autojoin_on_connect.iter() {
-            let join_msg = client::Join::new(&channel_name).into_irc_msg();
+            let join = cli2::JoinBuf::new(channel_name.as_bytes()).unwrap();
             // FIXME: luck
-            self.write_buffer.push_msg(&join_msg).ok().unwrap();
+            self.write_buffer.push_msg(&join).ok().unwrap();
         }
 
         BotSession {
@@ -440,26 +442,21 @@ impl BotConnector {
             Err(err) => return Err(err),
         };
 
-        if let server::IncomingMsg::Numeric(_, num) = server::IncomingMsg::from_msg(msg.clone()) {
-            if num.get_code() == 433 {
-                self.nick.push_str("`");
-                if 24 <= self.nick.len() {
-                    panic!("nick really long");
-                }
-                self.write_buffer
-                    .push_msg(&client::Nick::new(&self.nick).into_irc_msg())
-                    .ok().unwrap();
+        if msg.get_command() == "433" {
+            self.nick.push_str("`");
+            if 24 <= self.nick.len() {
+                panic!("nick really long");
             }
+            let nick = cli2::NickBuf::new(self.nick.as_bytes()).unwrap();
+            self.write_buffer.push_msg(&nick).ok().unwrap();
         }
 
-        if let server::IncomingMsg::Ping(ping) = server::IncomingMsg::from_msg(msg.clone()) {
-            if let Ok(pong) = ping.get_response() {
-                let pong_msg = pong.into_irc_msg();
-                self.write_buffer.push_msg(&pong_msg).ok().unwrap();
-            }
+        if let Ok(ping) = msg.as_tymsg::<&ser2::Ping>() {
+            self.write_buffer.push_msg(&ping.response()).ok().unwrap();
         }
 
-        if let Some(state) = self.state_builder.on_irc_msg(&msg) {
+        let legacy = msg.clone().into_legacy();
+        if let Some(state) = self.state_builder.on_irc_msg(&legacy) {
             self.state = Some(state);
             return Ok(false);
         }
@@ -493,29 +490,30 @@ impl BotSession {
             Err(err) => return Err(err),
         };
 
-        if let server::IncomingMsg::Ping(ping) = server::IncomingMsg::from_msg(msg.clone()) {
-            if let Ok(pong) = ping.get_response() {
-                let pong_msg = pong.into_irc_msg();
-                self.write_buffer.push_msg(&pong_msg).ok().unwrap();
-            }
+        if let Ok(ping) = msg.as_tymsg::<&ser2::Ping>() {
+            self.write_buffer.push_msg(&ping.response()).ok().unwrap();
         }
 
-        if let server::IncomingMsg::Pong(_) = server::IncomingMsg::from_msg(msg.clone()) {
+        if let Ok(pong) = msg.as_tymsg::<&ser2::Pong>() {
             self.ping_man.pong_received();
         }
 
-        if let server::IncomingMsg::Invite(invite) = server::IncomingMsg::from_msg(msg.clone()) {
-            if self.autojoin_on_invite.contains(invite.get_target()) {
-                let join_msg = client::Join::new(invite.get_target()).into_irc_msg();
-                self.write_buffer.push_msg(&join_msg).ok().unwrap();
+        if let Ok(invite) = msg.as_tymsg::<&ser2::Invite>() {
+            if let Ok(target) = ::std::str::from_utf8(invite.target()) {
+                if self.autojoin_on_invite.contains(target) {
+                    let join_msg = cli2::JoinBuf::new(invite.target()).unwrap();
+                    self.write_buffer.push_msg(&join_msg).ok().unwrap();
+                }
             }
         }
 
-        if let Some(join) = self.state.is_self_join(&msg) {
+        let mut legacy = msg.clone().into_legacy();
+        if let Some(join) = self.state.is_self_join(&legacy) {
             let who = client::Who::new(join.get_channel()).into_irc_msg();
+            let who = IrcMsgBuf::from_legacy(who);
             self.write_buffer.push_msg(&who).ok().unwrap();
         }
-        for event in self.bundler_man.on_irc_msg(&msg).into_iter() {
+        for event in self.bundler_man.on_irc_msg(&legacy).into_iter() {
             self.state.on_event(&event);
         }
         self.plugins.dispatch(Arc::new(self.state.clone_frozen()), &eloop.channel(), &msg);
@@ -524,7 +522,7 @@ impl BotSession {
 
     fn dispatch_timeout(&mut self, _eloop: &mut EventLoop<BotHandler>) -> Result<bool, ()> {
         if self.ping_man.should_terminate() {
-            let quit = client::Quit::new("Server not responding to PING").into_irc_msg();
+            let quit = cli2::QuitBuf::new(b"Server not responding to PING").unwrap();
             self.write_buffer.push_msg(&quit).ok().unwrap();
             return Ok(false);
         }
@@ -532,7 +530,7 @@ impl BotSession {
         if self.ping_man.next_ping().is_now() {
             let now = ::time::get_time();
             warn!("emitting ping: {:?}", now);
-            let ping = client::Ping::new("swagever").into_irc_msg();
+            let ping = cli2::PingBuf::new(b"swagever").unwrap();
             self.write_buffer.push_msg(&ping).ok().unwrap();
             self.ping_man.ping_sent();
         }
@@ -556,11 +554,12 @@ impl BotHandler {
 
 impl ::mio::Handler for BotHandler {
     type Timeout = Token;
-    type Message = IrcMsg;
+    type Message = IrcMsgBuf;
 
-    fn notify(&mut self, eloop: &mut EventLoop<BotHandler>, msg: IrcMsg) {
+    fn notify(&mut self, eloop: &mut EventLoop<BotHandler>, msg: IrcMsgBuf) {
         {
             let (_, _, wbuf) = self.session.operate();
+
             wbuf.push_msg(&msg).ok().unwrap();
         }
         self.session.client_ready(eloop, EventSet::writable());

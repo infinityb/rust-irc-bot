@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
 use mio::Sender;
-use irc::parse::IrcMsg;
-use irc::message_types::{client, server};
-use irc::FrozenState;
-use irc::MessageEndpoint::{
+use irc::{IrcMsg, IrcMsgBuf, client as cli2, server as ser2};
+use irc::legacy::IrcMsg as IrcMsgLegacy;
+use irc::legacy::message_types::{client, server};
+use irc::legacy::FrozenState;
+use irc::legacy::MessageEndpoint::{
     self,
     KnownUser,
     KnownChannel,
@@ -25,12 +26,12 @@ mod format;
 pub struct Token(pub u64);
 
 
-pub struct Replier(Sender<IrcMsg>);
+pub struct Replier(Sender<IrcMsgBuf>);
 
 impl Replier {
-    pub fn reply(&mut self, msg: IrcMsg) -> Result<(), ()> {
+    pub fn reply(&mut self, msg: &IrcMsg) -> Result<(), ()> {
         println!("Replier::reply EMITTING: {:?}", ::botcore::MaybeString::new(msg.as_bytes()));
-        match self.0.send(msg) {
+        match self.0.send(msg.into_owned()) {
             Ok(_) => Ok(()),
             Err(err) => {
                 panic!("Error during send: {:?}", err);
@@ -71,7 +72,7 @@ impl IrcBotConfigurator {
 
 struct DispatchBuilder {
     state: Arc<FrozenState>,
-    sender: Sender<IrcMsg>,
+    sender: Sender<IrcMsgBuf>,
     reply_target: String,
     source: MessageEndpoint,
     target: MessageEndpoint,
@@ -97,7 +98,7 @@ impl DispatchBuilder {
 pub struct CommandMapperDispatch {
     state: Arc<FrozenState>,
     command: CommandPhrase,
-    sender: Sender<IrcMsg>,
+    sender: Sender<IrcMsgBuf>,
     reply_target: String,
     pub source: MessageEndpoint,
     pub target: MessageEndpoint,
@@ -160,7 +161,7 @@ impl PluginContainer {
 
     /// Dispatches messages to plugins, if they have expressed interest in the message.
     /// Interest is expressed via calling map during the configuration phase.
-    pub fn dispatch(&mut self, state: Arc<FrozenState>, raw_tx: &Sender<IrcMsg>, msg: &IrcMsg) {
+    pub fn dispatch(&mut self, state: Arc<FrozenState>, raw_tx: &Sender<IrcMsgBuf>, msg: &IrcMsg) {
         let mut replier = Replier(raw_tx.clone());
         for &mut (ref mut plugin, _) in self.plugins.iter_mut() {
             plugin.on_message(&mut replier, msg);
@@ -230,7 +231,7 @@ impl PluginContainer {
 }
 
 fn get_prefix<'a>(msg: &IrcMsg, prefixes: &'a [String]) -> Option<&'a str> {
-    if let server::IncomingMsg::Privmsg(ref privmsg) = server::IncomingMsg::from_msg(msg.clone()) {
+    if let Ok(privmsg) = msg.as_tymsg::<&ser2::Privmsg>() {
         for prefix in prefixes.iter() {
             if privmsg.get_body_raw().starts_with(prefix.as_bytes()) {
                 return Some(&prefix);

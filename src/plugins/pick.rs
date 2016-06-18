@@ -1,4 +1,4 @@
-use irc::parse::IrcMsg;
+use irc::IrcMsg;
 use rand::{Rng, thread_rng};
 
 use command_mapper::{

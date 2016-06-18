@@ -10,7 +10,7 @@ use hyper::client::request::Request;
 use hyper::method::Method::Get;
 use time::{Timespec, get_time, Duration, SteadyTime};
 
-use irc::parse::IrcMsg;
+use irc::{IrcMsg, IrcMsgBuf};
 
 use utils::formatting::duration_to_string;
 use command_mapper::{
@@ -99,7 +99,7 @@ fn get_upcoming() -> Result<Vec<Upcoming>, ApiFailure> {
 }
 
 pub struct AnimeCalendarPlugin {
-    sender: Option<SyncSender<(CommandMapperDispatch, IrcMsg)>>
+    sender: Option<SyncSender<(CommandMapperDispatch, IrcMsgBuf)>>
 }
 
 
@@ -224,7 +224,7 @@ impl AniCalInternal {
         }
     }
 
-    fn start(&mut self, rx: Receiver<(CommandMapperDispatch, IrcMsg)>) {
+    fn start(&mut self, rx: Receiver<(CommandMapperDispatch, IrcMsgBuf)>) {
         for (m, _) in rx.iter() {
             let command_phrase = m.command();
             match command_phrase.token {
@@ -261,7 +261,7 @@ impl RustBotPlugin for AnimeCalendarPlugin {
         info!("dispatching AnimeCalendarPlugin command");
         match self.sender {
             Some(ref sender) => {
-                if let Err(err) = sender.send((m.clone(), message.clone())) {
+                if let Err(err) = sender.send((m.clone(), message.to_owned())) {
                     m.reply(&format!("Service ``animecalendar'' unavailable: {:?}", err));
                 }
             }

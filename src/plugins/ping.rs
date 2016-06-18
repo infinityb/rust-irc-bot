@@ -1,4 +1,4 @@
-use irc::parse::IrcMsg;
+use irc::IrcMsg;
 
 use command_mapper::{
     RustBotPlugin,

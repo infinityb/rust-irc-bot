@@ -3,11 +3,11 @@ use std::fs::File;
 use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 
 use time::{get_time, now_utc};
-use irc::parse::IrcMsg;
+use irc::{IrcMsg, IrcMsgBuf};
 
 use command_mapper::{Replier, RustBotPlugin};
 
-fn logger_loop(rx: Receiver<IrcMsg>) -> Result<(), io::Error> {
+fn logger_loop(rx: Receiver<IrcMsgBuf>) -> Result<(), io::Error> {
     let logfile = format!("logs/{}.irclog", now_utc().rfc3339());
     let mut log = try!(File::create(&logfile));
     for msg in rx.iter() {
@@ -25,7 +25,7 @@ fn logger_loop(rx: Receiver<IrcMsg>) -> Result<(), io::Error> {
 
 
 pub struct LoggerPlugin {
-    sender: Option<SyncSender<IrcMsg>>
+    sender: Option<SyncSender<IrcMsgBuf>>
 }
 
 impl LoggerPlugin {
@@ -52,7 +52,7 @@ impl RustBotPlugin for LoggerPlugin {
     fn on_message(&mut self, _: &mut Replier, msg: &IrcMsg) {
         let mut disable_self = false;
         if let Some(ref sender) = self.sender {
-            if let Err(err) = sender.send(msg.clone()) {
+            if let Err(err) = sender.send(msg.to_owned()) {
                 info!("Logger service gone: {:?}", err);
                 disable_self = true;
             }
