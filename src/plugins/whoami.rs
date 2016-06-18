@@ -1,4 +1,4 @@
-use irc::IrcMsg;
+use irc::{IrcMsg, server};
 
 use command_mapper::{
     RustBotPlugin,
@@ -45,20 +45,19 @@ impl RustBotPlugin for WhoAmIPlugin {
         conf.map_format(CMD_WHEREAMI, Format::from_str("whereami").unwrap());
     }
 
-    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, _msg: &IrcMsg) {
+    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, msg: &IrcMsg) {
+        let privmsg;
+        match msg.as_tymsg::<&server::Privmsg>() {
+            Ok(p) => privmsg = p,
+            Err(_) => return,
+        }
 
         match parse_command(m) {
-            Some(WhoAmICommandType::WhoAmI) => match (msg.get_prefix().nick(), &m.source) {
-                (Some(ref source_nick), uid) => {
-                    m.reply(&format!("{}: you are {:?}", source_nick, uid));
-                },
-                (_, _) => ()
+            Some(WhoAmICommandType::WhoAmI) => {
+                m.reply(&format!("{}: you are {:?}", privmsg.source_nick(), m.source));
             },
-            Some(WhoAmICommandType::WhereAmI) => match (msg.get_prefix().nick(), &m.target) {
-                (Some(ref source_nick), cid) => {
-                    m.reply(&format!("{}: you are in {:?}", source_nick, cid));
-                },
-                (_, _) => ()
+            Some(WhoAmICommandType::WhereAmI) => {
+                m.reply(&format!("{}: you are in {:?}", privmsg.source_nick(), m.source));
             },
             None => ()
         }

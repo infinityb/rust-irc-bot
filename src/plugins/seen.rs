@@ -34,7 +34,7 @@ impl SeenRecord {
         }
     }
 
-    fn with_now(message: IrcMsg) -> SeenRecord {
+    fn with_now(message: IrcMsgBuf) -> SeenRecord {
         SeenRecord::new(get_time(), message)
     }
 }
@@ -74,8 +74,7 @@ fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
     let mut user_has_quit: Option<Timespec> = None;
     let mut prev_message: Option<&SeenRecord> = None;
 
-
-
+    // XXX: abomination
     for record in records.iter().rev() {
         if record.message.get_command() == "QUIT" {
             user_has_quit = Some(record.when.clone());
@@ -85,10 +84,11 @@ fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
             break;
         }
     }
+
     let now = get_time();
     match (user_has_quit, prev_message) {
         (Some(when_quit), Some(record)) => {
-            match ::std::str::from_utf8(record.message.get_args()[1]) {
+            match ::std::str::from_utf8(record.message.get_body_raw()) {
                 Ok(said_what) => format!(
                     "{} said ``{}'' {} ago before quitting {} later",
                     nick,
@@ -141,11 +141,11 @@ impl RustBotPlugin for SeenPlugin {
         match self.map.remove(&privmsg.source_nick().to_string()) {
             Some(mut records) => {
                 records.push(SeenRecord::with_now(privmsg.to_irc_msg().to_owned()));
-                self.map.insert(privmsg.get_nick().to_string(), trim_vec(records));
+                self.map.insert(privmsg.source_nick().to_string(), trim_vec(records));
             },
             None => {
                 let records = vec![SeenRecord::with_now(privmsg.to_irc_msg().to_owned())];
-                self.map.insert(privmsg.get_nick().to_string(), records);
+                self.map.insert(privmsg.source_nick().to_string(), records);
             }
         }
     }
@@ -161,7 +161,7 @@ impl RustBotPlugin for SeenPlugin {
         if !privmsg.get_target().starts_with(b"#") {
             return
         }
-        let source_nick = privmsg.get_nick();
+        let source_nick = privmsg.source_nick();
 
         let command_phrase = m.command();
 

@@ -31,7 +31,7 @@ pub struct Replier(Sender<IrcMsgBuf>);
 impl Replier {
     pub fn reply(&mut self, msg: &IrcMsg) -> Result<(), ()> {
         println!("Replier::reply EMITTING: {:?}", ::botcore::MaybeString::new(msg.as_bytes()));
-        match self.0.send(msg.into_owned()) {
+        match self.0.send(msg.to_owned()) {
             Ok(_) => Ok(()),
             Err(err) => {
                 panic!("Error during send: {:?}", err);
@@ -123,7 +123,10 @@ impl CommandMapperDispatch {
 
     /// Reply with a message to the channel/nick which sent the message being dispatched
     pub fn reply(&self, message: &str) {
-        let privmsg = client::Privmsg::new(&self.reply_target, message.as_bytes()).into_irc_msg();
+        let privmsg = cli2::PrivmsgBuf::new(
+            self.reply_target.as_bytes(),
+            message.as_bytes()).unwrap();
+
         println!("CommandMapperDispatch::reply EMITTING: {:?}", ::botcore::MaybeString::new(privmsg.as_bytes()));
         self.sender.send(privmsg).ok().expect("Failed to send to IRC socket");
     }
@@ -167,20 +170,21 @@ impl PluginContainer {
             plugin.on_message(&mut replier, msg);
         }
         
-        let privmsg = match server::IncomingMsg::from_msg(msg.clone()) {
-            server::IncomingMsg::Privmsg(privmsg) => privmsg,
-            _ => return
-        };
+        let privmsg;
+        match msg.as_tymsg::<&ser2::Privmsg>() {
+            Ok(p) => privmsg = p,
+            Err(_) => return,
+        }
 
         let reply_target = {
-            if state.get_self_nick() == privmsg.get_target() {
+            if state.get_self_nick().as_bytes() == privmsg.get_target() {
                 privmsg.get_nick().to_string()
             } else {
                 privmsg.get_target().to_string()
             }
         };
         
-        let source = match state.identify_nick(privmsg.get_nick()) {
+        let source = match state.identify_nick(privmsg.source_nick()) {
             Some(bot_user) => KnownUser(bot_user),
             None => AnonymousUser
         };
@@ -201,7 +205,7 @@ impl PluginContainer {
         };
 
         let nick_cmd = format!("{}: ", state.get_self_nick());
-        let mut prefix = get_prefix(privmsg.to_irc_msg(), &self.cmd_prefixes);
+        let mut prefix = get_prefix(privmsg, &self.cmd_prefixes);
 
         if privmsg.get_body_raw().starts_with(nick_cmd.as_bytes()) {
             prefix = prefix.or(Some(&nick_cmd));
@@ -222,7 +226,7 @@ impl PluginContainer {
                 for &(token, ref mapper_format) in mappers.iter() {
                     if let Ok(command_phrase) = mapper_format.parse(token, &message_body) {
                         let dispatch = builder.build(command_phrase);
-                        plugin.dispatch_cmd(&dispatch, privmsg.to_irc_msg());
+                        plugin.dispatch_cmd(&dispatch, privmsg);
                     }
                 }
             }

@@ -228,19 +228,14 @@ impl GreedPlugin {
         "greed"
     }
     
-    fn dispatch_cmd_greed_stats(&mut self, m: &CommandMapperDispatch, message: &IrcMsg) {
+    fn dispatch_cmd_greed_stats(&mut self, m: &CommandMapperDispatch, msg: &server::Privmsg) {
         let user_id = match m.source {
             KnownUser(user_id) => user_id,
             _ => return
         };
-
-        let source_nick = match message.get_prefix().nick() {
-            Some(nickname) => nickname.to_string(),
-            None => return
-        };
         m.reply(match self.userstats.get(&user_id) {
-            Some(stats) => format!("{}: {}", source_nick, stats),
-            None => format!("{}: You haven't played any games yet", source_nick)
+            Some(stats) => format!("{}: {}", msg.source_nick(), stats),
+            None => format!("{}: You haven't played any games yet", msg.source_nick())
         }.as_ref());
     }
 
@@ -255,16 +250,13 @@ impl GreedPlugin {
         cur_user.opponent_score_sum += opp_score;
     }
 
-    fn dispatch_cmd_greed(&mut self, m: &CommandMapperDispatch, message: &IrcMsg) {
+    fn dispatch_cmd_greed(&mut self, m: &CommandMapperDispatch, msg: &server::Privmsg) {
         let (user_id, channel_id) = match (m.source.clone(), m.target.clone()) {
             (KnownUser(uid), KnownChannel(cid)) => (uid, cid),
             _ => return
         };
 
-        let source_nick = match message.get_prefix().nick() {
-            Some(nickname) => nickname.to_string(),
-            None => return
-        };
+        let source_nick = msg.source_nick();
 
         let prev_play_opt: Option<GreedPlayResult> = match self.games.entry(channel_id) {
             hash_map::Entry::Vacant(entry) => {
@@ -324,10 +316,16 @@ impl RustBotPlugin for GreedPlugin {
         conf.map_format(CMD_GREED_STATS, Format::from_str("greed-stats").unwrap());
     }
     
-    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, message: &IrcMsg) {
+    fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, msg: &IrcMsg) {
+        let privmsg;
+        match msg.as_tymsg::<&server::Privmsg>() {
+            Ok(p) => privmsg = p,
+            Err(_) => return,
+        }
+
         match parse_command(m) {
-            Some(GreedCommandType::Greed) => self.dispatch_cmd_greed(m, message),
-            Some(GreedCommandType::GreedStats) => self.dispatch_cmd_greed_stats(m, message),
+            Some(GreedCommandType::Greed) => self.dispatch_cmd_greed(m, privmsg),
+            Some(GreedCommandType::GreedStats) => self.dispatch_cmd_greed_stats(m, privmsg),
             None => ()
         }
     }

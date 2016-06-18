@@ -67,12 +67,16 @@ impl RustBotPlugin for EightBallPlugin {
     }
 
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, msg: &IrcMsg) {
+        let privmsg;
+        match msg.as_tymsg::<&server::Privmsg>() {
+            Ok(p) => privmsg = p,
+            Err(_) => return,
+        }
+
         match parse_command(m) {
             Some(EightBallCommandType::EightBall) => {
-                if let Ok(privmsg) = msg.as_tymsg::<&server::Privmsg>() {
-                     let answer = thread_rng().choose(ANSWERS).unwrap();
-                     m.reply(&format!("{}: {}", msg.source_nick(), answer));          
-                }
+                let answer = thread_rng().choose(ANSWERS).unwrap();
+                m.reply(&format!("{}: {}", privmsg.source_nick(), answer));        
             },
             None => return
         }

@@ -499,9 +499,9 @@ impl BotSession {
         }
 
         if let Ok(invite) = msg.as_tymsg::<&ser2::Invite>() {
-            if let Ok(target) = ::std::str::from_utf8(invite.target()) {
+            if let Ok(target) = ::std::str::from_utf8(invite.get_target()) {
                 if self.autojoin_on_invite.contains(target) {
-                    let join_msg = cli2::JoinBuf::new(invite.target()).unwrap();
+                    let join_msg = cli2::JoinBuf::new(invite.get_target()).unwrap();
                     self.write_buffer.push_msg(&join_msg).ok().unwrap();
                 }
             }
