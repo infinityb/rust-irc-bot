@@ -210,7 +210,7 @@ impl PluginContainer {
             let mut vec = Vec::new();
 
             let body_raw = privmsg.get_body_raw();
-            vec.push_all(&body_raw[prefix.len()..]);
+            vec.extend_from_slice(&body_raw[prefix.len()..]);
 
             let message_body = match String::from_utf8(vec) {
                 Ok(string) => string,
