@@ -4,10 +4,7 @@ use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 use std::io::{self, Read};
 
 use rustc_serialize::json::{self, DecoderError};
-use url::Url;
 use hyper;
-use hyper::client::request::Request;
-use hyper::method::Method::Get;
 use time::{Timespec, get_time, Duration, SteadyTime};
 
 use irc::{IrcMsg, IrcMsgBuf};
@@ -48,6 +45,7 @@ impl Upcoming {
         Timespec::new(self.end_time, 0)
     }
 
+    #[allow(unused)]
     pub fn start_offset(&self) -> Duration {
         Duration::seconds(self.start_offset)
     }
@@ -90,8 +88,8 @@ impl From<DecoderError> for ApiFailure {
 }
 
 fn get_upcoming() -> Result<Vec<Upcoming>, ApiFailure> {
-    let url = Url::parse(UPCOMING_URL).ok().expect("Invalid UPCOMING_URL");
-    let mut resp = try!(try!(try!(Request::new(Get, url)).start()).send());
+    let client = hyper::Client::new();
+    let mut resp = try!(client.get(UPCOMING_URL).send());
 
     let mut body = String::new();
     try!(resp.read_to_string(&mut body));

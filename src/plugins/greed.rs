@@ -13,8 +13,7 @@ use irc::legacy::{
     UserId,
 };
 
-use irc::{IrcMsg, IrcMsgBuf, server};
-use irc::legacy::IrcMsg as IrcMsgLegacy;
+use irc::{IrcMsg, server};
 use irc::legacy::MessageEndpoint::{
     KnownChannel,
     KnownUser,

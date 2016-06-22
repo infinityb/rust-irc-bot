@@ -1,5 +1,5 @@
-// #![deny(warnings)]
-#![feature(rustc_private, slice_patterns, convert, vec_push_all, slice_concat_ext)]
+#![deny(warnings)]
+#![feature(slice_patterns, slice_concat_ext)]
 #![cfg_attr(test, feature(slice_bytes))]
 
 #![feature(plugin)]
@@ -34,10 +34,10 @@ fn parse_appconfig() -> Option<BotConfig> {
     let args = args_os().collect::<Vec<_>>();
 
     let filename = match args.as_slice() {
-        [] => unreachable!(),
-        [_] => return None,
-        [_, ref filename] => filename,
-        [_, ref filename, ..] => filename,
+        &[] => unreachable!(),
+        &[_] => return None,
+        &[_, ref filename] => filename,
+        &[_, ref filename, ..] => filename,
     };
 
     let mut buf = String::new();
@@ -69,5 +69,6 @@ fn main() {
         None => panic!("bad config")
     };
 
+    println!("starting");
     botcore::run_loop(&appconfig).ok().expect("main loop failed");
 }

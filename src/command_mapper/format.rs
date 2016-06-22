@@ -19,7 +19,7 @@ pub enum ValueParseError {
 pub type ValueResult<T> = Result<T, ValueParseError>;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum AtomType {
+pub enum AtomType {
     String,
     WholeNumeric
 }
@@ -37,7 +37,7 @@ pub enum Atom {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-enum Value {
+pub enum Value {
     Literal(String),
     String(String),
     WholeNumeric(String)
@@ -131,7 +131,7 @@ impl CommandPhrase {
     }
 }
 
-trait ValueExtract: Sized {
+pub trait ValueExtract: Sized {
     fn value_extract(val: &Value) -> Option<Self>;
 }
 

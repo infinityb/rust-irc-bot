@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use mio::Sender;
-use irc::{IrcMsg, IrcMsgBuf, client as cli2, server as ser2};
-use irc::legacy::IrcMsg as IrcMsgLegacy;
-use irc::legacy::message_types::{client, server};
+use irc::{IrcMsg, IrcMsgBuf, client, server};
 use irc::legacy::FrozenState;
 use irc::legacy::MessageEndpoint::{
     self,
@@ -22,7 +20,7 @@ pub use self::format::FormatParseError::EmptyFormat;
 
 mod format;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Token(pub u64);
 
 
@@ -35,7 +33,7 @@ impl Replier {
             Ok(_) => Ok(()),
             Err(err) => {
                 panic!("Error during send: {:?}", err);
-                Err(())
+                // Err(())
             }
         }
     }
@@ -123,19 +121,14 @@ impl CommandMapperDispatch {
 
     /// Reply with a message to the channel/nick which sent the message being dispatched
     pub fn reply(&self, message: &str) {
-        let privmsg = cli2::PrivmsgBuf::new(
+        let privmsg = client::PrivmsgBuf::new(
             self.reply_target.as_bytes(),
             message.as_bytes()).unwrap();
 
         println!("CommandMapperDispatch::reply EMITTING: {:?}", ::botcore::MaybeString::new(privmsg.as_bytes()));
-        self.sender.send(privmsg).ok().expect("Failed to send to IRC socket");
+        self.sender.send(privmsg.into_inner())
+            .ok().expect("Failed to send to IRC socket");
     }
-
-    // /// Reply with a message to the channel/nick which sent the message being dispatched
-    // pub fn reply_bin(&self, message: Vec<u8>) {
-    //     let privmsg = client::Privmsg::new(self.reply_target.as_slice(), message.as_slice());
-    //     self.sender.send(privmsg.into_irc_msg()).ok().expect("Failed to send to IRC socket");
-    // }
 }
 
 
@@ -171,16 +164,19 @@ impl PluginContainer {
         }
         
         let privmsg;
-        match msg.as_tymsg::<&ser2::Privmsg>() {
+        match msg.as_tymsg::<&server::Privmsg>() {
             Ok(p) => privmsg = p,
             Err(_) => return,
         }
 
         let reply_target = {
-            if state.get_self_nick().as_bytes() == privmsg.get_target() {
-                privmsg.get_nick().to_string()
+            // FIXME: if we can figure out how to determine this without
+            // using get_self_nick, we could put it in rust-irc
+            let target = ::std::str::from_utf8(privmsg.get_target()).unwrap();
+            if state.get_self_nick() == target {
+                privmsg.source_nick().to_string()
             } else {
-                privmsg.get_target().to_string()
+                target.to_string()
             }
         };
         
@@ -188,9 +184,11 @@ impl PluginContainer {
             Some(bot_user) => KnownUser(bot_user),
             None => AnonymousUser
         };
-        let target = match state.identify_channel(privmsg.get_target()) {
+
+        let ptarget = ::std::str::from_utf8(privmsg.get_target()).unwrap();
+        let target = match state.identify_channel(ptarget) {
             Some(channel_id) => KnownChannel(channel_id),
-            None => match state.identify_nick(privmsg.get_target()) {
+            None => match state.identify_nick(ptarget) {
                 Some(user_id) => KnownUser(user_id),
                 None => AnonymousUser
             }
@@ -235,7 +233,7 @@ impl PluginContainer {
 }
 
 fn get_prefix<'a>(msg: &IrcMsg, prefixes: &'a [String]) -> Option<&'a str> {
-    if let Ok(privmsg) = msg.as_tymsg::<&ser2::Privmsg>() {
+    if let Ok(privmsg) = msg.as_tymsg::<&server::Privmsg>() {
         for prefix in prefixes.iter() {
             if privmsg.get_body_raw().starts_with(prefix.as_bytes()) {
                 return Some(&prefix);

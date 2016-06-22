@@ -57,7 +57,7 @@ impl RustBotPlugin for WhoAmIPlugin {
                 m.reply(&format!("{}: you are {:?}", privmsg.source_nick(), m.source));
             },
             Some(WhoAmICommandType::WhereAmI) => {
-                m.reply(&format!("{}: you are in {:?}", privmsg.source_nick(), m.source));
+                m.reply(&format!("{}: you are in {:?}", privmsg.source_nick(), m.target));
             },
             None => ()
         }

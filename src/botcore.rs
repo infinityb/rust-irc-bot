@@ -13,7 +13,7 @@ use irc::IrcMsgBuf;
 use irc::{client as cli2, server as ser2};
 use irc::legacy::{BundlerManager, JoinBundlerTrigger};
 use irc::legacy::IrcMsg;
-use irc::legacy::message_types::{client, server};
+use irc::legacy::message_types::client;
 use irc::legacy::State;
 
 use irc_mio::IrcMsgRingBuf;
@@ -295,7 +295,7 @@ impl Bot2Session {
         }
 
         if let Err(err) = self.dispatch_read(eloop) {
-            warn!("ready/is_readable: error in dispatch_read");
+            warn!("ready/is_readable: error in dispatch_read: {:?}", err);
             eloop.shutdown();
             return;
         }
@@ -319,7 +319,6 @@ struct BotConnector {
     connection: TcpStream,
     autojoin_on_connect: Vec<String>,
     autojoin_on_invite: HashSet<String>,
-    desired_nick: String,
     nick: String,
 
     state_builder: StatePlugin,
@@ -392,7 +391,6 @@ impl BotConnector {
             autojoin_on_invite: autojoin_on_invite,
             autojoin_on_connect: autojoin_on_connect,
 
-            desired_nick: conf.nickname.clone(),
             nick: conf.nickname.clone(),
             state_builder: StatePlugin::new(),
             state: None,
@@ -494,7 +492,8 @@ impl BotSession {
             self.write_buffer.push_msg(&ping.response()).ok().unwrap();
         }
 
-        if let Ok(pong) = msg.as_tymsg::<&ser2::Pong>() {
+        if let Ok(_pong) = msg.as_tymsg::<&ser2::Pong>() {
+            // FIXME: check response
             self.ping_man.pong_received();
         }
 
@@ -507,7 +506,7 @@ impl BotSession {
             }
         }
 
-        let mut legacy = msg.clone().into_legacy();
+        let legacy = msg.clone().into_legacy();
         if let Some(join) = self.state.is_self_join(&legacy) {
             let who = client::Who::new(join.get_channel()).into_irc_msg();
             let who = IrcMsgBuf::from_legacy(who);
@@ -583,7 +582,7 @@ impl ::mio::Handler for BotHandler {
 
 
 pub fn run_loop(conf: &BotConfig) -> Result<(), ()> {
-    let mut config = EventLoopConfig::default();
+    let config = EventLoopConfig::default();
     let mut event_loop = EventLoop::configured(config).unwrap();
 
     let addr: ::std::net::SocketAddr =

@@ -1,6 +1,5 @@
 use std::convert::From;
 use bytes::{RingBuf, MutBuf, Buf};
-use irc::legacy::{IrcMsg as LegacyIrcMsg};
 use irc::{IrcMsg, IrcMsgBuf, ParseError};
 
 pub enum PushError {
@@ -41,28 +40,12 @@ impl IrcMsgRingBuf {
         IrcMsgRingBuf(RingBuf::new(capacity))
     }
 
-    pub fn is_full(&self) -> bool {
-        self.0.is_full()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub fn capacity(&self) -> usize {
-        self.0.capacity()
-    }
-
     pub fn mark(&mut self) {
         self.0.mark();
     }
 
     pub fn reset(&mut self) {
         self.0.reset();
-    }
-
-    pub fn bytes(&self) -> &[u8] {
-        self.0.bytes()
     }
 
     pub fn pop_msg(&mut self) -> Result<IrcMsgBuf, PopError> {

@@ -1,11 +1,9 @@
 use std::convert::From;
 use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 
-use url::{Url, ParseError};
 use hyper;
-use hyper::client::request::Request;
 use hyper::header::Server;
-use hyper::method::Method::Head;
+
 use irc::IrcMsg;
 
 use command_mapper::{
@@ -21,14 +19,7 @@ const CMD_WSERVER: Token = Token(0);
 #[derive(Debug)]
 enum WserverFailure {
     NoServerFound,
-    BadUrl(ParseError),
     RequestError(hyper::Error)
-}
-
-impl From<ParseError> for WserverFailure {
-    fn from(err: ParseError) -> WserverFailure {
-        WserverFailure::BadUrl(err)
-    }
 }
 
 impl From<hyper::Error> for WserverFailure {
@@ -38,14 +29,13 @@ impl From<hyper::Error> for WserverFailure {
 }
 
 fn get_wserver_result(urlstr: &str) -> Result<String, WserverFailure> {
-    let url = match Url::parse(urlstr) {
-        Ok(url) => url,
-        Err(_) => {
-            let http_url = format!("http://{}", urlstr);
-            try!(Url::parse(&http_url))
-        }
-    };
-    let resp = try!(try!(try!(Request::new(Head, url)).start()).send());
+    let mut url = urlstr.to_string();
+    if !urlstr.starts_with("http") {
+        url = format!("http://{}", urlstr);
+    }
+
+    let client = hyper::Client::new();
+    let resp = try!(client.head(&url).send());
 
     match resp.headers.get::<Server>() {
         Some(&Server(ref server)) => Ok(server.clone()),

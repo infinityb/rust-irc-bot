@@ -2,11 +2,8 @@ use std::io::{self, Read};
 use std::convert::From;
 use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 
-use rustc_serialize::json::{self, DecoderError};
-use url::Url;
 use hyper;
-use hyper::client::request::Request;
-use hyper::method::Method::Get;
+use rustc_serialize::json::{self, DecoderError};
 
 use irc::IrcMsg;
 
@@ -65,8 +62,8 @@ impl From<DecoderError> for RadioApiFailure {
 
 
 fn get_radio_api_result() -> Result<RadioApiResponse, RadioApiFailure> {
-    let url = Url::parse(API_URL).ok().expect("Invalid URL :-(");
-    let mut resp = try!(try!(try!(Request::new(Get, url)).start()).send());
+    let client = hyper::Client::new();
+    let mut resp = try!(client.get(API_URL).send());
 
     let mut body = String::new();
     try!(resp.read_to_string(&mut body));

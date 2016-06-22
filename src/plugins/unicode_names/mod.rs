@@ -1,8 +1,4 @@
-use std::collections::BTreeMap;
 use std::slice::SliceConcatExt;
-
-use time::{get_time, Timespec};
-use time::Duration;
 
 use irc::{IrcMsg, server};
 
@@ -14,7 +10,6 @@ use command_mapper::{
     IrcBotConfigurator,
     Format,
     Token,
-    Replier,
 };
 
 const CMD_UNICODE_NAME: Token = Token(0);
@@ -36,7 +31,7 @@ impl UnicodeNamePlugin {
         for ch in message.chars() {
             output.push(data::NAMES.get(&ch).map(|x| *x).unwrap_or("[UNKNOWN]"));
         }
-        m.reply(&output.connect(", "));
+        m.reply(&output.join(", "));
     }
 }
 

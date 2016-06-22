@@ -1,10 +1,8 @@
 use std::collections::BTreeMap;
 
 use time::{get_time, Timespec};
-use time::Duration;
 
-use irc::{IrcMsg, IrcMsgBuf, server};
-use irc::legacy::IrcMsg as IrcMsgLegacy;
+use irc::{IrcMsg, server};
 
 use utils::formatting::duration_to_string;
 use command_mapper::{
@@ -20,25 +18,31 @@ const CMD_SEEN: Token = Token(0);
 
 static MAX_USER_RECORDS_KEPT: usize = 5;
 
-pub struct SeenRecord {
-    when: Timespec,
-    message: IrcMsgBuf,
+enum Message {
+    Privmsg(server::PrivmsgBuf),
+    Quit(server::QuitBuf),
 }
 
+pub struct SeenRecord {
+    when: Timespec,
+    message: Message,
+}
 
 impl SeenRecord {
-    fn new(when: Timespec, message: IrcMsgBuf) -> SeenRecord {
+    fn new_privmsg(when: Timespec, message: server::PrivmsgBuf) -> SeenRecord {
         SeenRecord {
             when: when,
-            message: message
+            message: Message::Privmsg(message)
         }
     }
 
-    fn with_now(message: IrcMsgBuf) -> SeenRecord {
-        SeenRecord::new(get_time(), message)
+    fn new_quit(when: Timespec, message: server::QuitBuf) -> SeenRecord {
+        SeenRecord {
+            when: when,
+            message: Message::Quit(message)
+        }
     }
 }
-
 
 pub struct SeenPlugin {
     map: BTreeMap<String, Vec<SeenRecord>>,
@@ -58,12 +62,14 @@ impl SeenPlugin {
 }
 
 
-fn trim_vec<T>(vec: Vec<T>) -> Vec<T> {
+fn trim_vec<T>(vec: &mut Vec<T>) {
     if vec.len() <= MAX_USER_RECORDS_KEPT {
-        return vec;
+        return;
     }
-    let excess_elem = vec.len() - MAX_USER_RECORDS_KEPT;
-    vec.into_iter().skip(excess_elem).collect()
+
+    let before = ::std::mem::replace(vec, Vec::new());
+    let excess_elem = before.len() - MAX_USER_RECORDS_KEPT;
+    vec.extend(before.into_iter().skip(excess_elem));
 }
 
 enum SeenCommandType {
@@ -71,58 +77,51 @@ enum SeenCommandType {
 }
 
 fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
-    let mut user_has_quit: Option<Timespec> = None;
-    let mut prev_message: Option<&SeenRecord> = None;
+    use std::str;
+    use std::fmt::Write;
 
-    // XXX: abomination
+    let mut priv_msg: Option<(Timespec, Option<String>)> = None;
+    let mut quit_msg: Option<Timespec> = None;
+    
     for record in records.iter().rev() {
-        if record.message.get_command() == "QUIT" {
-            user_has_quit = Some(record.when.clone());
-        }
-        if record.message.get_command() == "PRIVMSG" {
-            prev_message = Some(record);
-            break;
+        match record.message {
+            Message::Privmsg(ref pmsg) => {
+                let said_what = str::from_utf8(pmsg.get_body_raw())
+                    .ok().map(ToOwned::to_owned);
+                priv_msg = Some((record.when, said_what));
+            }
+            Message::Quit(_) => quit_msg = Some(record.when),
         }
     }
 
     let now = get_time();
-    match (user_has_quit, prev_message) {
-        (Some(when_quit), Some(record)) => {
-            match ::std::str::from_utf8(record.message.get_body_raw()) {
-                Ok(said_what) => format!(
-                    "{} said ``{}'' {} ago before quitting {} later",
-                    nick,
-                    said_what,
-                    duration_to_string(now - record.when),
-                    duration_to_string(when_quit - record.when)),
-                Err(_) => format!("{} said something I dare not repeat {} ago before quitting {} later",
-                    nick,
-                    duration_to_string(now - record.when),
-                    duration_to_string(when_quit - record.when)),
-            }
+
+    let mut out = String::new();
+    match priv_msg {
+        Some((when, Some(ref said_what))) => {
+            write!(&mut out, "{} said ``{}'' {} ago",
+                nick, said_what, duration_to_string(now - when)).unwrap();
         },
-        (None, Some(record)) => {
-            match ::std::str::from_utf8(record.message.get_args()[1]) {
-                Ok(said_what) => format!(
-                    "{} said ``{}'' {} ago",
-                    nick,
-                    said_what,
-                    duration_to_string(now - record.when)),
-                Err(_) => format!(
-                    "{} said something I dare not repeat {} ago",
-                    nick, duration_to_string(now - record.when))
-            }
+        Some((when, None)) => {
+            write!(&mut out, "{} said something I dare not repeat {} ago",
+                nick, duration_to_string(now - when)).unwrap();
         },
-        (Some(when_quit), None) => {
-            format!(
-                "{} quit {} seconds ago",
-                nick,
-                duration_to_string(now - when_quit))
+        None => (),
+    }
+    match (quit_msg, priv_msg.is_some()) {
+        (Some(when), true) => {
+            write!(&mut out, " before quitting {} later", duration_to_string(now - when)).unwrap();
         },
-        (None, None) => {
-            format!("Sorry, I am very confused about {}", nick)
+        (Some(when), false) => {
+            write!(&mut out, "{} quit {} ago", nick, duration_to_string(now - when)).unwrap();
+        },
+        (None, true) => (),
+        (None, false) => {
+            write!(&mut out, "Sorry, I am very confused about {}", nick).unwrap();
         }
     }
+
+    out
 }
 
 
@@ -132,21 +131,18 @@ impl RustBotPlugin for SeenPlugin {
     }
 
     fn on_message(&mut self, _: &mut Replier, msg: &IrcMsg) {
-        let privmsg;
-        match msg.as_tymsg::<&server::Privmsg>() {
-            Ok(p) => privmsg = p,
-            Err(_) => return,
+        if let Ok(privmsg) = msg.as_tymsg::<&server::Privmsg>() {
+            // FIXME: dedup this code? source_nick could be on IrcMsg
+            let source = privmsg.source_nick().to_owned();
+            let records: &mut Vec<SeenRecord> = self.map.entry(source).or_insert(Vec::new());
+            records.push(SeenRecord::new_privmsg(get_time(), privmsg.to_owned()));
+            trim_vec(records);
         }
-
-        match self.map.remove(&privmsg.source_nick().to_string()) {
-            Some(mut records) => {
-                records.push(SeenRecord::with_now(privmsg.to_irc_msg().to_owned()));
-                self.map.insert(privmsg.source_nick().to_string(), trim_vec(records));
-            },
-            None => {
-                let records = vec![SeenRecord::with_now(privmsg.to_irc_msg().to_owned())];
-                self.map.insert(privmsg.source_nick().to_string(), records);
-            }
+        if let Ok(quitmsg) = msg.as_tymsg::<&server::Quit>() {
+            let source = quitmsg.source_nick().to_owned();
+            let records: &mut Vec<SeenRecord> = self.map.entry(source).or_insert(Vec::new());
+            records.push(SeenRecord::new_quit(get_time(), quitmsg.to_owned()));
+            trim_vec(records);
         }
     }
 
@@ -157,7 +153,7 @@ impl RustBotPlugin for SeenPlugin {
             Err(_) => return,
         }
 
-        // Hacky is-channel
+        // FIXME: Hacky is-channel
         if !privmsg.get_target().starts_with(b"#") {
             return
         }
