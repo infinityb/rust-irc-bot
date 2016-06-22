@@ -1,5 +1,8 @@
 [package]
 name = "ircbot"
+license = "MIT/Apache 2.0"
+repository = "http://github.com/infinityb/rust-irc-bot"
+description = "IRC bot in rust"
 version = "0.1.0"
 authors = [ "Stacey Ell <stacey.ell@gmail.com>" ]
 
@@ -21,6 +24,20 @@ phf = "0.7"
 phf_macros = "0.7"
 mio = "0.5"
 
+
 [dependencies.irc]
 git = "https://github.com/infinityb/rust-irc"
+
+[package.metadata.deb]
+maintainer = "Stacey Ell <stacey.ell@gmail.com>"
+copyright = "2016, Stacey Ell <stacey.ell@gmail.com>"
+license_file = ["LICENSE-MIT", "4"]
+extended_description = "swag"
+depends = "libc6"
+section = "utility"
+priority = "optional"
+assets = [
+    ["target/release/ircbot", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/rust-irc-bot/README", "644"],
+]
 
