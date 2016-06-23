@@ -35,6 +35,7 @@ use plugins::{
     UnicodeNamePlugin,
     EightBallPlugin,
     PickPlugin,
+    IrcColorsPlugin,
 };
 
 
@@ -371,6 +372,9 @@ impl BotConnector {
         }
         if conf.enabled_plugins.contains(PickPlugin::get_plugin_name()) {
             plugins.register(PickPlugin::new());
+        }
+        if conf.enabled_plugins.contains(IrcColorsPlugin::get_plugin_name()) {
+            plugins.register(IrcColorsPlugin::new());
         }
 
         let autojoin_on_invite: HashSet<String> = conf.channels.iter().cloned().collect();

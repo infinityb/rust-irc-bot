@@ -12,6 +12,7 @@ pub use self::animecalendar::AnimeCalendarPlugin;
 pub use self::unicode_names::UnicodeNamePlugin;
 pub use self::eightball::EightBallPlugin;
 pub use self::pick::PickPlugin;
+pub use self::irc_colors::IrcColorsPlugin;
 
 mod deer;
 mod greed;
@@ -27,3 +28,4 @@ mod animecalendar;
 mod unicode_names;
 mod eightball;
 mod pick;
+mod irc_colors;
