@@ -2,7 +2,7 @@
 import json
 from collections import OrderedDict
 
-def codepoint_to_rs((key, value)):
+def codepoint_to_rs((key, value):
     return "\'\\u{{{:x}}}\' => {},".format(key, json.dumps(value))
 
 
@@ -19,7 +19,7 @@ def load_codepoint_names():
             yield (key, line[1])
 
 
-print("pub static NAMES: phf::Map<char, &'static str> = phf_map! {")
+print("use phf;\n\npub static NAMES: phf::Map<char, &'static str> = phf_map! {")
 for line in map(codepoint_to_rs, load_codepoint_names()):
     print("    " + line)
 print("};")
