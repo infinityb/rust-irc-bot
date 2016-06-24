@@ -377,6 +377,7 @@ pub mod atom_parser {
                 },
                 (InWhitespace, cur_byte) => {
                     assert_eq!(self.cur_atom.len(), 0);
+                    self.atoms.push(Atom::Whitespace);
                     self.cur_atom.push(cur_byte);
                     InLiteral
                 },
@@ -484,7 +485,7 @@ pub mod atom_parser {
             assert!(parse_atoms("deer {a} {*b}xxx").is_err());
 
             match parse_atoms("deer {a:s} {*b}") {
-                Ok(ok) => (),
+                Ok(_ok) => (),
                 Err(err) => assert!(false, format!("{:?}", err))
             };
         }
@@ -550,62 +551,84 @@ fn cons_the_basics() {
 }
 
 #[test]
-fn parse_the_basics() {
-    {
-        let cmd_str = "articles my_bar my_category 1234";
-        let fmt_str = "articles {foo} {category:s} {id:d}";
+fn simple001() {
+    let cmd_str = "articles my_bar my_category 1234";
+    let fmt_str = "articles {foo} {category:s} {id:d}";
 
-        let fmt = match Format::from_str(fmt_str) {
-            Ok(fmt) => fmt,
-            Err(err) => panic!("parse failure: {:?}", err)
-        };
+    let fmt = match Format::from_str(fmt_str) {
+        Ok(fmt) => fmt,
+        Err(err) => panic!("parse failure: {:?}", err)
+    };
 
-        assert!(fmt.parse(Token(0), "articles").is_err());
-        let cmdlet = match fmt.parse(Token(0), cmd_str) {
-            Ok(cmdlet) => cmdlet,
-            Err(err) => panic!("parse failure: {:?}", err)
-        };
-        assert_eq!(&cmdlet.command, "articles");
-        assert_eq!(
-            cmdlet.get::<String>("foo"),
-            Some("my_bar".to_string()));
+    assert!(fmt.parse(Token(0), "articles").is_err());
+    let cmdlet = match fmt.parse(Token(0), cmd_str) {
+        Ok(cmdlet) => cmdlet,
+        Err(err) => panic!("parse failure: {:?}", err)
+    };
+    assert_eq!(&cmdlet.command, "articles");
+    assert_eq!(
+        cmdlet.get::<String>("foo"),
+        Some("my_bar".to_string()));
 
-        assert_eq!(
-            cmdlet.get::<String>("category"),
-            Some("my_category".to_string()));
+    assert_eq!(
+        cmdlet.get::<String>("category"),
+        Some("my_category".to_string()));
 
-        assert_eq!(cmdlet.get::<u64>("id"), Some(1234));
-    }
-    {
-        match Format::from_str("") {
-            Ok(_) => panic!("empty string must not succeed"),
-            Err(FormatParseError::EmptyFormat) => (),
-            Err(err) => panic!("wrong error for empty: {:?}", err),
-        };
-    }
-    {
-        let cmd_str = "articles ";
-        let fmt_str = "articles";
+    assert_eq!(cmdlet.get::<u64>("id"), Some(1234));
+}
 
-        let fmt = match Format::from_str(fmt_str) {
-            Ok(fmt) => fmt,
-            Err(err) => panic!("parse failure: {:?}", err)
-        };
-        if let Err(err) = fmt.parse(Token(0), cmd_str) {
-            panic!("Error processing {:?} with {:?}: {:?}", cmd_str, fmt_str, err);
-        }
-    }
-    {
-        let cmd_str = "articlestest";
-        let fmt_str = "articles {foo}";
+#[test]
+fn simple002() {
+    match Format::from_str("") {
+        Ok(_) => panic!("empty string must not succeed"),
+        Err(FormatParseError::EmptyFormat) => (),
+        Err(err) => panic!("wrong error for empty: {:?}", err),
+    };
+}
 
-        let fmt = match Format::from_str(fmt_str) {
-            Ok(fmt) => fmt,
-            Err(err) => panic!("parse failure: {:?}", err)
-        };
-        match fmt.parse(Token(0), cmd_str) {
-            Err(ValueParseError::Mismatch(_)) => (),
-            p @ _ => panic!("{:?} should not parse. Got {:?}", cmd_str, p),
-        };
+#[test]
+fn simple003() {
+    let cmd_str = "articles ";
+    let fmt_str = "articles";
+
+    let fmt = match Format::from_str(fmt_str) {
+        Ok(fmt) => fmt,
+        Err(err) => panic!("parse failure: {:?}", err)
+    };
+    if let Err(err) = fmt.parse(Token(0), cmd_str) {
+        panic!("Error processing {:?} with {:?}: {:?}", cmd_str, fmt_str, err);
     }
 }
+
+#[test]
+fn simple004() {
+    let cmd_str = "articlestest";
+    let fmt_str = "articles {foo}";
+
+    let fmt = match Format::from_str(fmt_str) {
+        Ok(fmt) => fmt,
+        Err(err) => panic!("parse failure: {:?}", err)
+    };
+    match fmt.parse(Token(0), cmd_str) {
+        Err(ValueParseError::Mismatch(_)) => (),
+        p @ _ => panic!("{:?} should not parse. Got {:?}", cmd_str, p),
+    };
+}
+
+#[test]
+fn simple005() {
+    let cmd_str = "irc-colors more";
+    let fmt_str = "irc-colors more";
+
+    let fmt = match Format::from_str(fmt_str) {
+        Ok(fmt) => fmt,
+        Err(err) => panic!("parse failure: {:?}", err)
+    };
+    println!("{:?}", fmt);
+    let cmdlet = match fmt.parse(Token(0), cmd_str) {
+        Ok(cmdlet) => cmdlet,
+        Err(err) => panic!("parse failure: {:?}", err)
+    };
+    assert_eq!(&cmdlet.command, "irc-colors");
+}
+
