@@ -42,12 +42,13 @@ impl RustBotPlugin for FetwgrkifgPlugin {
 #[cfg(test)]
 mod tests {
     use super::apply_bitflips;
-    use std::slice::bytes::copy_memory;
 
     #[test]
     fn test_bitflip() {
         let mut networking = [0; 13];
-        copy_memory(b"   networking", &mut networking);
+        for (i, o) in b"   networking".iter().zip(networking.iter_mut()) {
+            *o = *i;
+        }
         apply_bitflips(&mut networking);
         assert_eq!(&networking, b"   fetwgrkifg");
     }

@@ -1,6 +1,5 @@
 #![deny(warnings)]
 #![feature(slice_patterns, slice_concat_ext)]
-#![cfg_attr(test, feature(slice_bytes))]
 
 #![feature(plugin)]
 #![plugin(phf_macros)]
