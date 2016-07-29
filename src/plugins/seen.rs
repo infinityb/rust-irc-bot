@@ -83,7 +83,7 @@ fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
     let mut priv_msg: Option<(Timespec, Option<String>)> = None;
     let mut quit_msg: Option<Timespec> = None;
     
-    for record in records.iter().rev() {
+    for record in records.iter() {
         match record.message {
             Message::Privmsg(ref pmsg) => {
                 let said_what = str::from_utf8(pmsg.get_body_raw())
