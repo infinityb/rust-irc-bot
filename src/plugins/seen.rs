@@ -108,15 +108,15 @@ fn format_activity(nick: &str, records: &Vec<SeenRecord>) -> String {
         },
         None => (),
     }
-    match (quit_msg, priv_msg.is_some()) {
-        (Some(when), true) => {
-            write!(&mut out, " before quitting {} later", duration_to_string(now - when)).unwrap();
+    match (quit_msg, priv_msg) {
+        (Some(quit_when), Some((msg_when, _))) => {
+            write!(&mut out, " before quitting {} later", duration_to_string(quit_when - msg_when)).unwrap();
         },
-        (Some(when), false) => {
+        (Some(when), None) => {
             write!(&mut out, "{} quit {} ago", nick, duration_to_string(now - when)).unwrap();
         },
-        (None, true) => (),
-        (None, false) => {
+        (None, Some(_)) => (),
+        (None, None) => {
             write!(&mut out, "Sorry, I am very confused about {}", nick).unwrap();
         }
     }
