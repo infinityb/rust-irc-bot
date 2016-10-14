@@ -1,5 +1,5 @@
 use std::convert::From;
-use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
+use std::sync::mpsc::{sync_channel, SyncSender, Receiver, TrySendError};
 
 use hyper;
 use hyper::header::Server;
@@ -29,12 +29,18 @@ impl From<hyper::Error> for WserverFailure {
 }
 
 fn get_wserver_result(urlstr: &str) -> Result<String, WserverFailure> {
+    use std::time::Duration;
+    use hyper::client::RedirectPolicy::FollowNone;
+
     let mut url = urlstr.to_string();
     if !urlstr.starts_with("http") {
         url = format!("http://{}", urlstr);
     }
 
-    let client = hyper::Client::new();
+    let mut client = hyper::Client::new();
+    client.set_redirect_policy(FollowNone);
+    client.set_read_timeout(Some(Duration::new(1, 0)));
+
     let resp = try!(client.head(&url).send());
 
     match resp.headers.get::<Server>() {
@@ -103,7 +109,7 @@ impl RustBotPlugin for WserverPlugin {
     }
 
     fn start(&mut self) {
-        let (tx, rx) = sync_channel(10);
+        let (tx, rx) = sync_channel(2);
         let _ = ::std::thread::Builder::new().name("plugin-wserver".to_string()).spawn(move || {
             let mut internal_state = WserverInternalState::new();
             internal_state.start(rx);
@@ -112,13 +118,16 @@ impl RustBotPlugin for WserverPlugin {
     }
 
     fn dispatch_cmd(&mut self, m: &CommandMapperDispatch, _message: &IrcMsg) {
-        match self.sender {
-            Some(ref sender) => {
-                if let Err(err) = sender.send(m.clone()) {
-                    m.reply(&format!("Service ``wserver'' unavailable: {:?}", err));
+        if let Some(ref sender) = self.sender {
+            match sender.try_send(m.clone()) {
+                Ok(()) => (),
+                Err(TrySendError::Full(_)) => {
+                    m.reply("Too many requests - try again later");
+                },
+                Err(TrySendError::Disconnected(_)) => {
+                    m.reply("Service ``wserver'' unavailable: disconnected");
                 }
             }
-            None => ()
         }
     }
 }
