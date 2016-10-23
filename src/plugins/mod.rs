@@ -13,6 +13,7 @@ pub use self::unicode_names::UnicodeNamePlugin;
 pub use self::eightball::EightBallPlugin;
 pub use self::pick::PickPlugin;
 pub use self::irc_colors::IrcColorsPlugin;
+pub use self::fourchan_image_thread::FourchanImageThreadPlugin;
 
 mod deer;
 mod greed;
@@ -29,3 +30,5 @@ mod unicode_names;
 mod eightball;
 mod pick;
 mod irc_colors;
+mod fourchan_image_thread;
+pub mod fourchan_api;

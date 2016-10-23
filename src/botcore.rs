@@ -36,6 +36,7 @@ use plugins::{
     EightBallPlugin,
     PickPlugin,
     IrcColorsPlugin,
+    FourchanImageThreadPlugin,
 };
 
 
@@ -375,6 +376,9 @@ impl BotConnector {
         }
         if conf.enabled_plugins.contains(IrcColorsPlugin::get_plugin_name()) {
             plugins.register(IrcColorsPlugin::new());
+        }
+        if conf.enabled_plugins.contains(FourchanImageThreadPlugin::get_plugin_name()) {
+            plugins.register(FourchanImageThreadPlugin::new());
         }
 
         let autojoin_on_invite: HashSet<String> = conf.channels.iter().cloned().collect();
