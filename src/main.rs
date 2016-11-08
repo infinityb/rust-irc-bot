@@ -16,6 +16,7 @@ extern crate url;
 extern crate mio;
 extern crate bytes;
 extern crate phf;
+extern crate yotsuba_apiclient;
 
 use std::io::Read;
 use std::fs::File;

@@ -20,13 +20,18 @@ rustc-serialize = "0.3"
 rand = "0.3"
 hyper = "0.9"
 bytes = "0.3"
-phf = "0.7"
-phf_macros = "0.7"
+phf = "=0.7.16"
+phf_macros = "=0.7.16"
 mio = "0.5"
-
 
 [dependencies.irc]
 git = "https://github.com/infinityb/rust-irc"
+
+[dependencies.yotsuba_apiclient]
+path = "/home/sell/dev/fourchan-spider/apiclient"
+
+[profile.release]
+lto = true
 
 [package.metadata.deb]
 maintainer = "Stacey Ell <stacey.ell@gmail.com>"

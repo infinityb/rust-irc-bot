@@ -31,4 +31,3 @@ mod eightball;
 mod pick;
 mod irc_colors;
 mod fourchan_image_thread;
-pub mod fourchan_api;
