@@ -2,10 +2,7 @@ use std::io;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use url::{
-    Url, SchemeType, Host,
-    ParseResult, UrlParser
-};
+use url::{self, Url};
 use mio::{EventLoop, EventLoopConfig, Token, EventSet, PollOpt};
 use mio::tcp::TcpStream;
 
@@ -51,33 +48,28 @@ pub struct BotConfig {
     pub enabled_plugins: HashSet<String>,
 }
 
-pub fn irc_scheme_type_mapper(scheme: &str) -> SchemeType {
-    match scheme {
-        "irc" => SchemeType::Relative(6667),
-        "ircs" => SchemeType::Relative(6697),
-        _ => SchemeType::NonRelative,
+fn default_port_number(url: &Url) -> Result<u16, ()> {
+    match url.scheme() {
+        "irc" => Ok(6667),
+        "ircs" => Ok(6697),
+        _ => Err(())
     }
 }
 
+fn io_error(reason: &str) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, reason)
+}
+
 impl BotConfig {
-    fn get_url(&self) -> ParseResult<Url> {
-        let mut parser = UrlParser::new();
-        parser.scheme_type_mapper(irc_scheme_type_mapper);
-        parser.parse(&self.server)
-    }
+    fn get_host_and_port(&self) -> io::Result<url::HostAndPort> {
+        use std::error::Error;
 
-    fn get_host(&self) -> String {
-        let server = self.get_url().unwrap();
-        match server.host() {
-            Some(&Host::Domain(ref string)) => string.clone(),
-            Some(&Host::Ipv6(ref addr)) => addr.serialize(),
-            None => panic!()
-        }
-    }
+        let url = Url::parse(&self.server)
+            .map_err(|e| io_error(e.description()))?;
 
-    fn get_port(&self) -> u16 {
-        let server = self.get_url().unwrap();
-        server.port().unwrap_or(6667)
+        url.with_default_port(default_port_number)
+            .map(|s| s.to_owned())
+            .map_err(|e| io_error(e.description()))
     }
 }
 
@@ -590,12 +582,17 @@ impl ::mio::Handler for BotHandler {
 
 
 pub fn run_loop(conf: &BotConfig) -> Result<(), ()> {
+    use std::net::ToSocketAddrs;
+
     let config = EventLoopConfig::default();
     let mut event_loop = EventLoop::configured(config).unwrap();
 
-    let addr: ::std::net::SocketAddr =
-        format!("{}:{}", conf.get_host(), conf.get_port()).parse().unwrap();
-    let conn = TcpStream::connect(&addr).unwrap();
+    // Sorry.
+    let addr = conf.get_host_and_port().unwrap();
+    let mut addr_iter = addr.to_socket_addrs().unwrap();
+    let first_addr = addr_iter.next().unwrap();
+
+    let conn = TcpStream::connect(&first_addr).unwrap();
     let connector = BotConnector::configured(conn, conf);
 
     event_loop.register(&connector.connection, CLIENT,
