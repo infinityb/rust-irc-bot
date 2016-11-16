@@ -125,13 +125,13 @@ impl RollResult {
     }
 
 
-    fn format_score_component(score_components: &ScoreRec) -> String {
+    fn format_score_component(score_components: &'static ScoreRec) -> String {
         let (_, ref prefix_data, _) = *score_components;
         RollResult::format_score_component_bare(prefix_data)
     }
 
 
-    fn format_score(score_components: &Vec<&ScoreRec>) -> String {
+    fn format_score(score_components: &[&'static ScoreRec]) -> String {
         let mut output = String::new();
         for tuple in score_components.iter() {
             let (_, _, score) = **tuple;
@@ -260,7 +260,7 @@ impl GreedPlugin {
         let prev_play_opt: Option<GreedPlayResult> = match self.games.entry(channel_id) {
             hash_map::Entry::Vacant(entry) => {
                 let roll = thread_rng().gen::<RollResult>();
-                m.reply(&format!("{}: {}", source_nick, roll));
+                m.reply(&format!("{}: You've rolled.", source_nick));
                 entry.insert(GreedPlayResult {
                     user_id: user_id,
                     user_nick: source_nick.to_string(),
@@ -279,11 +279,14 @@ impl GreedPlugin {
         };
         if let Some(prev_play) = prev_play_opt {
             let roll = thread_rng().gen::<RollResult>();
-            m.reply(&format!("{}: {}", source_nick, roll));
 
             let prev_play_nick = m.get_state().resolve_user(prev_play.user_id)
                 .and_then(|user: &User| Some(user.get_nick().to_string()))
                 .unwrap_or_else(|| format!("{} (deceased)", prev_play.user_nick));
+
+            m.reply(&format!("{}: {}", prev_play_nick, prev_play.roll));
+            m.reply(&format!("{}: {}", source_nick, roll));
+
             let prev_play_score = prev_play.roll.total_score();
             let cur_play_score = roll.total_score();
             let cmp_result = prev_play_score.cmp(&cur_play_score);
