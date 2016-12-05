@@ -17,24 +17,10 @@ use irc_mio::IrcMsgRingBuf;
 use irc_mio::PopError as IrcRingPopError;
 use command_mapper::PluginContainer;
 
-use plugins::{
-    DeerPlugin,
-    GreedPlugin,
-    SeenPlugin,
-    RadioPlugin,
-    PingPlugin,
-    WserverPlugin,
-    WhoAmIPlugin,
-    LoggerPlugin,
-    FetwgrkifgPlugin,
-    AsciiArtPlugin,
-    AnimeCalendarPlugin,
-    UnicodeNamePlugin,
-    EightBallPlugin,
-    PickPlugin,
-    IrcColorsPlugin,
-    FourchanImageThreadPlugin,
-};
+use plugins::{DeerPlugin, GreedPlugin, SeenPlugin, RadioPlugin, PingPlugin, WserverPlugin,
+              WhoAmIPlugin, LoggerPlugin, FetwgrkifgPlugin, AsciiArtPlugin, AnimeCalendarPlugin,
+              UnicodeNamePlugin, EightBallPlugin, PickPlugin, IrcColorsPlugin,
+              FourchanImageThreadPlugin, WebTitlePlugin};
 
 
 #[derive(RustcDecodable, RustcEncodable, Debug)]
@@ -52,7 +38,7 @@ fn default_port_number(url: &Url) -> Result<u16, ()> {
     match url.scheme() {
         "irc" => Ok(6667),
         "ircs" => Ok(6697),
-        _ => Err(())
+        _ => Err(()),
     }
 }
 
@@ -64,8 +50,7 @@ impl BotConfig {
     fn get_host_and_port(&self) -> io::Result<url::HostAndPort> {
         use std::error::Error;
 
-        let url = Url::parse(&self.server)
-            .map_err(|e| io_error(e.description()))?;
+        let url = Url::parse(&self.server).map_err(|e| io_error(e.description()))?;
 
         url.with_default_port(default_port_number)
             .map(|s| s.to_owned())
@@ -131,7 +116,7 @@ mod ping {
             match self.state {
                 PingState::Pending(_st) => {
                     self.state = PingState::Good(now);
-                },
+                }
                 PingState::Good(_) => {
                     warn!("ping-state already in good condition; unsolicited PONG?");
                 }
@@ -146,8 +131,8 @@ mod ping {
                     let future = self.interval - (now - st);
                     assert!(Duration::zero() < future);
                     NextPing::Future(future)
-                },
-                PingState::Good(_) => NextPing::Now
+                }
+                PingState::Good(_) => NextPing::Now,
             }
         }
     }
@@ -168,10 +153,12 @@ impl Bot2Session {
 
     fn operate(&mut self) -> (&mut TcpStream, &mut IrcMsgRingBuf, &mut IrcMsgRingBuf) {
         match *self {
-            Bot2Session::Connecting(ref mut conn) => (
-                &mut conn.connection, &mut conn.read_buffer, &mut conn.write_buffer),
-            Bot2Session::Connected(ref mut conn) => (
-                &mut conn.connection, &mut conn.read_buffer, &mut conn.write_buffer),
+            Bot2Session::Connecting(ref mut conn) => {
+                (&mut conn.connection, &mut conn.read_buffer, &mut conn.write_buffer)
+            }
+            Bot2Session::Connected(ref mut conn) => {
+                (&mut conn.connection, &mut conn.read_buffer, &mut conn.write_buffer)
+            }
         }
     }
 
@@ -180,16 +167,17 @@ impl Bot2Session {
         use std::mem::{forget, replace, uninitialized};
 
         let moved_self = replace(self, unsafe { uninitialized() });
-        forget(replace(self, match moved_self {
-            Connecting(connector) => {
-                if connector.is_finished()  {
-                    Connected(connector.into_session())
-                } else {
-                    Connecting(connector)
-                }
-            }
-            Connected(sth) => Connected(sth),
-        }));
+        forget(replace(self,
+                       match moved_self {
+                           Connecting(connector) => {
+                               if connector.is_finished() {
+                                   Connected(connector.into_session())
+                               } else {
+                                   Connecting(connector)
+                               }
+                           }
+                           Connected(sth) => Connected(sth),
+                       }));
     }
 
     fn dispatch_msg(&mut self, eloop: &mut EventLoop<BotHandler>) -> Result<bool, IrcRingPopError> {
@@ -241,7 +229,7 @@ impl Bot2Session {
                 Some(0) => {
                     info!("read 0 bytes: finished reading");
                     break;
-                },
+                }
                 Some(sz) => info!("read {} bytes", sz),
                 None => {
                     info!("emptied kernel read buffer: subscribing");
@@ -259,7 +247,7 @@ impl Bot2Session {
                 Some(0) => {
                     info!("wrote 0 bytes: finished writing");
                     break;
-                },
+                }
                 Some(sz) => info!("wrote {} bytes", sz),
                 None => {
                     info!("filled kernel write buffer: subscribing");
@@ -296,9 +284,12 @@ impl Bot2Session {
 
         match self.client_try_io(EventSet::all()) {
             Ok(eset) => {
-                eloop.reregister(self.connection(), CLIENT,
-                    eset | EventSet::error(), PollOpt::empty()).unwrap();
-            },
+                eloop.reregister(self.connection(),
+                                CLIENT,
+                                eset | EventSet::error(),
+                                PollOpt::empty())
+                    .unwrap();
+            }
             Err(err) => {
                 warn!("client_readable: error in client_try_io: {:?}", err);
                 eloop.shutdown();
@@ -372,6 +363,9 @@ impl BotConnector {
         if conf.enabled_plugins.contains(FourchanImageThreadPlugin::get_plugin_name()) {
             plugins.register(FourchanImageThreadPlugin::new());
         }
+        if conf.enabled_plugins.contains(WebTitlePlugin::get_plugin_name()) {
+            plugins.register(WebTitlePlugin::new());
+        }
 
         let autojoin_on_invite: HashSet<String> = conf.channels.iter().cloned().collect();
         let autojoin_on_connect: Vec<String> = conf.channels.iter().cloned().collect();
@@ -405,11 +399,12 @@ impl BotConnector {
     }
 
     fn into_session(mut self) -> BotSession {
-        let state = self.state.take().expect("is_finished() must be true before calling into_session()");
+        let state =
+            self.state.take().expect("is_finished() must be true before calling into_session()");
 
         let mut bundler_man = BundlerManager::with_defaults();
-            bundler_man.add_bundler_trigger(Box::new(
-                JoinBundlerTrigger::new(state.get_self_nick().as_bytes())));
+        bundler_man.add_bundler_trigger(Box::new(JoinBundlerTrigger::new(state.get_self_nick()
+            .as_bytes())));
 
         for channel_name in self.autojoin_on_connect.iter() {
             let join = cli2::JoinBuf::new(channel_name.as_bytes()).unwrap();
@@ -545,9 +540,7 @@ struct BotHandler {
 
 impl BotHandler {
     fn new(connector: BotConnector) -> BotHandler {
-        BotHandler {
-            session: Bot2Session::Connecting(connector),
-        }
+        BotHandler { session: Bot2Session::Connecting(connector) }
     }
 }
 
@@ -595,8 +588,11 @@ pub fn run_loop(conf: &BotConfig) -> Result<(), ()> {
     let conn = TcpStream::connect(&first_addr).unwrap();
     let connector = BotConnector::configured(conn, conf);
 
-    event_loop.register(&connector.connection, CLIENT,
-        EventSet::readable() | EventSet::writable(), PollOpt::edge()).unwrap();
+    event_loop.register(&connector.connection,
+                  CLIENT,
+                  EventSet::readable() | EventSet::writable(),
+                  PollOpt::edge())
+        .unwrap();
     event_loop.timeout_ms(CLIENT, 2500).unwrap();
     event_loop.run(&mut BotHandler::new(connector)).unwrap();
 
@@ -649,20 +645,5 @@ impl StatePlugin {
         }
 
         None
-    }
-}
-
-#[derive(Debug)]
-pub enum MaybeString<'a> {
-    String(&'a str),
-    Bytes(&'a [u8]),
-}
-
-impl<'a> MaybeString<'a> {
-    pub fn new(buf: &'a [u8]) -> MaybeString<'a> {
-        match ::std::str::from_utf8(buf) {
-            Ok(s) => MaybeString::String(s),
-            Err(_) => MaybeString::Bytes(buf),
-        }
     }
 }

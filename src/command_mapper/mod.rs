@@ -3,19 +3,10 @@ use std::sync::Arc;
 use mio::Sender;
 use irc::{IrcMsg, IrcMsgBuf, client, server};
 use irc::legacy::FrozenState;
-use irc::legacy::MessageEndpoint::{
-    self,
-    KnownUser,
-    KnownChannel,
-    AnonymousUser,
-};
+use irc::legacy::MessageEndpoint::{self, KnownUser, KnownChannel, AnonymousUser};
+use ::utils::formatting::MaybeString;
 
-
-pub use self::format::{
-    Format,
-    FormatResult,
-    CommandPhrase
-};
+pub use self::format::{Format, FormatResult, CommandPhrase};
 pub use self::format::FormatParseError::EmptyFormat;
 
 mod format;
@@ -23,12 +14,12 @@ mod format;
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Token(pub u64);
 
-
 pub struct Replier(Sender<IrcMsgBuf>);
 
 impl Replier {
     pub fn reply(&mut self, msg: &IrcMsg) -> Result<(), ()> {
-        println!("Replier::reply EMITTING: {:?}", ::botcore::MaybeString::new(msg.as_bytes()));
+        println!("Replier::reply EMITTING: {:?}",
+                 MaybeString::new(msg.as_bytes()));
         match self.0.send(msg.to_owned()) {
             Ok(_) => Ok(()),
             Err(err) => {
@@ -51,16 +42,14 @@ pub trait RustBotPlugin {
 
 
 pub struct IrcBotConfigurator {
-    mapped: Vec<(Token, Format)>
+    mapped: Vec<(Token, Format)>,
 }
 
 /// Defines the public API the bot exposes to plugins for configuration
 // TODO: move to `plugin' module
 impl IrcBotConfigurator {
     pub fn new() -> IrcBotConfigurator {
-        IrcBotConfigurator {
-            mapped: Vec::new(),
-        }
+        IrcBotConfigurator { mapped: Vec::new() }
     }
 
     pub fn map_format(&mut self, token: Token, format: Format) {
@@ -121,20 +110,22 @@ impl CommandMapperDispatch {
 
     /// Reply with a message to the channel/nick which sent the message being dispatched
     pub fn reply(&self, message: &str) {
-        let privmsg = client::PrivmsgBuf::new(
-            self.reply_target.as_bytes(),
-            message.as_bytes()).unwrap();
+        let privmsg = client::PrivmsgBuf::new(self.reply_target.as_bytes(), message.as_bytes())
+            .unwrap();
 
-        println!("CommandMapperDispatch::reply EMITTING: {:?}", ::botcore::MaybeString::new(privmsg.as_bytes()));
-        self.sender.send(privmsg.into_inner())
-            .ok().expect("Failed to send to IRC socket");
+        println!("CommandMapperDispatch::reply EMITTING: {:?}",
+                 MaybeString::new(privmsg.as_bytes()));
+        self.sender
+            .send(privmsg.into_inner())
+            .ok()
+            .expect("Failed to send to IRC socket");
     }
 }
 
 
 pub struct PluginContainer {
     cmd_prefixes: Vec<String>,
-    plugins: Vec<(Box<RustBotPlugin+'static>, Vec<(Token, Format)>)>,
+    plugins: Vec<(Box<RustBotPlugin + 'static>, Vec<(Token, Format)>)>,
 }
 
 
@@ -142,13 +133,15 @@ impl PluginContainer {
     pub fn new(prefixes: Vec<String>) -> PluginContainer {
         PluginContainer {
             cmd_prefixes: prefixes,
-            plugins: Vec::new()
+            plugins: Vec::new(),
         }
     }
 
     /// Register a plugin instance.  This will configure and start the plugin.
-    pub fn register<P>(&mut self, plugin: P) where P: RustBotPlugin+'static {
-        let mut plugin = Box::new(plugin) as Box<RustBotPlugin+'static>;
+    pub fn register<P>(&mut self, plugin: P)
+        where P: RustBotPlugin + 'static
+    {
+        let mut plugin = Box::new(plugin) as Box<RustBotPlugin + 'static>;
         let mut configurator = IrcBotConfigurator::new();
         plugin.configure(&mut configurator);
         plugin.start();
@@ -162,7 +155,7 @@ impl PluginContainer {
         for &mut (ref mut plugin, _) in self.plugins.iter_mut() {
             plugin.on_message(&mut replier, msg);
         }
-        
+
         let privmsg;
         match msg.as_tymsg::<&server::Privmsg>() {
             Ok(p) => privmsg = p,
@@ -179,18 +172,20 @@ impl PluginContainer {
                 target.to_string()
             }
         };
-        
+
         let source = match state.identify_nick(privmsg.source_nick()) {
             Some(bot_user) => KnownUser(bot_user),
-            None => AnonymousUser
+            None => AnonymousUser,
         };
 
         let ptarget = ::std::str::from_utf8(privmsg.get_target()).unwrap();
         let target = match state.identify_channel(ptarget) {
             Some(channel_id) => KnownChannel(channel_id),
-            None => match state.identify_nick(ptarget) {
-                Some(user_id) => KnownUser(user_id),
-                None => AnonymousUser
+            None => {
+                match state.identify_nick(ptarget) {
+                    Some(user_id) => KnownUser(user_id),
+                    None => AnonymousUser,
+                }
             }
         };
 
@@ -208,7 +203,7 @@ impl PluginContainer {
         if privmsg.get_body_raw().starts_with(nick_cmd.as_bytes()) {
             prefix = prefix.or(Some(&nick_cmd));
         }
-        
+
         if let Some(prefix) = prefix {
             let mut vec = Vec::new();
 

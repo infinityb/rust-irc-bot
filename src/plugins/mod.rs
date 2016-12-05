@@ -14,6 +14,7 @@ pub use self::eightball::EightBallPlugin;
 pub use self::pick::PickPlugin;
 pub use self::irc_colors::IrcColorsPlugin;
 pub use self::fourchan_image_thread::FourchanImageThreadPlugin;
+pub use self::webtitle::WebTitlePlugin;
 
 mod deer;
 mod greed;
@@ -31,3 +32,4 @@ mod eightball;
 mod pick;
 mod irc_colors;
 mod fourchan_image_thread;
+mod webtitle;

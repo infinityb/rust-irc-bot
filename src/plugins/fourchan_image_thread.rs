@@ -48,7 +48,7 @@ impl RustBotPlugin for FourchanImageThreadPlugin {
         println!("ok looking up {}", body);
 
         let reply_target = str::from_utf8(privmsg.get_target()).unwrap();
-        let searchlist: Vec<_> = body.split(' ').filter_map(|word| {
+        let searchlist: Vec<_> = body.split(char::is_whitespace).filter_map(|word| {
             ImageLocator::parse_fourchan_url(word).map(ImageNameSearch2).ok()
         }).collect();
 
@@ -64,49 +64,43 @@ impl RustBotPlugin for FourchanImageThreadPlugin {
         let api = FourchanApi::with_client(client);
         
         // make this threaded ....
+        // let mut emitted = HashSet::new();
         let mut out = Vec::new();
-        for search in searchlist.iter().take(1) {
+        for search in searchlist.iter() {
             println!("running search {:?}", search);
-            match api.execute(search) {
+            let val_res = api.execute(search)
+                .map_err(|e| format!("lookup {:?} -> {:?}", search, e))
+                .and_then(|val| format_thread(&search.0, &val).map_err(Into::into));
+            match val_res {
                 Ok(val) => {
-                    if let Ok(val) = format_thread(&search.0, &val) {
-                        out.push(val);
-                    }                   
+                    out.push(val);         
                 }
-                Err(e) => println!("lookup {:?} -> {:?}", search, e),
+                Err(err) => println!("error: {}", err),
             }
             println!("ok search term finished");
         }
 
         // reply_target
-        let msg_out = out.join(" ");
-        let _ = m.reply(&client::PrivmsgBuf::new(
-            reply_target.as_bytes(),
-            msg_out.as_bytes(),
-        ).unwrap());
+        for line in out.iter() {
+            let _ = m.reply(&client::PrivmsgBuf::new(
+                reply_target.as_bytes(),
+                line.as_bytes(),
+            ).unwrap());
+        }
     }
 }
 
-fn format_thread(search: &ImageLocator, thread: &Thread) -> Result<String, ()> {
-    let thread_no = try!(thread.post_ids().next().ok_or(()));
+fn format_thread(search: &ImageLocator, thread: &Thread) -> Result<String, &'static str> {
+    let thread_no = try!(thread.post_ids().next().ok_or("thread_no missing"));
     let mut post_id = None;
     for (pid, iname) in thread.posts_with_image_names() {
         if search.image_name == iname {
             post_id = Some(pid);
         }
     }
-    let post_id = match post_id {
-        Some(post_id) => post_id,
-        None => return Err(()),
-    };
-    let post = match thread.get_post(post_id) {
-        Some(post) => post,
-        None => return Err(()),
-    };
-    let filename = match post.get_filename() {
-        Some(filename) => filename,
-        None => return Err(()),
-    };
+    let post_id = try!(post_id.ok_or("post_id missing"));
+    let post = try!(thread.get_post(post_id).ok_or("root post missing"));
+    let filename = try!(post.get_filename().ok_or("filename missing"));
 
     let thread_loc = ThreadLocator {
         board: search.board.clone(),
@@ -114,10 +108,10 @@ fn format_thread(search: &ImageLocator, thread: &Thread) -> Result<String, ()> {
     };
 
     let mut out = Vec::new();
-    // write!(&mut out, "{} from {}#p{}", filename, thread_loc, post_id).unwrap();
-    // if let Some(sub) = thread.get_subject() {
-    //     write!(&mut out, "- {}", sub).unwrap();
-    // }
+    write!(&mut out, "{} from {}#p{}", filename, thread_loc, post_id).unwrap();
+    if let Some(sub) = thread.get_subject() {
+        write!(&mut out, " - {}", sub).unwrap();
+    }
 
     Ok(String::from_utf8(out).unwrap())
 }

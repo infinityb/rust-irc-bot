@@ -21,3 +21,18 @@ pub fn duration_to_string(dur: Duration) -> String {
     }
     string
 }
+
+#[derive(Debug)]
+pub enum MaybeString<'a> {
+    String(&'a str),
+    Bytes(&'a [u8]),
+}
+
+impl<'a> MaybeString<'a> {
+    pub fn new(buf: &'a [u8]) -> MaybeString<'a> {
+        match ::std::str::from_utf8(buf) {
+            Ok(s) => MaybeString::String(s),
+            Err(_) => MaybeString::Bytes(buf),
+        }
+    }
+}
