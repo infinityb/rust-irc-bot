@@ -28,7 +28,8 @@ use command_mapper::{
 };
 
 const CMD_GREED: Token = Token(0);
-const CMD_GREED_STATS: Token = Token(1);
+const CMD_GREED_QUIET: Token = Token(1);
+const CMD_GREED_STATS: Token = Token(2);
 
 type ScorePrefix = [u8; 6];
 type ScoreRec = (usize, ScorePrefix, i32);
@@ -171,7 +172,7 @@ pub struct GreedPlugin {
 }
 
 enum GreedCommandType {
-    Greed,
+    Greed { quiet: bool },
     GreedStats
 }
 
@@ -183,7 +184,8 @@ struct GreedPlayResult {
 
 fn parse_command<'a>(m: &CommandMapperDispatch) -> Option<GreedCommandType> {
     match m.command().token {
-        CMD_GREED => Some(GreedCommandType::Greed),
+        CMD_GREED => Some(GreedCommandType::Greed { quiet: false }),
+        CMD_GREED_QUIET => Some(GreedCommandType::Greed { quiet: true }),
         CMD_GREED_STATS => Some(GreedCommandType::GreedStats),
         _ => None
     }
@@ -249,7 +251,7 @@ impl GreedPlugin {
         cur_user.opponent_score_sum += opp_score;
     }
 
-    fn dispatch_cmd_greed(&mut self, m: &CommandMapperDispatch, msg: &server::Privmsg) {
+    fn dispatch_cmd_greed(&mut self, m: &CommandMapperDispatch, msg: &server::Privmsg, quiet: bool) {
         let (user_id, channel_id) = match (m.source.clone(), m.target.clone()) {
             (KnownUser(uid), KnownChannel(cid)) => (uid, cid),
             _ => return
@@ -260,7 +262,9 @@ impl GreedPlugin {
         let prev_play_opt: Option<GreedPlayResult> = match self.games.entry(channel_id) {
             hash_map::Entry::Vacant(entry) => {
                 let roll = thread_rng().gen::<RollResult>();
-                m.reply(&format!("{}: You've rolled.", source_nick));
+                if !quiet {
+                    m.reply(&format!("{}: You've rolled.", source_nick));
+                }
                 entry.insert(GreedPlayResult {
                     user_id: user_id,
                     user_nick: source_nick.to_string(),
@@ -284,26 +288,16 @@ impl GreedPlugin {
                 .and_then(|user: &User| Some(user.get_nick().to_string()))
                 .unwrap_or_else(|| format!("{} (deceased)", prev_play.user_nick));
 
-            m.reply(&format!("{}: {}", prev_play_nick, prev_play.roll));
-            m.reply(&format!("{}: {}", source_nick, roll));
-
             let prev_play_score = prev_play.roll.total_score();
             let cur_play_score = roll.total_score();
-            let cmp_result = prev_play_score.cmp(&cur_play_score);
-            let (prev_user_wins, cur_user_wins) = match cmp_result {
+
+            m.reply(&format!("{} ({:+}): {}", prev_play_nick, prev_play_score - cur_play_score, prev_play.roll));
+            m.reply(&format!("{} ({:+}): {}", source_nick, cur_play_score - prev_play_score, roll));
+            let (prev_user_wins, cur_user_wins) = match prev_play_score.cmp(&cur_play_score) {
                 Ordering::Less => (false, true),
                 Ordering::Equal => (false, false),
                 Ordering::Greater => (true, false)
             };
-            let score_diff = (prev_play_score - cur_play_score).abs();
-            let response = match cmp_result {
-                 Ordering::Less => format!("{} wins {} points from {}!",
-                    source_nick, score_diff, prev_play_nick),
-                 Ordering::Equal => format!("{} and {} tie.", source_nick, prev_play_nick),
-                 Ordering::Greater => format!("{} wins {} points from {}!",
-                    prev_play_nick, score_diff, source_nick),
-            };
-            m.reply(&response);
             self.add_userstats_roll(user_id, cur_user_wins,
                 cur_play_score, prev_play_score);
             self.add_userstats_roll(prev_play.user_id, prev_user_wins,
@@ -315,6 +309,9 @@ impl GreedPlugin {
 impl RustBotPlugin for GreedPlugin {
     fn configure(&mut self, conf: &mut IrcBotConfigurator) {
         conf.map_format(CMD_GREED, Format::from_str("greed").unwrap());
+        conf.map_format(CMD_GREED_QUIET, Format::from_str("greed quiet").unwrap());
+        conf.map_format(CMD_GREED_QUIET, Format::from_str("greed --verbosity=quiet --noconfirm --noalert").unwrap());
+        conf.map_format(CMD_GREED_QUIET, Format::from_str("greed -fomit-response").unwrap());
         conf.map_format(CMD_GREED_STATS, Format::from_str("greed-stats").unwrap());
     }
     
@@ -326,8 +323,12 @@ impl RustBotPlugin for GreedPlugin {
         }
 
         match parse_command(m) {
-            Some(GreedCommandType::Greed) => self.dispatch_cmd_greed(m, privmsg),
-            Some(GreedCommandType::GreedStats) => self.dispatch_cmd_greed_stats(m, privmsg),
+            Some(GreedCommandType::Greed { quiet }) => {
+                self.dispatch_cmd_greed(m, privmsg, quiet);
+            },
+            Some(GreedCommandType::GreedStats) => {
+                self.dispatch_cmd_greed_stats(m, privmsg);
+            },
             None => ()
         }
     }
