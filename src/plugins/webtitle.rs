@@ -75,6 +75,7 @@ fn is_valid_url(url_candidate: &&str) -> bool {
 }
 
 const USER_AGENT: &'static str = "Mozilla/5.0 (X11; Linux; rv:37.0) Servo/1.0 Firefox/37.0";
+const USE_HEAD: bool = false;
 
 fn get_title(url: &str) -> Result<String, String> {
     use std::io::{self, Read};
@@ -83,22 +84,26 @@ fn get_title(url: &str) -> Result<String, String> {
     client.set_read_timeout(Some(Duration::new(5, 0)));
     client.set_write_timeout(Some(Duration::new(5, 0)));
     
-    let req = client.head(url)
-        .header(UserAgent(USER_AGENT.into()))
-        .header(AcceptEncoding(vec![
-            qitem(Encoding::Gzip),
-            qitem(Encoding::Deflate),
-            qitem(Encoding::Identity),
-        ]));
+    if USE_HEAD {
+        let req = client.head(url)
+            .header(UserAgent(USER_AGENT.into()))
+            .header(accept_html())
+            .header(AcceptEncoding(vec![
+                qitem(Encoding::Gzip),
+                qitem(Encoding::Deflate),
+                qitem(Encoding::Identity),
+            ]));
 
-    let resp = try!(req.send().map_err(|e| format!("HEAD req send: {}", e)));
-    if !is_html(&resp) && !absurd_webserver(&resp) {
-        return Err("HEAD: not text/html or not acceptable".into());
+        let resp = try!(req.send().map_err(|e| format!("HEAD req send: {}", e)));
+        if !is_html(&resp) && !absurd_webserver(&resp) {
+            return Err("HEAD: not text/html or not acceptable".into());
+        }
+        drop(resp);
     }
-    drop(resp);
 
     let req = client.get(url)
         .header(UserAgent(USER_AGENT.into()))
+        .header(accept_html())
         .header(AcceptEncoding(vec![
             qitem(Encoding::Gzip),
             qitem(Encoding::Deflate),
@@ -121,7 +126,15 @@ fn get_title(url: &str) -> Result<String, String> {
         .read_from(&mut io::Cursor::new(&buf[..]))
         .map_err(|e| format!("html5ever read: {}", e)));
 
-    walk_title(dom.document).ok_or("bad walk".into())
+    return walk_title(dom.document).ok_or("bad walk".into());
+
+    fn accept_html() -> hyper::header::Accept {
+        use hyper::header::Accept;
+        
+        Accept(vec![
+            qitem(Mime(TopLevel::Text, SubLevel::Html, vec![])),
+        ])
+    }
 }
 
 
@@ -156,12 +169,13 @@ fn read_body(resp: hyper::client::Response) -> Result<Box<io::Read>, String> {
     }
 
     let encoding = resp.headers.get::<ContentEncoding>()
-        .and_then(|x| match x.0.get(0) {
+        .map(|x| match x.0.get(0) {
             Some(&Encoding::Gzip) => Some(_Encoding::Gzip),
             Some(&Encoding::Deflate) => Some(_Encoding::Deflate),
             Some(&Encoding::Identity) => Some(_Encoding::Identity),
             _ => None,
-        });
+        })
+        .unwrap_or(Some(_Encoding::Identity));
 
     match encoding {
         Some(_Encoding::Gzip) => {
